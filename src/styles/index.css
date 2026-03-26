@@ -1084,6 +1084,24 @@ html, body {
     transform: translateX(0);
   }
 
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 90;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+
+  .sidebar-overlay.show {
+    display: block;
+    opacity: 1;
+  }
+
   .mobile-only {
     display: inline-flex;
   }

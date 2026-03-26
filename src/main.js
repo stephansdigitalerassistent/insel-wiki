@@ -63,6 +63,15 @@ const emptyState = document.getElementById('empty-state');
 const userInfoEl = document.getElementById('user-info');
 const sidebarToggle = document.getElementById('sidebar-toggle');
 const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+
+function closeSidebarOnMobile() {
+  if (window.innerWidth <= 768) {
+    sidebar.classList.remove('open');
+    if (sidebarOverlay) sidebarOverlay.classList.remove('show');
+  }
+}
 
 // --- Profile Modal Elements ---
 const profileModal = document.getElementById('profile-modal');
@@ -114,11 +123,20 @@ async function init() {
   // Setup logout
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
 
-  // Setup sidebar toggle (mobile)
+  // Sidebar toggle for mobile
   if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
       sidebar.classList.toggle('open');
+      if (sidebarOverlay) sidebarOverlay.classList.toggle('show');
     });
+  }
+
+  if (sidebarCloseBtn) {
+    sidebarCloseBtn.addEventListener('click', closeSidebarOnMobile);
+  }
+
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener('click', closeSidebarOnMobile);
   }
 
   // Setup action buttons
@@ -537,6 +555,8 @@ async function loadPage(pageId) {
   currentPresenceUnsub = subscribeToPresence(pageId, (users) => {
     renderPresence(users);
   });
+
+  closeSidebarOnMobile();
 }
 
 function renderPresence(users) {
