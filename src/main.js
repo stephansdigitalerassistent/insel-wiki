@@ -130,6 +130,31 @@ async function init() {
   document.getElementById('close-history').addEventListener('click', closeHistoryPanel);
   document.getElementById('empty-new-page').addEventListener('click', () => handleNewPage(null));
 
+  // Setup shortcuts modal
+  const shortcutsBtn = document.getElementById('shortcuts-btn');
+  const shortcutsModal = document.getElementById('shortcuts-modal');
+  const shortcutsCloseBtn = document.getElementById('shortcuts-close-btn');
+
+  if (shortcutsBtn) {
+    shortcutsBtn.addEventListener('click', () => {
+      shortcutsModal.classList.remove('hidden');
+    });
+  }
+
+  if (shortcutsCloseBtn) {
+    shortcutsCloseBtn.addEventListener('click', () => {
+      shortcutsModal.classList.add('hidden');
+    });
+  }
+
+  if (shortcutsModal) {
+    shortcutsModal.addEventListener('click', (e) => {
+      if (e.target === shortcutsModal) {
+        shortcutsModal.classList.add('hidden');
+      }
+    });
+  }
+
   // Setup profile modal
   if (userInfoEl) userInfoEl.addEventListener('click', openProfileModal);
   if (profileCancelBtn) profileCancelBtn.addEventListener('click', closeProfileModal);
@@ -170,6 +195,18 @@ async function init() {
 
   // Initial route
   handleRoute();
+
+  // Global Shortcuts
+  window.addEventListener('keydown', (e) => {
+    // Ctrl+S or Cmd+S for manual save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      if (currentPageId) {
+        const markdown = getMarkdown();
+        handleSave(currentPageId, markdown);
+      }
+    }
+  });
 }
 
 // --- Auth Handlers ---

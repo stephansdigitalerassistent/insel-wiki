@@ -120,9 +120,14 @@
           </svg>
           <span class="sidebar-title">Insel-Wiki</span>
         </div>
-        <button id="new-page-btn" class="btn-icon" title="Neue Seite">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </button>
+        <div class="sidebar-header-actions">
+          <button id="shortcuts-btn" class="btn-icon" title="Tastenkombinationen">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="6" y2="12"/><line x1="10" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="14" y2="12"/><line x1="18" y1="12" x2="18" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+          </button>
+          <button id="new-page-btn" class="btn-icon" title="Neue Seite">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
       </div>
       <div class="sidebar-search">
         <input type="text" id="search-input" placeholder="Suchen…" />
@@ -214,6 +219,33 @@
         <button id="empty-new-page" class="btn btn-primary">+ Neue Seite</button>
       </div>
     </main>
+  </div>
+
+  <!-- Keyboard Shortcuts Modal -->
+  <div id="shortcuts-modal" class="modal-overlay hidden">
+    <div class="modal-box shortcuts-modal-box">
+      <h3 class="modal-title">Tastenkombinationen</h3>
+      <div class="shortcuts-grid">
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>B</kbd> <span>Fett</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>I</kbd> <span>Kursiv</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd> <span>Durchgestrichen</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>E</kbd> <span>Code</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Alt</kbd> + <kbd>1-3</kbd> <span>Überschrift 1-3</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>8</kbd> <span>Aufzählung</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>7</kbd> <span>Nummerierung</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>9</kbd> <span>Aufgabenliste</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> <span>Zitat</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> <span>Code-Block</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>K</kbd> <span>Link einfügen</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Enter</kbd> <span>Trennlinie</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Z</kbd> <span>Rückgängig</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Y</kbd> <span>Wiederholen</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>S</kbd> <span>Speichern</span></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="shortcuts-close-btn">Schliessen</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

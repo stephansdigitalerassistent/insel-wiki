@@ -116,6 +116,11 @@ html, body {
   padding: 16px 16px 8px;
 }
 
+.sidebar-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
 .sidebar-logo {
   display: flex;
   align-items: center;
@@ -1211,6 +1216,49 @@ html, body {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+/* --- Keyboard Shortcuts Guide --- */
+.shortcuts-modal-box {
+  max-width: 500px !important;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.shortcut-item kbd {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: monospace;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  min-width: 24px;
+  text-align: center;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+}
+
+.shortcut-item span {
+  flex: 1;
+}
+
+@media (max-width: 480px) {
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @keyframes modalFadeIn {

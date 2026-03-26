@@ -3,9 +3,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     match /registration_requests/{tokenId} {
+      // Allow unauthenticated users to create requests if email is correct
       allow create: if request.resource.data.email.matches('.*@insel[.]ch$');
+      
+      // Allow the backend bot to do anything (read, update status, delete)
+      allow read, write, update, delete: if request.auth != null && request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com';
+
+      // Allow the frontend (unauthenticated) to read/cancel its own requests
       allow read, delete: if true; 
-      allow update: if false; 
     }
 
     match /pages/{pageId} {
