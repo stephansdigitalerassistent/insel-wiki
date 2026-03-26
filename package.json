@@ -34,6 +34,7 @@
     "@tiptap/pm": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
     "firebase": "^12.11.0",
+    "firebase-tools": "^15.11.0",
     "marked": "^17.0.5",
     "turndown": "^7.2.2",
     "vite": "^8.0.1",
