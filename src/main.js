@@ -440,21 +440,29 @@ async function handleProfileSave() {
     profileSaveBtn.textContent = 'Speichern';
   }
 }
-
 // --- Routing ---
 function handleRoute() {
   const hash = window.location.hash.replace('#/', '').replace('#', '');
   if (hash) {
-    loadPage(hash);
+    // Extract ID (first part before slash or just the hash)
+    const pageId = hash.split('/')[0];
+    loadPage(pageId);
   } else {
     showEmptyState();
   }
 }
 
-function navigateToPage(pageId) {
-  window.location.hash = `#/${pageId}`;
+function navigateToPage(pageId, title = '') {
+  if (title) {
+    const slug = slugify(title);
+    window.location.hash = `#/${pageId}/${slug}`;
+  } else {
+    window.location.hash = `#/${pageId}`;
+  }
+  
   // Close mobile sidebar
-  sidebar.classList.remove('open');
+  if (sidebar) sidebar.classList.remove('open');
+  if (sidebarOverlay) sidebarOverlay.classList.remove('show');
 }
 
 // --- Page Loading ---
@@ -547,6 +555,13 @@ async function loadPage(pageId) {
         pageTitleInput.value = updatedPage.title || '';
       }
       updateBreadcrumb(pageId);
+      
+      // Keep URL synced with title
+      const slug = slugify(updatedPage.title || '');
+      const newHash = `#/${pageId}/${slug}`;
+      if (window.location.hash !== newHash) {
+        window.history.replaceState(null, '', newHash);
+      }
     }
   });
 
@@ -722,11 +737,12 @@ async function handleNewPage() {
       // Insert link into current editor instead of navigating
       const ed = getEditor();
       if (ed) {
-        ed.chain().focus().insertContent(`<a href="#${pageId}">${title}</a> `).run();
+        const slug = slugify(title);
+        ed.chain().focus().insertContent(`<a href="#/${pageId}/${slug}">${title}</a> `).run();
       }
     } else {
       // Standard behavior: navigate to new page
-      navigateToPage(pageId);
+      navigateToPage(pageId, title);
     }
   } catch (err) {
     console.error('Error creating page:', err);
@@ -768,12 +784,12 @@ function debounce(fn, ms) {
 
 async function handleCopyLink() {
   if (!currentPageId) return;
-  const url = window.location.href;
   const title = pageTitleInput.value.trim() || 'Seite';
-  const markdownLink = `[${title}](${url})`;
+  const slug = slugify(title);
+  const url = `${window.location.origin}${window.location.pathname}#/${currentPageId}/${slug}`;
   
   try {
-    await navigator.clipboard.writeText(markdownLink);
+    await navigator.clipboard.writeText(url);
     const originalContent = copyLinkBtn.innerHTML;
     copyLinkBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`;
     setTimeout(() => {
@@ -782,6 +798,19 @@ async function handleCopyLink() {
   } catch (err) {
     console.error('Failed to copy link:', err);
   }
+}
+
+/**
+ * Convert title to URL-safe slug
+ */
+function slugify(text) {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')     // Replace spaces with -
+    .replace(/[^\w-]+/g, '')   // Remove all non-word chars
+    .replace(/--+/g, '-');     // Replace multiple - with single -
 }
 
 /**
