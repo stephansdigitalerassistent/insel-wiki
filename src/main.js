@@ -769,8 +769,11 @@ function debounce(fn, ms) {
 async function handleCopyLink() {
   if (!currentPageId) return;
   const url = window.location.href;
+  const title = pageTitleInput.value.trim() || 'Seite';
+  const markdownLink = `[${title}](${url})`;
+  
   try {
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(markdownLink);
     const originalContent = copyLinkBtn.innerHTML;
     copyLinkBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`;
     setTimeout(() => {
