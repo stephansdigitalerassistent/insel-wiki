@@ -7,7 +7,7 @@ import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, crea
 import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from './firebase/presence.js';
 import { initSidebar, setActivePage, getBreadcrumb } from './components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from './components/history.js';
-import { promptModal } from './components/modal.js';
+import { promptModal, newPageModal } from './components/modal.js';
 
 // --- State ---
 let currentPageId = null;
@@ -146,16 +146,16 @@ async function init() {
   }
 
   // Setup action buttons
-  document.getElementById('new-page-btn').addEventListener('click', () => handleNewPage(null));
-  if (toolbarNewPageBtn) toolbarNewPageBtn.addEventListener('click', () => handleNewPage(null));
-  if (addChildBtn) addChildBtn.addEventListener('click', () => handleNewPage(currentPageId));
+  document.getElementById('new-page-btn').addEventListener('click', () => handleNewPage());
+  if (toolbarNewPageBtn) toolbarNewPageBtn.addEventListener('click', () => handleNewPage());
+  if (addChildBtn) addChildBtn.addEventListener('click', () => handleNewPage());
   if (deletePageBtn) deletePageBtn.addEventListener('click', handleDeletePage);
   if (historyBtn) historyBtn.addEventListener('click', handleHistoryToggle);
   if (printBtn) printBtn.addEventListener('click', () => window.print());
   if (copyLinkBtn) copyLinkBtn.addEventListener('click', handleCopyLink);
   
   document.getElementById('close-history').addEventListener('click', closeHistoryPanel);
-  document.getElementById('empty-new-page').addEventListener('click', () => handleNewPage(null));
+  document.getElementById('empty-new-page').addEventListener('click', () => handleNewPage());
 
   // Setup shortcuts modal
   const shortcutsBtn = document.getElementById('shortcuts-btn');
@@ -703,15 +703,35 @@ function updateBreadcrumb(pageId) {
 }
 
 // --- Page Actions ---
-async function handleNewPage(parentId) {
+async function handleNewPage() {
   if (!canEdit()) return;
-  const title = await promptModal('Seitentitel eingeben:', 'z.B. Neue Seite', 'Neue Seite');
-  if (!title) return;
+  
+  // Open the new page modal with options
+  const result = await newPageModal(!!currentPageId);
+  if (!result) return;
+
+  const { title, isChild, copyLink } = result;
 
   try {
     const currentUser = getCurrentUser();
+    const parentId = isChild ? currentPageId : null;
     const pageId = await createPage(title, parentId, currentUser?.email || '');
+    
+    // Navigate first
     navigateToPage(pageId);
+
+    // If link requested, copy full URL
+    if (copyLink) {
+      const url = `${window.location.origin}${window.location.pathname}#${pageId}`;
+      setTimeout(async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          // Show a small hint could be added here if needed
+        } catch (err) {
+          console.warn('Auto-copy link failed', err);
+        }
+      }, 500); // Small delay to ensure navigation happened
+    }
   } catch (err) {
     console.error('Error creating page:', err);
     alert('Fehler beim Erstellen der Seite.');
