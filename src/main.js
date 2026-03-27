@@ -2,7 +2,7 @@
 import { initAuth, onAuthChange, login, logout, isLoggedIn, canEdit, getCurrentUser, getAccessRequestLink, updateUserProfile } from './firebase/auth.js';
 import { uploadAvatar } from './firebase/storage.js';
 import { formatDefaultName } from './utils/string.js';
-import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, compactHistory, updatePageTitle, deletePage, restorePage, getDeletedPages, permanentlyDeletePage, getChildren, subscribeToPage, createRegistrationRequest, subscribeToRegistrationRequest, cancelRegistrationRequest } from './firebase/firestore.js';
+import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, restorePage, getDeletedPages, permanentlyDeletePage, getChildren, subscribeToPage, createRegistrationRequest, subscribeToRegistrationRequest, cancelRegistrationRequest } from './firebase/firestore.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider } from './editor/editor.js';
 import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from './firebase/presence.js';
 import { initSidebar, setActivePage, getBreadcrumb } from './components/sidebar.js';
@@ -738,7 +738,7 @@ async function handleHistoryToggle() {
     toggleHistoryPanel();
     loadHistory(currentPageId);
     // Compact history in the background when viewing it
-    // compactHistory(currentPageId).catch(console.warn);
+    // console.log('[Insel-Wiki] Page loaded successfully', currentPageId);
   }
 }
 

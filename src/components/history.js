@@ -1,5 +1,5 @@
 // History panel component
-import { getHistory, formatTimestamp } from '../firebase/firestore.js';
+import { getHistory, formatTimestamp, getFullHistoryContent } from '../firebase/firestore.js';
 import { marked } from 'marked';
 
 let currentPageId = null;
@@ -33,14 +33,16 @@ export async function loadHistory(pageId) {
         <div class="history-date">${formatTimestamp(entry.savedAt)}</div>
         <div class="history-user">${entry.savedBy || 'Unbekannt'}</div>
       `;
-      el.addEventListener('click', () => {
+      el.addEventListener('click', async () => {
         // Highlight active entry
         listEl.querySelectorAll('.history-entry').forEach((e) => e.style.background = '');
         el.style.background = 'var(--accent-subtle)';
 
         // Show preview
         if (previewEl) {
-          previewEl.innerHTML = marked.parse(entry.content || '');
+          previewEl.innerHTML = '<div style="padding: 16px; color: var(--text-muted);">Rekonstruiere Inhalt…</div>';
+          const fullContent = await getFullHistoryContent(currentPageId, entry.id);
+          previewEl.innerHTML = marked.parse(fullContent || '');
         }
       });
       listEl.appendChild(el);

@@ -16,13 +16,15 @@ import {
   serverTimestamp,
   Timestamp,
   limit,
-  writeBatch
+  writeBatch,
+  getCountFromServer
 } from 'firebase/firestore';
+import DiffMatchPatch from 'diff-match-patch';
 
-// --- History compaction settings ---
-const HISTORY_KEEP_RECENT = 20;        // keep last N entries as-is
-const HISTORY_MAX_AGE_DAYS = 30;       // delete entries older than this
-const HISTORY_COMPACT_INTERVAL_MS = 5 * 60 * 1000; // snapshot every 5 min
+const dmp = new DiffMatchPatch();
+
+// --- History settings ---
+const SNAPSHOT_KEYFRAME_INTERVAL = 10; // Save full snapshot every 10th change
 
 const PAGES_COLLECTION = 'pages';
 
@@ -94,21 +96,118 @@ export async function savePage(pageId, content, title, savedBy = '') {
 
 /**
  * Create a history snapshot explicitly.
- * Called on page leave, periodic interval, or manual trigger.
+ * Uses a hybrid approach: saves full text occasionally, and patches for small changes.
  */
 export async function createHistorySnapshot(pageId, content, title, savedBy = '') {
   try {
     const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
+    
+    // 1. Get the latest version to compare
+    const latestSnap = await getLatestHistorySnapshot(pageId);
+    let latestContent = '';
+    
+    if (latestSnap) {
+      latestContent = await getFullHistoryContent(pageId, latestSnap.id);
+    }
+    
+    let type = 'full';
+    let storedContent = content;
+
+    if (latestContent) {
+      // 2. Decide if patch or full
+      const snapshotCount = await getCountFromServer(historyRef);
+      const count = snapshotCount.data().count;
+      
+      // Calculate diff
+      const diffs = dmp.diff_main(latestContent, content);
+      dmp.diff_cleanupSemantic(diffs);
+      const patches = dmp.patch_make(latestContent, diffs);
+      const patchText = dmp.patch_toText(patches);
+
+      // Criteria for patch:
+      const isSmallPatch = patchText.length < content.length * 0.5;
+      const isIntervalKeyframe = (count > 0 && count % SNAPSHOT_KEYFRAME_INTERVAL === 0);
+
+      if (isSmallPatch && !isIntervalKeyframe) {
+        type = 'patch';
+        storedContent = patchText;
+      }
+    }
+
     await addDoc(historyRef, {
-      content,
+      content: storedContent,
+      type, // 'full' or 'patch'
       title: title || '',
       savedBy,
       savedAt: serverTimestamp(),
     });
   } catch (err) {
     console.error('[Insel-Wiki] Snapshot error:', err);
-    // Ignore history snapshot crashes for oversize docs silently to not annoy user twice,
-    // they already get savePage alerts.
+  }
+}
+
+/**
+ * Get the full content of a history entry, reconstructing it from patches if necessary.
+ */
+export async function getFullHistoryContent(pageId, snapshotId) {
+  try {
+    const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
+    const targetSnap = await getDoc(doc(historyRef, snapshotId));
+    
+    if (!targetSnap.exists()) return '';
+    const data = targetSnap.data();
+    
+    if (data.type === 'full' || !data.type) {
+      return data.content;
+    }
+
+    // It's a patch. We need to find the chain of patches since the last full snapshot.
+    // To keep it simple and performant, we fetch all history entries before this one, 
+    // ordered by date descending, until we hit a 'full' one.
+    const q = query(
+      historyRef, 
+      where('savedAt', '<=', data.savedAt),
+      orderBy('savedAt', 'desc'),
+      limit(20) // Limit the chain depth for safety
+    );
+    const querySnapshot = await getDocs(q);
+    const entries = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    // Find the first 'full' entry in the past
+    let baseContent = '';
+    const chain = [];
+    
+    for (const entry of entries) {
+      if (entry.type === 'full' || !entry.type) {
+        baseContent = entry.content;
+        break;
+      }
+      chain.unshift(entry); // Add to beginning to process in chronological order
+    }
+
+    if (!baseContent && entries.length > 0) {
+      // Fallback: If we didn't find a full snap in the last 20, 
+      // the chain is too long or broken.
+      console.warn('History chain too long or broken for', snapshotId);
+      return entries[entries.length - 1].content; // best effort
+    }
+
+    // Apply patches in order
+    let currentContent = baseContent;
+    for (const patchEntry of chain) {
+      try {
+        const patches = dmp.patch_fromText(patchEntry.content);
+        const [reconstructed] = dmp.patch_apply(patches, currentContent);
+        currentContent = reconstructed;
+      } catch (e) {
+        console.error('Failed to apply patch', patchEntry.id, e);
+      }
+    }
+
+    return currentContent;
+  } catch (err) {
+    console.error('Error reconstructing history content:', err);
+    return '';
   }
 }
 
@@ -129,59 +228,6 @@ export async function getLatestHistorySnapshot(pageId) {
   } catch (err) {
     console.error('Error getting latest snapshot:', err);
     return null;
-  }
-}
-
-/**
- * Compact history: keep last HISTORY_KEEP_RECENT entries,
- * for older entries keep only 1 per day, delete entries older than
- * HISTORY_MAX_AGE_DAYS.
- * Runs automatically when history is loaded.
- */
-export async function compactHistory(pageId) {
-  const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
-  const q = query(historyRef, orderBy('savedAt', 'desc'));
-  const snapshot = await getDocs(q);
-  const entries = snapshot.docs;
-
-  if (entries.length <= HISTORY_KEEP_RECENT) return; // nothing to compact
-
-  const now = Date.now();
-  const maxAgeMs = HISTORY_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
-  const seenDays = new Set(); // track "YYYY-MM-DD" keys for daily dedup
-  const toDelete = [];
-
-  entries.forEach((entry, index) => {
-    // Always keep the most recent entries
-    if (index < HISTORY_KEEP_RECENT) return;
-
-    const data = entry.data();
-    const ts = data.savedAt;
-    const date = ts instanceof Timestamp ? ts.toDate() : new Date(ts);
-    const ageMs = now - date.getTime();
-
-    // Delete entries older than max age
-    if (ageMs > maxAgeMs) {
-      toDelete.push(entry.ref);
-      return;
-    }
-
-    // For remaining old entries, keep 1 per day
-    const dayKey = date.toISOString().slice(0, 10); // "YYYY-MM-DD"
-    if (seenDays.has(dayKey)) {
-      toDelete.push(entry.ref);
-    } else {
-      seenDays.add(dayKey);
-    }
-  });
-
-  // Batch delete (Firestore limit: 500 per batch, but unlikely to hit)
-  for (const ref of toDelete) {
-    await deleteDoc(ref);
-  }
-
-  if (toDelete.length > 0) {
-    console.log(`[Insel-Wiki] Compacted history for page ${pageId}: removed ${toDelete.length} old entries`);
   }
 }
 
