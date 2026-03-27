@@ -99,6 +99,7 @@ html, body {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--glass-bg);
@@ -265,15 +266,16 @@ html, body {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
+  gap: 10px;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
   cursor: pointer;
-  padding: 4px;
+  padding: 8px;
+  margin-right: 8px;
   border-radius: var(--radius-sm);
   transition: background var(--transition-fast), color var(--transition-fast);
 }
