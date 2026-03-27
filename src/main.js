@@ -412,8 +412,10 @@ async function handleProfileSave() {
     
     // Upload file if selected
     if (selectedAvatarFile) {
+      profileSaveBtn.textContent = 'Bild verarbeiten...';
+      const resizedFile = await resizeAvatar(selectedAvatarFile, 256);
       profileSaveBtn.textContent = 'Bild hochladen...';
-      newAvatarUrl = await uploadAvatar(selectedAvatarFile, user.uid);
+      newAvatarUrl = await uploadAvatar(resizedFile, user.uid);
     }
     
     profileSaveBtn.textContent = 'Profil wird aktualisiert...';
@@ -741,6 +743,52 @@ function debounce(fn, ms) {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), ms);
   };
+}
+
+/**
+ * Resize an image file using Canvas to a max dimension
+ */
+async function resizeAvatar(file, maxDim = 256) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height *= maxDim / width;
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width *= maxDim / height;
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          } else {
+            reject(new Error('Canvas toBlob failed'));
+          }
+        }, 'image/jpeg', 0.85); // 85% quality JPEG
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // --- Go! ---
