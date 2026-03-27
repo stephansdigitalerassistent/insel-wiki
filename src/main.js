@@ -3,7 +3,7 @@ import { initAuth, onAuthChange, login, logout, isLoggedIn, canEdit, getCurrentU
 import { uploadAvatar } from './firebase/storage.js';
 import { formatDefaultName } from './utils/string.js';
 import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, restorePage, getDeletedPages, permanentlyDeletePage, getChildren, subscribeToPage, createRegistrationRequest, subscribeToRegistrationRequest, cancelRegistrationRequest } from './firebase/firestore.js';
-import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider } from './editor/editor.js';
+import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor } from './editor/editor.js';
 import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from './firebase/presence.js';
 import { initSidebar, setActivePage, getBreadcrumb } from './components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from './components/history.js';
@@ -745,8 +745,8 @@ async function handleNewPage() {
       navigateToPage(pageId, title);
     }
   } catch (err) {
-    console.error('Error creating page:', err);
-    alert('Fehler beim Erstellen der Seite.');
+    console.error('[Insel-Wiki] Error creating page:', err);
+    alert('Fehler beim Erstellen der Seite: ' + (err.message || err));
   }
 }
 
