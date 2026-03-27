@@ -32,15 +32,16 @@ const ARCHIVE_COLLECTION = 'archive';
 /**
  * Create a new page
  */
-export async function createPage(title, parentId = null, order = 0) {
+export async function createPage(title, parentId = null, createdBy = '') {
   const pagesRef = collection(db, PAGES_COLLECTION);
   const docRef = await addDoc(pagesRef, {
     title,
     parentId,
-    order,
+    order: 0, // Default order
     content: '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+    createdBy,
     deleted: false
   });
   return docRef.id;
