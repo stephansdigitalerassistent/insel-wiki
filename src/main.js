@@ -711,26 +711,22 @@ async function handleNewPage() {
   if (!result) return;
 
   const { title, isChild, copyLink } = result;
+  const insertLink = copyLink; // renamed logic for clarity
 
   try {
     const currentUser = getCurrentUser();
     const parentId = isChild ? currentPageId : null;
     const pageId = await createPage(title, parentId, currentUser?.email || '');
     
-    // Navigate first
-    navigateToPage(pageId);
-
-    // If link requested, copy full URL
-    if (copyLink) {
-      const url = `${window.location.origin}${window.location.pathname}#${pageId}`;
-      setTimeout(async () => {
-        try {
-          await navigator.clipboard.writeText(url);
-          // Show a small hint could be added here if needed
-        } catch (err) {
-          console.warn('Auto-copy link failed', err);
-        }
-      }, 500); // Small delay to ensure navigation happened
+    if (insertLink) {
+      // Insert link into current editor instead of navigating
+      const ed = getEditor();
+      if (ed) {
+        ed.chain().focus().insertContent(`<a href="#${pageId}">${title}</a> `).run();
+      }
+    } else {
+      // Standard behavior: navigate to new page
+      navigateToPage(pageId);
     }
   } catch (err) {
     console.error('Error creating page:', err);

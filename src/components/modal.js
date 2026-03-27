@@ -119,12 +119,12 @@ export function newPageModal(canBeChild = false) {
       <span style="${!canBeChild ? 'opacity: 0.5' : ''}">Als Unterseite der aktuellen Seite erstellen</span>
     `;
 
-    // Option: Copy link
+    // Option: Insert link
     const linkOption = document.createElement('label');
     linkOption.className = 'modal-checkbox-label';
     linkOption.innerHTML = `
       <input type="checkbox" id="modal-opt-link">
-      <span>Internen Link zur neuen Seite kopieren</span>
+      <span>Link in aktuelle Seite einfügen</span>
     `;
 
     options.appendChild(childOption);
