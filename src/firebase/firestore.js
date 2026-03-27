@@ -27,27 +27,22 @@ const dmp = new DiffMatchPatch();
 const SNAPSHOT_KEYFRAME_INTERVAL = 10; // Save full snapshot every 10th change
 
 const PAGES_COLLECTION = 'pages';
+const ARCHIVE_COLLECTION = 'archive';
 
 /**
  * Create a new page
  */
-export async function createPage(title, parentId = null, createdBy = '') {
+export async function createPage(title, parentId = null, order = 0) {
   const pagesRef = collection(db, PAGES_COLLECTION);
-  
-  // Get next order number for siblings
-  const siblings = await getChildren(parentId);
-  const order = siblings.length;
-
   const docRef = await addDoc(pagesRef, {
     title,
-    content: '',
     parentId,
     order,
+    content: '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    createdBy,
+    deleted: false
   });
-
   return docRef.id;
 }
 
@@ -55,40 +50,31 @@ export async function createPage(title, parentId = null, createdBy = '') {
  * Get a single page by ID
  */
 export async function getPage(pageId) {
-  const docRef = doc(db, PAGES_COLLECTION, pageId);
-  const snapshot = await getDoc(docRef);
-  if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...snapshot.data() };
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  const snap = await getDoc(pageRef);
+  if (snap.exists()) {
+    return { id: snap.id, ...snap.data() };
+  }
+  return null;
 }
 
 /**
- * Get children of a page (or root pages if parentId is null)
- */
-export async function getChildren(parentId = null) {
-  const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(
-    pagesRef,
-    where('parentId', '==', parentId),
-    orderBy('order', 'asc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
-/**
- * Save page content only (no history snapshot).
- * Called by the editor's debounced auto-save.
+ * Update page content and title
  */
 export async function savePage(pageId, content, title, savedBy = '') {
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
   try {
-    const pageRef = doc(db, PAGES_COLLECTION, pageId);
-    const updates = { updatedAt: serverTimestamp() };
-    if (content !== undefined) updates.content = content;
-    if (title !== undefined) updates.title = title;
-    await updateDoc(pageRef, updates);
+    await updateDoc(pageRef, {
+      content,
+      title,
+      updatedAt: serverTimestamp(),
+      lastSavedBy: savedBy
+    });
   } catch (err) {
-    console.error('[Insel-Wiki] Save error:', err);
-    if (err.message && err.message.includes('longer than 1048487 bytes')) {
+    console.error('Firestore save error:', err);
+    if (err.code === 'unavailable') {
+      alert('Verbindung zum Server unterbrochen. Bitte überprüfe deine Internetverbindung.');
+    } else if (err.code === 'resource-exhausted') {
       alert('Speicherfehler: Der Inhalt der Seite ist zu groß (über 1MB). Bitte reduziere die Menge an eingefügten Bildern.');
     }
   }
@@ -162,18 +148,15 @@ export async function getFullHistoryContent(pageId, snapshotId) {
     }
 
     // It's a patch. We need to find the chain of patches since the last full snapshot.
-    // To keep it simple and performant, we fetch all history entries before this one, 
-    // ordered by date descending, until we hit a 'full' one.
     const q = query(
       historyRef, 
       where('savedAt', '<=', data.savedAt),
       orderBy('savedAt', 'desc'),
-      limit(20) // Limit the chain depth for safety
+      limit(20) 
     );
     const querySnapshot = await getDocs(q);
     const entries = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     
-    // Find the first 'full' entry in the past
     let baseContent = '';
     const chain = [];
     
@@ -182,17 +165,13 @@ export async function getFullHistoryContent(pageId, snapshotId) {
         baseContent = entry.content;
         break;
       }
-      chain.unshift(entry); // Add to beginning to process in chronological order
+      chain.unshift(entry);
     }
 
     if (!baseContent && entries.length > 0) {
-      // Fallback: If we didn't find a full snap in the last 20, 
-      // the chain is too long or broken.
-      console.warn('History chain too long or broken for', snapshotId);
-      return entries[entries.length - 1].content; // best effort
+      return entries[entries.length - 1].content;
     }
 
-    // Apply patches in order
     let currentContent = baseContent;
     for (const patchEntry of chain) {
       try {
@@ -250,34 +229,32 @@ export async function updatePageTitle(pageId, title) {
 
 /**
  * Soft-delete a page and all its children recursively.
- * Sets `deleted: true` and `deletedAt` timestamp — data is preserved.
  */
 export async function deletePage(pageId) {
-  // Soft-delete children first
-  const children = await getChildren(pageId);
-  for (const child of children) {
+  const pagesRef = collection(db, PAGES_COLLECTION);
+  const q = query(pagesRef, where('parentId', '==', pageId));
+  const snapshot = await getDocs(q);
+  for (const child of snapshot.docs) {
     await deletePage(child.id);
   }
 
-  // Mark page as deleted
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
   await updateDoc(pageRef, {
     deleted: true,
-    deletedAt: serverTimestamp(),
+    deletedAt: serverTimestamp()
   });
 }
 
 /**
- * Restore a soft-deleted page (and its children).
+ * Restore a soft-deleted page and all its children.
  */
 export async function restorePage(pageId) {
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
   await updateDoc(pageRef, {
     deleted: false,
-    deletedAt: null,
+    deletedAt: null
   });
 
-  // Also restore children that were deleted together
   const pagesRef = collection(db, PAGES_COLLECTION);
   const q = query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true));
   const snapshot = await getDocs(q);
@@ -297,28 +274,54 @@ export async function getDeletedPages() {
 }
 
 /**
- * Permanently delete a page and all its children + history.
- * This is irreversible.
+ * Move a page and all its children + history to the archive collection,
+ * then remove it from the active pages collection.
  */
 export async function permanentlyDeletePage(pageId) {
-  // Delete children first
-  const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(pagesRef, where('parentId', '==', pageId));
-  const snapshot = await getDocs(q);
-  for (const child of snapshot.docs) {
-    await permanentlyDeletePage(child.id);
-  }
+  try {
+    const pageRef = doc(db, PAGES_COLLECTION, pageId);
+    const pageSnap = await getDoc(pageRef);
+    
+    if (!pageSnap.exists()) return;
+    const pageData = pageSnap.data();
 
-  // Delete history subcollection
-  const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
-  const historySnaps = await getDocs(historyRef);
-  for (const snap of historySnaps.docs) {
-    await deleteDoc(snap.ref);
-  }
+    // 1. Archive children first (recursive)
+    const pagesRef = collection(db, PAGES_COLLECTION);
+    const q = query(pagesRef, where('parentId', '==', pageId));
+    const snapshot = await getDocs(q);
+    for (const child of snapshot.docs) {
+      await permanentlyDeletePage(child.id);
+    }
 
-  // Delete the page document
-  const pageRef = doc(db, PAGES_COLLECTION, pageId);
-  await deleteDoc(pageRef);
+    // 2. Archive history subcollection
+    const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
+    const historySnaps = await getDocs(historyRef);
+    const archivedHistoryRef = collection(db, ARCHIVE_COLLECTION, pageId, 'history');
+    
+    for (const snap of historySnaps.docs) {
+      await setDoc(doc(archivedHistoryRef, snap.id), {
+        ...snap.data(),
+        archivedAt: serverTimestamp()
+      });
+      await deleteDoc(snap.ref);
+    }
+
+    // 3. Archive the main page document
+    const archiveRef = doc(db, ARCHIVE_COLLECTION, pageId);
+    await setDoc(archiveRef, {
+      ...pageData,
+      archivedAt: serverTimestamp(),
+      originalCollection: PAGES_COLLECTION
+    });
+
+    // 4. Finally delete the original page
+    await deleteDoc(pageRef);
+    
+    console.log(`[Insel-Wiki] Page ${pageId} successfully moved to archive.`);
+  } catch (err) {
+    console.error('Error during permanent delete (archiving):', err);
+    throw err;
+  }
 }
 
 /**
@@ -333,7 +336,6 @@ export async function getHistory(pageId) {
 
 /**
  * Subscribe to the full page tree in real time
- * Returns an unsubscribe function
  */
 export function subscribeToPages(callback) {
   const pagesRef = collection(db, PAGES_COLLECTION);
@@ -351,9 +353,9 @@ export function subscribeToPages(callback) {
  */
 export function subscribeToPage(pageId, callback) {
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
-  return onSnapshot(pageRef, (snapshot) => {
-    if (snapshot.exists()) {
-      callback({ id: snapshot.id, ...snapshot.data() });
+  return onSnapshot(pageRef, (snap) => {
+    if (snap.exists()) {
+      callback({ id: snap.id, ...snap.data() });
     } else {
       callback(null);
     }
@@ -361,63 +363,46 @@ export function subscribeToPage(pageId, callback) {
 }
 
 /**
- * Format a Firestore timestamp for display
+ * Update multiple pages (used for hierarchy changes)
+ */
+export async function updatePageHierarchy(pageId, parentId, order) {
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  await updateDoc(pageRef, { parentId, order, updatedAt: serverTimestamp() });
+}
+
+/**
+ * Get all children of a page
+ */
+export async function getChildren(pageId) {
+  const pagesRef = collection(db, PAGES_COLLECTION);
+  const q = query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', false), orderBy('order', 'asc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/**
+ * Get relative timestamp string
  */
 export function formatTimestamp(ts) {
-  if (!ts) return '';
+  if (!ts) return 'Gerade eben';
   const date = ts instanceof Timestamp ? ts.toDate() : new Date(ts);
-  return date.toLocaleString('de-CH', {
-    day: '2-digit',
-    month: '2-digit',
+  return date.toLocaleString('de-CH', { 
+    day: '2-digit', 
+    month: '2-digit', 
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit',
+    minute: '2-digit'
   });
 }
 
 /**
- * Update the hierarchy and order of pages.
- * Called when a page is dragged and dropped.
+ * Registration logic
  */
-export async function updatePageHierarchy(draggedId, newParentId, newOrder) {
-  const batch = writeBatch(db);
-  const pagesRef = collection(db, PAGES_COLLECTION);
-  
-  // 1. Get all siblings in the new parent's context
-  const targetSiblings = await getChildren(newParentId);
-  const siblingsList = targetSiblings
-    .filter(p => p.id !== draggedId && !p.deleted) // remove dragged item from current position
-    .sort((a, b) => a.order - b.order);
-    
-  // 2. Insert dragged item at the requested target index
-  // Note: we just need to place an object representing the dragged item at the specified index
-  const draggedPlaceholder = { id: draggedId };
-  siblingsList.splice(newOrder, 0, draggedPlaceholder);
-  
-  // 3. Batch update the new order for all siblings in the destination list
-  siblingsList.forEach((sibling, index) => {
-    const ref = doc(db, PAGES_COLLECTION, sibling.id);
-    const updates = { order: index };
-    
-    // For the dragged item itself, also update parentId
-    if (sibling.id === draggedId) {
-      updates.parentId = newParentId;
-      updates.updatedAt = serverTimestamp();
-    }
-    
-    batch.update(ref, updates);
-  });
-  
-  await batch.commit();
-}
-
-// --- Registration Workflow ---
-
 export async function createRegistrationRequest(tokenId, email, password) {
   const reqRef = doc(db, 'registration_requests', tokenId);
   await setDoc(reqRef, {
-    email: email,
-    password: password,
+    email,
+    password, // Hash this in a real production app!
     status: 'pending',
     createdAt: serverTimestamp()
   });
@@ -425,11 +410,11 @@ export async function createRegistrationRequest(tokenId, email, password) {
 
 export function subscribeToRegistrationRequest(tokenId, callback) {
   const reqRef = doc(db, 'registration_requests', tokenId);
-  return onSnapshot(reqRef, (snapshot) => {
-    if (snapshot.exists()) {
-      callback(snapshot.data());
+  return onSnapshot(reqRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.id, snap.data());
     } else {
-      callback(null); // Document was deleted (could mean success or cancelled)
+      callback(null);
     }
   });
 }
