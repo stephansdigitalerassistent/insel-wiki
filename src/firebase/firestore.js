@@ -157,7 +157,7 @@ export async function getFullHistoryContent(pageId, snapshotId) {
     if (!targetSnap.exists()) return '';
     const data = targetSnap.data();
     
-    if (data.type === 'full' || !data.type) {
+    if (data.type === 'full') {
       return data.content;
     }
 
@@ -178,7 +178,7 @@ export async function getFullHistoryContent(pageId, snapshotId) {
     const chain = [];
     
     for (const entry of entries) {
-      if (entry.type === 'full' || !entry.type) {
+      if (entry.type === 'full') {
         baseContent = entry.content;
         break;
       }

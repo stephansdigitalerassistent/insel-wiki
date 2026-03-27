@@ -52,11 +52,7 @@ export function createEditor(element, pageId, user, onSave) {
   // Create Custom Firestore Provider for robust serverless sync
   provider = new FirestoreYjsProvider(pageId, ydoc, user);
   provider.setLoadCallback((hasYjsState) => {
-    // If it's a completely blank/legacy page without Yjs state, 
-    // inject the markdown backup as a starting point.
-    if (!hasYjsState && window.pendingMarkdownInjection !== undefined) {
-      setContent(window.pendingMarkdownInjection);
-    }
+    // Page loaded successfully
   });
 
   const extensions = [

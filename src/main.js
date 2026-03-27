@@ -509,15 +509,7 @@ async function loadPage(pageId) {
     }
   }
 
-  // Defer content injection to the Yjs Provider load callback
-  // It will only be injected if there is no pre-existing compressed Yjs state.
-  let initialMarkdown = page.content || '';
-  if (initialMarkdown.length > 100000) {
-    initialMarkdown = initialMarkdown.substring(0, 100000);
-    console.warn('[Insel-Wiki] Loaded content exceeded 100,000 characters and was truncated.');
-  }
-  window.pendingMarkdownInjection = initialMarkdown;
-  
+  // Content is handled by the Yjs Provider load callback
   setEditable(canEdit());
   pageTitleInput.readOnly = !canEdit();
 
