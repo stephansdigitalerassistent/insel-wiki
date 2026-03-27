@@ -5,7 +5,7 @@ import { formatDefaultName } from './utils/string.js';
 import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, restorePage, getDeletedPages, permanentlyDeletePage, getChildren, subscribeToPage, createRegistrationRequest, subscribeToRegistrationRequest, cancelRegistrationRequest } from './firebase/firestore.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor } from './editor/editor.js';
 import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from './firebase/presence.js';
-import { initSidebar, setActivePage, getBreadcrumb } from './components/sidebar.js';
+import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from './components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from './components/history.js';
 import { promptModal, newPageModal } from './components/modal.js';
 
@@ -499,6 +499,19 @@ async function loadPage(pageId) {
     return;
   }
 
+  // Self-heal internal links before loading into editor
+  const { markdown: healedMarkdown, changed } = selfHealLinks(page.content || '');
+  if (changed) {
+    console.log(`[Insel-Wiki] Auto-healed links for page: ${pageId}`);
+    page.content = healedMarkdown;
+    // Trigger a silent background save
+    setTimeout(() => {
+      if (canEdit()) {
+        savePage(pageId, healedMarkdown, page.title, 'System (Link-Healer)').catch(console.warn);
+      }
+    }, 2000);
+  }
+
   // Set title
   pageTitleInput.value = page.title || '';
 
@@ -813,6 +826,43 @@ async function handleCopyLink() {
   } catch (err) {
     console.error('Failed to copy link:', err);
   }
+}
+
+/**
+ * Automatically find and update outdated internal links in markdown content.
+ */
+function selfHealLinks(markdown) {
+  const pages = getAllPages();
+  if (!pages || pages.length === 0) return markdown;
+
+  const pageMap = new Map(pages.map(p => [p.id, p.title]));
+  let changed = false;
+
+  // Regex matches: [Text](#/ID/Slug)
+  // Group 1: Text, Group 2: ID, Group 3: Slug
+  const healedMarkdown = markdown.replace(/\[(.*?)\]\(#\/(.*?)\/(.*?)\)/g, (match, text, id, slug) => {
+    const currentTitle = pageMap.get(id);
+    if (!currentTitle) return match; // Page not found or deleted
+
+    const currentSlug = slugify(currentTitle);
+    
+    // Check if the URL slug is outdated
+    if (slug !== currentSlug) {
+      changed = true;
+      
+      // If the link text matched the old slug (standard naming), update it too
+      if (slugify(text) === slug) {
+        return `[${currentTitle}](#/${id}/${currentSlug})`;
+      } else {
+        // Custom text: keep text, only update URL slug
+        return `[${text}](#/${id}/${currentSlug})`;
+      }
+    }
+    
+    return match;
+  });
+
+  return { markdown: healedMarkdown, changed };
 }
 
 /**
