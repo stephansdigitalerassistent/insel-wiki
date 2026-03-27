@@ -113,6 +113,26 @@ export async function createHistorySnapshot(pageId, content, title, savedBy = ''
 }
 
 /**
+ * Get the latest history snapshot for a page
+ */
+export async function getLatestHistorySnapshot(pageId) {
+  try {
+    const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
+    const q = query(historyRef, orderBy('savedAt', 'desc'), limit(1));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const doc = querySnapshot.docs[0];
+      return { id: doc.id, ...doc.data() };
+    }
+    return null;
+  } catch (err) {
+    console.error('Error getting latest snapshot:', err);
+    return null;
+  }
+}
+
+/**
  * Compact history: keep last HISTORY_KEEP_RECENT entries,
  * for older entries keep only 1 per day, delete entries older than
  * HISTORY_MAX_AGE_DAYS.

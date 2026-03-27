@@ -2,7 +2,7 @@
 import { initAuth, onAuthChange, login, logout, isLoggedIn, canEdit, getCurrentUser, getAccessRequestLink, updateUserProfile } from './firebase/auth.js';
 import { uploadAvatar } from './firebase/storage.js';
 import { formatDefaultName } from './utils/string.js';
-import { createPage, getPage, savePage, createHistorySnapshot, compactHistory, updatePageTitle, deletePage, restorePage, getDeletedPages, permanentlyDeletePage, getChildren, subscribeToPage, createRegistrationRequest, subscribeToRegistrationRequest, cancelRegistrationRequest } from './firebase/firestore.js';
+import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, compactHistory, updatePageTitle, deletePage, restorePage, getDeletedPages, permanentlyDeletePage, getChildren, subscribeToPage, createRegistrationRequest, subscribeToRegistrationRequest, cancelRegistrationRequest } from './firebase/firestore.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider } from './editor/editor.js';
 import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from './firebase/presence.js';
 import { initSidebar, setActivePage, getBreadcrumb } from './components/sidebar.js';
@@ -17,6 +17,10 @@ let currentSessionId = null;
 let formatToolbar = null;
 let historySnapshotInterval = null;
 const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+// History optimization
+let lastSnapshotContent = '';
+let isSnapshotDirty = false;
 
 // --- DOM Elements ---
 const authOverlay = document.getElementById('auth-overlay');
@@ -556,6 +560,11 @@ async function loadPage(pageId) {
     renderPresence(users);
   });
 
+  // Initialize history optimization state
+  isSnapshotDirty = false;
+  const latestSnap = await getLatestHistorySnapshot(pageId);
+  lastSnapshotContent = latestSnap ? latestSnap.content : (page.content || '');
+
   closeSidebarOnMobile();
 }
 
@@ -606,9 +615,20 @@ function showEmptyState() {
  */
 async function snapshotCurrentPage() {
   if (!currentPageId || !canEdit()) return;
+  
+  // Optimization: Only save if there are actual changes
+  if (!isSnapshotDirty) return;
+
   try {
     const markdown = getMarkdown();
     if (!markdown || markdown.trim().length === 0) return;
+    
+    // Extra safety: double check content hasn't reverted or stayed identical
+    if (markdown === lastSnapshotContent) {
+      isSnapshotDirty = false;
+      return;
+    }
+
     const user = getCurrentUser();
     await createHistorySnapshot(
       currentPageId,
@@ -616,6 +636,11 @@ async function snapshotCurrentPage() {
       pageTitleInput.value,
       user?.email || ''
     );
+
+    // Update tracking state
+    lastSnapshotContent = markdown;
+    isSnapshotDirty = false;
+    
   } catch (err) {
     // Silent — don't block navigation for snapshot errors
     console.warn('[Insel-Wiki] Snapshot error:', err);
@@ -626,6 +651,7 @@ async function snapshotCurrentPage() {
 async function handleSave(pageId, markdown) {
   if (!canEdit()) return;
   updateSaveStatus('saving');
+  isSnapshotDirty = true; // Trigger history snapshot on next interval
   try {
     const currentUser = getCurrentUser();
     await savePage(pageId, markdown, pageTitleInput.value, currentUser?.email || '');
