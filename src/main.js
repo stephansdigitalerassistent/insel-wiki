@@ -54,6 +54,8 @@ const historyBtn = document.getElementById('history-btn');
 const printBtn = document.getElementById('print-page-btn');
 const addChildBtn = document.getElementById('add-child-btn');
 const deletePageBtn = document.getElementById('delete-page-btn');
+const toolbarNewPageBtn = document.getElementById('toolbar-new-page-btn');
+const copyLinkBtn = document.getElementById('copy-link-btn');
 const requestAccessLink = document.getElementById('request-access-link');
 const appEl = document.getElementById('app');
 const editorContainer = document.getElementById('editor-container');
@@ -145,10 +147,13 @@ async function init() {
 
   // Setup action buttons
   document.getElementById('new-page-btn').addEventListener('click', () => handleNewPage(null));
+  if (toolbarNewPageBtn) toolbarNewPageBtn.addEventListener('click', () => handleNewPage(null));
   if (addChildBtn) addChildBtn.addEventListener('click', () => handleNewPage(currentPageId));
   if (deletePageBtn) deletePageBtn.addEventListener('click', handleDeletePage);
   if (historyBtn) historyBtn.addEventListener('click', handleHistoryToggle);
   if (printBtn) printBtn.addEventListener('click', () => window.print());
+  if (copyLinkBtn) copyLinkBtn.addEventListener('click', handleCopyLink);
+  
   document.getElementById('close-history').addEventListener('click', closeHistoryPanel);
   document.getElementById('empty-new-page').addEventListener('click', () => handleNewPage(null));
 
@@ -743,6 +748,21 @@ function debounce(fn, ms) {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), ms);
   };
+}
+
+async function handleCopyLink() {
+  if (!currentPageId) return;
+  const url = window.location.href;
+  try {
+    await navigator.clipboard.writeText(url);
+    const originalContent = copyLinkBtn.innerHTML;
+    copyLinkBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`;
+    setTimeout(() => {
+      copyLinkBtn.innerHTML = originalContent;
+    }, 2000);
+  } catch (err) {
+    console.error('Failed to copy link:', err);
+  }
 }
 
 /**
