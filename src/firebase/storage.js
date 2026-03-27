@@ -12,7 +12,7 @@ export async function uploadAvatar(file, uid) {
   
   // Extract file extension and safely upload
   const ext = file.name.split('.').pop() || 'jpg';
-  const path = `avatars/${uid}.${ext}`;
+  const path = `avatars/${uid}/${uid}.${ext}`;
   const storageRef = ref(storage, path);
   
   const snapshot = await uploadBytes(storageRef, file);
@@ -31,7 +31,7 @@ export async function uploadImageFile(file, uid) {
   
   const ext = file.name.split('.').pop() || 'png';
   const timestamp = Date.now();
-  const path = `images/${uid}_${timestamp}.${ext}`;
+  const path = `editor/${uid}/${timestamp}.${ext}`;
   const storageRef = ref(storage, path);
   
   const snapshot = await uploadBytes(storageRef, file);
