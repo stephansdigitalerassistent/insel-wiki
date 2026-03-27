@@ -742,16 +742,23 @@ async function handleNewPage() {
     const pageId = await createPage(title, parentId, currentUser?.email || '');
     
     if (insertLink) {
-      // Insert link into current editor instead of navigating
+      // Insert link into current editor before navigating
       const ed = getEditor();
       if (ed) {
         const slug = slugify(title);
         ed.chain().focus().insertContent(`<a href="#/${pageId}/${slug}">${title}</a> `).run();
+        
+        // Force save the current page immediately so the link isn't lost
+        // before the router unmounts the editor
+        const currentMarkdown = getMarkdown();
+        if (currentPageId && currentMarkdown) {
+           await handleSave(currentPageId, currentMarkdown);
+        }
       }
-    } else {
-      // Standard behavior: navigate to new page
-      navigateToPage(pageId, title);
     }
+    
+    // Always navigate to the newly created page
+    navigateToPage(pageId, title);
   } catch (err) {
     console.error('[Insel-Wiki] Error creating page:', err);
     alert('Fehler beim Erstellen der Seite: ' + (err.message || err));
