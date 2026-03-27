@@ -1,6 +1,7 @@
 // Tiptap WYSIWYG Editor with Yjs collaboration
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
+import { BubbleMenu } from '@tiptap/extension-bubble-menu';
 import { Collaboration } from '@tiptap/extension-collaboration';
 import { CollaborationCursor } from '@tiptap/extension-collaboration-cursor';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -74,6 +75,16 @@ export function createEditor(element, pageId, user, onSave) {
     }),
     Link.configure({
       openOnClick: false,
+      HTMLAttributes: {
+        class: 'editable-link',
+      },
+    }),
+    BubbleMenu.configure({
+      element: document.getElementById('link-bubble-menu'),
+      shouldShow: ({ editor, from, to }) => {
+        // Only show bubble menu when a link is active
+        return editor.isActive('link');
+      },
     }),
     TaskList,
     TaskItem.configure({
@@ -122,6 +133,16 @@ export function createEditor(element, pageId, user, onSave) {
     editorProps: {
       attributes: {
         class: 'tiptap',
+      },
+      handleClick: (view, pos, event) => {
+        const { schema } = view.state;
+        const attrs = view.state.doc.resolve(pos).marks().find(mark => mark.type === schema.marks.link)?.attrs;
+        
+        if (attrs?.href && (event.ctrlKey || event.metaKey)) {
+          window.open(attrs.href, '_blank');
+          return true;
+        }
+        return false;
       },
       handlePaste: (view, event, slice) => {
         const items = Array.from(event.clipboardData?.items || []);
@@ -182,7 +203,35 @@ export function createEditor(element, pageId, user, onSave) {
         }
       }, 1500);
     },
+    onTransaction: ({ editor: ed }) => {
+      const bubbleUrl = document.getElementById('bubble-link-url');
+      if (bubbleUrl && ed.isActive('link')) {
+        const { href } = ed.getAttributes('link');
+        bubbleUrl.href = href;
+        bubbleUrl.textContent = href;
+      }
+    },
   });
+
+  // Setup Bubble Menu button handlers
+  const bubbleEdit = document.getElementById('bubble-link-edit');
+  const bubbleUnlink = document.getElementById('bubble-link-unlink');
+
+  if (bubbleEdit) {
+    bubbleEdit.onclick = async () => {
+      const { href } = editor.getAttributes('link');
+      const newUrl = await promptModal('Link bearbeiten:', href);
+      if (newUrl !== null) {
+        editor.chain().focus().extendMarkRange('link').setLink({ href: newUrl }).run();
+      }
+    };
+  }
+
+  if (bubbleUnlink) {
+    bubbleUnlink.onclick = () => {
+      editor.chain().focus().unsetLink().run();
+    };
+  }
 
   // Start initialization of async Provider load
   provider.init();
