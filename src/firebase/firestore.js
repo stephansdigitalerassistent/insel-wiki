@@ -212,6 +212,15 @@ export async function getFullHistoryContent(pageId, snapshotId) {
 }
 
 /**
+ * Compute a visual HTML diff between two texts
+ */
+export function computeDiffHtml(oldText, newText) {
+  const diffs = dmp.diff_main(oldText || '', newText || '');
+  dmp.diff_cleanupSemantic(diffs);
+  return dmp.diff_prettyHtml(diffs);
+}
+
+/**
  * Get the latest history snapshot for a page
  */
 export async function getLatestHistorySnapshot(pageId) {

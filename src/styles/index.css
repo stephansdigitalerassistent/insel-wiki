@@ -1346,6 +1346,36 @@ html, body {
   color: var(--text-primary);
 }
 
+/* --- Diff Styles --- */
+.diff-view {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-view ins {
+  background-color: rgba(52, 211, 153, 0.2);
+  color: #a7f3d0;
+  text-decoration: none;
+  border-bottom: 1px solid var(--success);
+}
+
+.diff-view del {
+  background-color: rgba(248, 113, 113, 0.2);
+  color: #fecaca;
+  text-decoration: line-through;
+  border-bottom: 1px solid var(--danger);
+}
+
+.diff-empty-hint {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* --- Print Styles --- */
 @media print {
   /* Override variables to plain black/white for clarity and ink-saving */

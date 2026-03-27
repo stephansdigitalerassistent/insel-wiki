@@ -1,5 +1,5 @@
 // History panel component
-import { getHistory, formatTimestamp, getFullHistoryContent } from '../firebase/firestore.js';
+import { getHistory, formatTimestamp, getFullHistoryContent, computeDiffHtml } from '../firebase/firestore.js';
 import { marked } from 'marked';
 
 let currentPageId = null;
@@ -38,11 +38,34 @@ export async function loadHistory(pageId) {
         listEl.querySelectorAll('.history-entry').forEach((e) => e.style.background = '');
         el.style.background = 'var(--accent-subtle)';
 
-        // Show preview
+        // Show preview with diff
         if (previewEl) {
-          previewEl.innerHTML = '<div style="padding: 16px; color: var(--text-muted);">Rekonstruiere Inhalt…</div>';
-          const fullContent = await getFullHistoryContent(currentPageId, entry.id);
-          previewEl.innerHTML = marked.parse(fullContent || '');
+          previewEl.innerHTML = '<div style="padding: 16px; color: var(--text-muted);">Vergleiche Versionen…</div>';
+          
+          // Get current selected content
+          const currentVersionContent = await getFullHistoryContent(currentPageId, entry.id);
+          
+          // Get previous content (if exists)
+          let previousVersionContent = '';
+          if (index < entries.length - 1) {
+            const prevEntry = entries[index + 1]; // entries are descending
+            previousVersionContent = await getFullHistoryContent(currentPageId, prevEntry.id);
+          }
+
+          if (!previousVersionContent) {
+            // First version or no previous: show full marked content
+            previewEl.innerHTML = `
+              <div style="padding: 8px; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 12px;">Erste Version</div>
+              ${marked.parse(currentVersionContent || '')}
+            `;
+          } else {
+            // Show visual diff
+            const diffHtml = computeDiffHtml(previousVersionContent, currentVersionContent);
+            previewEl.innerHTML = `
+              <div style="padding: 8px; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 12px;">Änderungen in dieser Version:</div>
+              <div class="diff-view">${diffHtml}</div>
+            `;
+          }
         }
       });
       listEl.appendChild(el);
