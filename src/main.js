@@ -579,6 +579,14 @@ async function loadPage(pageId) {
   const latestSnap = await getLatestHistorySnapshot(pageId);
   lastSnapshotContent = latestSnap ? latestSnap.content : (page.content || '');
 
+  // Auto-focus logic: focus title if empty, else editor handles it via autofocus: 'end'
+  if (!page.title || page.title === 'Neue Seite') {
+    setTimeout(() => {
+      pageTitleInput.focus();
+      pageTitleInput.select();
+    }, 100);
+  }
+
   closeSidebarOnMobile();
 }
 

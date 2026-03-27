@@ -126,6 +126,7 @@ export function createEditor(element, pageId, user, onSave) {
   editor = new Editor({
     element,
     extensions,
+    autofocus: 'end',
     editorProps: {
       attributes: {
         class: 'tiptap',
