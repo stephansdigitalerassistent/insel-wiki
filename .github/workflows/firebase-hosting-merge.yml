@@ -23,9 +23,10 @@ jobs:
           VITE_FIREBASE_APP_ID: "1:485637054444:web:b11ab31e2f31b0fb136ac9"
           VITE_FIREBASE_MEASUREMENT_ID: "G-MYMGER7S1R"
       - name: Deploy to Firebase
-        uses: w9jds/firebase-action@master
+        uses: w9jds/firebase-action@v15.12.0
         with:
           args: deploy
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_INSEL_WIKI }}
           PROJECT_ID: insel-wiki
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
