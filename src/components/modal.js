@@ -21,6 +21,7 @@ export function promptModal(title, placeholder = '', defaultValue = '') {
     // 4. Input field
     const input = document.createElement('input');
     input.type = 'text';
+    input.id = 'prompt-modal-input';
     input.className = 'modal-input';
     input.placeholder = placeholder;
     input.value = defaultValue;
@@ -36,6 +37,7 @@ export function promptModal(title, placeholder = '', defaultValue = '') {
     
     // 7. Submit button
     const submitBtn = document.createElement('button');
+    submitBtn.id = 'prompt-modal-submit';
     submitBtn.className = 'btn btn-primary';
     submitBtn.textContent = 'OK';
     
@@ -103,6 +105,7 @@ export function newPageModal(canBeChild = false) {
     
     const input = document.createElement('input');
     input.type = 'text';
+    input.id = 'new-page-modal-input';
     input.className = 'modal-input';
     input.placeholder = 'Seitentitel…';
     input.value = 'Neue Seite';
@@ -138,6 +141,7 @@ export function newPageModal(canBeChild = false) {
     cancelBtn.textContent = 'Abbrechen';
     
     const submitBtn = document.createElement('button');
+    submitBtn.id = 'new-page-modal-submit';
     submitBtn.className = 'btn btn-primary';
     submitBtn.textContent = 'Erstellen';
     

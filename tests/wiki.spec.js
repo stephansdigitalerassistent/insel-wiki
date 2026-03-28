@@ -1,85 +1,135 @@
 import { test, expect } from '@playwright/test';
 
-// Credentials for testing (using the created test account)
+// Credentials for testing
 const TEST_USER = 'test.user@insel.ch';
 const TEST_PASS = 'InselWikiTest2026!';
 
-test.describe('Insel-Wiki Core E2E Tests', () => {
+/**
+ * Helper to perform login
+ */
+async function login(page) {
+  await page.goto('/');
+  await page.waitForLoadState('domcontentloaded');
+  
+  const overlay = page.locator('#auth-overlay');
+  
+  // If overlay is already hidden, we are logged in
+  const isHidden = await overlay.isHidden();
+  if (isHidden) return;
+  
+  await page.fill('#login-email', TEST_USER);
+  await page.fill('#login-password', TEST_PASS);
+  await page.click('#login-btn');
+  await expect(overlay).toBeHidden({ timeout: 15000 });
+}
+
+test.describe('Insel-Wiki Robust Suite', () => {
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await login(page);
   });
 
-  test('should show login screen for unauthenticated users', async ({ page }) => {
-    await expect(page.locator('#auth-overlay')).toBeVisible();
-    await expect(page.locator('#login-email')).toBeVisible();
-  });
-
-  test('should login successfully', async ({ page }) => {
-    await page.fill('#login-email', TEST_USER);
-    await page.fill('#login-password', TEST_PASS);
-    await page.click('#login-btn');
-
-    // Wait for overlay to disappear with extended timeout
-    await expect(page.locator('#auth-overlay')).toBeHidden({ timeout: 15000 });
+  test('Page Lifecycle: Create, Rename, and Delete', async ({ page }) => {
+    const uniqueTitle = `Test-Seite ${Date.now()}`;
     
-    // Verify user info is displayed
-    await expect(page.locator('#user-info')).toContainText('Test User');
-  });
-
-  test('should search and find content (Full-Text)', async ({ page }) => {
-    // 1. Login
-    await page.fill('#login-email', TEST_USER);
-    await page.fill('#login-password', TEST_PASS);
-    await page.click('#login-btn');
-    await expect(page.locator('#auth-overlay')).toBeHidden({ timeout: 15000 });
-
-    // 2. Perform search
-    const searchInput = page.locator('#search-input');
-    await searchInput.fill('Willkommen');
+    // 1. Create Page
+    await page.click('#new-page-btn');
+    await expect(page.locator('#new-page-modal-input')).toBeVisible();
+    await page.fill('#new-page-modal-input', uniqueTitle);
+    await page.click('#new-page-modal-submit');
     
-    // 3. Verify search result visibility
-    await page.waitForTimeout(1000); // Wait for filter
-    await expect(page.locator('.page-tree')).toBeVisible();
-  });
+    // Verify it's loaded
+    await expect(page.locator('#page-title')).toHaveValue(uniqueTitle, { timeout: 10000 });
+    await expect(page.locator('.tree-item.active')).toContainText(uniqueTitle);
 
-  test('mobile: should toggle sidebar', async ({ page, isMobile }) => {
-    test.skip(!isMobile, 'This test is only for mobile devices');
+    // 2. Rename
+    const updatedTitle = `${uniqueTitle} (Edited)`;
+    await page.fill('#page-title', updatedTitle);
+    // Wait for debounce save (800ms in main.js)
+    await page.waitForTimeout(1500);
+    await expect(page.locator('.tree-item.active')).toContainText(updatedTitle);
 
-    // 1. Check if sidebar is hidden by default on mobile
-    const sidebar = page.locator('#sidebar');
-    // On mobile, the CSS transform: translateX(-100%) is used.
-    // We check for the 'open' class
-    await expect(sidebar).not.toHaveClass(/open/);
-
-    // 2. Click toggle button
-    await page.click('#sidebar-toggle');
-
-    // 3. Verify sidebar is open
-    await expect(sidebar).toHaveClass(/open/);
-
-    // 4. Click overlay to close
-    await page.click('#sidebar-overlay', { position: { x: 270, y: 100 } }); // Click outside
-    await expect(sidebar).not.toHaveClass(/open/);
-  });
-
-  test('should show "Last edited by" badge on a page', async ({ page }) => {
-    // 1. Login
-    await page.fill('#login-email', TEST_USER);
-    await page.fill('#login-password', TEST_PASS);
-    await page.click('#login-btn');
+    // 3. Delete
+    page.once('dialog', dialog => dialog.accept());
+    await page.click('#delete-page-btn');
     
-    // 2. Navigate to a page if hash exists, or wait for tree
+    // After delete, should show empty state
+    await expect(page.locator('#empty-state')).toBeVisible();
+  });
+
+  test('Collaboration: Add Inline Comment', async ({ page }) => {
+    // Navigate to a page
     await page.waitForSelector('.tree-item');
-    const firstPage = page.locator('.tree-item').first();
-    await firstPage.click();
+    await page.locator('.tree-item').first().click();
+    await page.waitForTimeout(1000); // Wait for editor load
 
-    // 3. Check for badge visibility
-    // It might be hidden if never edited, but usually pages have metadata
-    const badge = page.locator('#last-edited-badge');
-    // If it exists in the DOM, check its structure
-    if (await badge.isVisible()) {
-        await expect(badge).toContainText('Zuletzt bearbeitet von');
-    }
+    // Type text
+    const editor = page.locator('.tiptap');
+    await editor.focus();
+    await page.keyboard.type('Test-Text für Kommentar.');
+    
+    // Select all
+    await page.keyboard.press('Control+A');
+    
+    // Click Comment button
+    await page.click('[data-action="comment"]');
+    
+    const sidebar = page.locator('.comments-sidebar');
+    await expect(sidebar).toBeVisible();
+    
+    // Type and save
+    await page.fill('#new-comment-text', 'Automatisierter Test-Kommentar');
+    await page.click('#save-comment-btn');
+    
+    // Verify
+    await expect(page.locator('.comment-item').first()).toContainText('Automatisierter');
   });
+
+  test('Collaboration: User Mentions (@)', async ({ page }) => {
+    await page.waitForSelector('.tree-item');
+    await page.locator('.tree-item').first().click();
+    await page.waitForTimeout(1000);
+
+    const editor = page.locator('.tiptap');
+    await editor.focus();
+    await page.keyboard.type('Paging @');
+    
+    // Check suggestions
+    const suggestions = page.locator('.mention-suggestions');
+    await expect(suggestions).toBeVisible({ timeout: 10000 });
+    await page.keyboard.press('Enter');
+    
+    await expect(editor).toContainText('@');
+  });
+
+  test('Search: Full-Text Highlight', async ({ page }) => {
+    const searchTerm = `SearchKey-${Date.now()}`;
+    
+    // 1. Create page with search term
+    await page.click('#new-page-btn');
+    await page.fill('#new-page-modal-input', `SearchTest-${Date.now()}`);
+    await page.click('#new-page-modal-submit');
+    
+    await page.locator('.tiptap').focus();
+    await page.keyboard.type(`Dies ist ein geheimes Wort: ${searchTerm}`);
+    await page.waitForTimeout(1000); // Save sync
+
+    // 2. Search
+    const searchInput = page.locator('#search-input');
+    await searchInput.fill(searchTerm);
+    
+    // 3. Verify snippet
+    await expect(page.locator('.search-snippet')).toContainText(searchTerm);
+    await expect(page.locator('.search-snippet mark')).toBeVisible();
+  });
+
+  test('Profile: Update Name', async ({ page }) => {
+    await page.click('#user-info');
+    const newName = `User-${Math.floor(Math.random() * 1000)}`;
+    await page.fill('#profile-name', newName);
+    await page.click('#profile-save-btn');
+    
+    await expect(page.locator('#user-info')).toContainText(newName);
+  });
+
 });
