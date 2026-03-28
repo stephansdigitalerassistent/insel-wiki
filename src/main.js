@@ -8,6 +8,7 @@ import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from './fi
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from './components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from './components/history.js';
 import { promptModal, newPageModal } from './components/modal.js';
+import { initComments, loadCommentsForPage } from './components/comments.js';
 
 // --- State ---
 let currentPageId = null;
@@ -222,6 +223,9 @@ async function init() {
 
   // Initial route
   handleRoute();
+
+  // Init comments
+  initComments(appEl);
 
   // Global Shortcuts
   window.addEventListener('keydown', (e) => {
@@ -487,6 +491,7 @@ async function loadPage(pageId) {
 
   currentPageId = pageId;
   setActivePage(pageId);
+  loadCommentsForPage(pageId);
 
   // Show editor, hide empty state
   editorContainer.classList.remove('hidden');

@@ -3,13 +3,14 @@
 // @insel.ch users send their chosen password via email → admin or Cloud Function creates account.
 // Logged-in users can edit.
 
-import { auth } from './config.js';
+import { auth, db } from './config.js';
 import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // Wiki admin email — receiving end for access requests
 const WIKI_ADMIN_EMAIL = 'wiki-admin@insel.ch';
@@ -107,6 +108,15 @@ export async function updateUserProfile(displayName, photoURL) {
   
   await updateProfile(currentUser, { displayName, photoURL });
   
+  // Sync with Firestore users collection for mentions/search
+  const userRef = doc(db, 'users', currentUser.uid);
+  await setDoc(userRef, {
+    displayName,
+    photoURL,
+    email: currentUser.email,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
   // Refresh standard fields so they propagate to state changes
   // Firebase Auth does not trigger onAuthStateChanged after updateProfile
   currentUser = { ...currentUser, displayName, photoURL };

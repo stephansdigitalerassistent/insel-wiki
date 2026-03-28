@@ -397,6 +397,50 @@ export function formatTimestamp(ts) {
 }
 
 /**
+ * Get all comments for a page
+ */
+export async function getComments(pageId) {
+  const commentsRef = collection(db, PAGES_COLLECTION, pageId, 'comments');
+  const q = query(commentsRef, orderBy('createdAt', 'asc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+/**
+ * Save a new comment
+ */
+export async function saveComment(pageId, commentId, text, userId, userName) {
+  const commentRef = doc(db, PAGES_COLLECTION, pageId, 'comments', commentId);
+  await setDoc(commentRef, {
+    text,
+    userId,
+    userName,
+    createdAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Subscribe to comments for a page
+ */
+export function subscribeToComments(pageId, callback) {
+  const commentsRef = collection(db, PAGES_COLLECTION, pageId, 'comments');
+  const q = query(commentsRef, orderBy('createdAt', 'asc'));
+  return onSnapshot(q, (snapshot) => {
+    const comments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    callback(comments);
+  });
+}
+
+/**
+ * Get all active users (for mentions)
+ */
+export async function getUsers() {
+  const usersRef = collection(db, 'users');
+  const snapshot = await getDocs(usersRef);
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+/**
  * Registration logic
  */
 export async function createRegistrationRequest(tokenId, email, password) {

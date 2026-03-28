@@ -15,6 +15,9 @@ import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { CodeBlock } from '@tiptap/extension-code-block';
 import { CharacterCount } from '@tiptap/extension-character-count';
+import { Comment } from './Comment.js';
+import { Mention } from '@tiptap/extension-mention';
+import suggestion from './suggestions.js';
 import * as Y from 'yjs';
 import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
 
@@ -63,6 +66,13 @@ export function createEditor(element, pageId, user, onSave) {
       link: false, // We configure Link separately below
     }),
     CodeBlock,
+    Comment,
+    Mention.configure({
+      HTMLAttributes: {
+        class: 'mention',
+      },
+      suggestion,
+    }),
     Placeholder.configure({
       placeholder: 'Beginne hier zu schreiben…',
     }),
@@ -332,6 +342,7 @@ export function createFormatToolbar(container) {
     <div class="divider"></div>
     <button class="format-btn" data-action="link" title="Link">🔗</button>
     <button class="format-btn" data-action="image" title="Bild">🖼</button>
+    <button class="format-btn" data-action="comment" title="Kommentar hinzufügen">💬</button>
   `;
 
   container.insertBefore(toolbar, container.firstChild);
@@ -366,6 +377,14 @@ export function createFormatToolbar(container) {
       case 'image': {
         const src = await promptModal('Bild-URL eingeben:', 'https://...');
         if (src) chain.setImage({ src }).run();
+        break;
+      }
+      case 'comment': {
+        const commentId = `comment-${Date.now()}`;
+        chain.setComment(commentId).run();
+        // Trigger a custom event that main.js can listen to
+        const event = new CustomEvent('add-comment', { detail: { commentId } });
+        window.dispatchEvent(event);
         break;
       }
     }
