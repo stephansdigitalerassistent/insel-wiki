@@ -110,7 +110,11 @@ export function getBreadcrumb(pageId) {
  */
 function renderTree(container) {
   const filteredPages = searchFilter
-    ? allPages.filter((p) => p.title && p.title.toLowerCase().includes(searchFilter))
+    ? allPages.filter((p) => {
+        const inTitle = p.title && p.title.toLowerCase().includes(searchFilter);
+        const inContent = p.content && p.content.toLowerCase().includes(searchFilter);
+        return inTitle || inContent;
+      })
     : allPages;
 
   // Build tree from flat list
@@ -193,11 +197,34 @@ function createTreeItem(page, allFilteredPages) {
   name.textContent = page.title || 'Ohne Titel';
   row.appendChild(name);
 
+  // Search result snippet
+  if (searchFilter && page.content && page.content.toLowerCase().includes(searchFilter)) {
+    const snippet = document.createElement('div');
+    snippet.className = 'search-snippet';
+    
+    // Find index of first occurrence
+    const contentLower = page.content.toLowerCase();
+    const index = contentLower.indexOf(searchFilter);
+    const start = Math.max(0, index - 20);
+    const end = Math.min(page.content.length, index + searchFilter.length + 40);
+    
+    let text = page.content.substring(start, end).replace(/\n/g, ' ');
+    if (start > 0) text = '…' + text;
+    if (end < page.content.length) text = text + '…';
+    
+    // Highlight the term
+    const regex = new RegExp(`(${searchFilter})`, 'gi');
+    snippet.innerHTML = text.replace(regex, '<mark>$1</mark>');
+    
+    item.appendChild(row);
+    item.appendChild(snippet);
+  } else {
+    item.appendChild(row);
+  }
+
   row.addEventListener('click', () => {
     if (onNavigateCallback) onNavigateCallback(page.id);
   });
-
-  // --- Drag & Drop ---
   if (canEdit() && !searchFilter) {
     row.draggable = true;
 
