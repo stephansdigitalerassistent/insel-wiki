@@ -868,6 +868,12 @@ async function handleNewPage() {
 
 async function handleDeletePage() {
   if (!canEdit() || !currentPageId) return;
+  
+  if (currentPageId === 'page-entwicklung' || currentPageId === 'page-tests') {
+    alert('Diese Systemseite ist angeheftet und kann nicht gelöscht werden.');
+    return;
+  }
+
   const confirmed = confirm('Diese Seite und alle Unterseiten in den Papierkorb verschieben?');
   if (!confirmed) return;
 

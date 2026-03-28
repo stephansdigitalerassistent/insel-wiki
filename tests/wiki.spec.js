@@ -84,6 +84,14 @@ test.describe('Insel-Wiki Evolution Suite', () => {
   test.afterEach(async ({ page }) => {
     // Instead of complex browser logic, we'll just use the cleanup script if many pages exist,
     // or just ensure we delete what we created via the UI.
+    
+    // Ensure dashboard is closed if open
+    const dashboardOverlay = page.locator('.dashboard-overlay');
+    if (await dashboardOverlay.isVisible()) {
+        await page.click('#close-dashboard-btn', { force: true });
+        await expect(dashboardOverlay).toBeHidden({ timeout: 5000 });
+    }
+
     for (const id of createdPageIds) {
         await page.goto(`/#/${id}`);
         await ensureSidebarClosed(page);
@@ -96,8 +104,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     const taskText = `Task-${Date.now()}`;
     const pageTitle = `TEST-TaskPage-${Date.now()}`;
     
-    // 1. Create page
-    // Ensure we are logged in and auth state is loaded by checking if new page buttons are visible/clickable
+    // Navigate to 'Tests' page so we can create it as a child
+    await page.goto('/#/page-tests');
+
     await page.waitForTimeout(1000); // Give auth time to settle
     const emptyNewBtn = page.locator('#empty-new-page');
     if (await emptyNewBtn.isVisible()) {
@@ -112,11 +121,22 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     }
     await page.waitForSelector('#new-page-modal-input', { timeout: 10000 });
     await page.fill('#new-page-modal-input', pageTitle);
+    
+    // Check 'Als Unterseite' box if it's there and not disabled
+    const childOpt = page.locator('#modal-opt-child');
+    if (await childOpt.isVisible() && await childOpt.isEnabled() && !(await childOpt.isChecked())) {
+        await childOpt.check({ force: true });
+    }
+
     await page.click('#new-page-modal-submit');
+    
+    // Wait for navigation to the new page by checking the title
+    await expect(page.locator('#page-title')).toHaveValue(pageTitle, { timeout: 15000 });
     
     // Extract ID from URL
     await page.waitForURL(/\/([a-zA-Z0-9_-]+)/);
-    const pageId = page.url().split('/').pop().split('?')[0];
+    const urlMatch = page.url().match(/#\/([^\/]+)/);
+    const pageId = urlMatch ? urlMatch[1] : '';
     createdPageIds.push(pageId);
 
     await ensureSidebarClosed(page);
@@ -125,7 +145,7 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.keyboard.type(`[ ] ${taskText}`);
     await page.keyboard.press('Enter');
     await page.keyboard.press('Control+S');
-    await page.waitForTimeout(5000); 
+    await page.waitForTimeout(6000); // give yjs and firestore time to sync
 
     // 2. Open Dashboard
     await ensureSidebarOpen(page);
@@ -133,11 +153,16 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.click('#open-dashboard-btn');
     await expect(page.locator('.dashboard-overlay')).toBeVisible();
     
-    const taskCard = page.locator('.task-card', { hasText: taskText });
-    await expect(taskCard).toBeVisible({ timeout: 15000 });
+    // Wait for the task to appear, retrying if necessary
+    await expect(async () => {
+      // Re-open dashboard if it closed or tasks are still rendering
+      const taskCard = page.locator('.task-card', { hasText: taskText });
+      await expect(taskCard).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 15000 });
     
-    await taskCard.first().click();
-    await expect(page.locator('.dashboard-overlay')).toBeHidden();
+    const taskCard = page.locator('.task-card', { hasText: taskText });
+    await taskCard.first().click({ force: true });
+    await expect(page.locator('.dashboard-overlay')).toBeHidden({ timeout: 5000 });
   });
 
   test('Offline: Status indicator should appear', async ({ page, context }) => {
@@ -157,6 +182,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
 
   test('Page Lifecycle: Robust check', async ({ page }) => {
     const title = `TEST-Robust-${Date.now()}`;
+    // Navigate to 'Tests' page so we can create it as a child
+    await page.goto('/#/page-tests');
+
     await page.waitForTimeout(1000); // Give auth time to settle
     const emptyNewBtn = page.locator('#empty-new-page');
     if (await emptyNewBtn.isVisible()) {
@@ -171,10 +199,21 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     }
     await page.waitForSelector('#new-page-modal-input', { timeout: 10000 });
     await page.fill('#new-page-modal-input', title);
+
+    // Check 'Als Unterseite' box if it's there and not disabled
+    const childOpt = page.locator('#modal-opt-child');
+    if (await childOpt.isVisible() && await childOpt.isEnabled() && !(await childOpt.isChecked())) {
+        await childOpt.check({ force: true });
+    }
+
     await page.click('#new-page-modal-submit');
-    
+
+    // Wait for navigation to the new page by checking the title
+    await expect(page.locator('#page-title')).toHaveValue(title, { timeout: 15000 });
+
     await page.waitForURL(/\/([a-zA-Z0-9_-]+)/);
-    const pageId = page.url().split('/').pop().split('?')[0];
+    const urlMatch = page.url().match(/#\/([^\/]+)/);
+    const pageId = urlMatch ? urlMatch[1] : '';
     // We don't push to createdPageIds here because we delete it manually in the test
     
     await ensureSidebarClosed(page);
@@ -189,6 +228,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     
     // 1. Create page
     // Ensure we are logged in and auth state is loaded by checking if new page buttons are visible/clickable
+    // Navigate to 'Tests' page so we can create it as a child
+    await page.goto('/#/page-tests');
+
     await page.waitForTimeout(1000); // Give auth time to settle
     const emptyNewBtn = page.locator('#empty-new-page');
     if (await emptyNewBtn.isVisible()) {
@@ -203,9 +245,18 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     }
     await page.waitForSelector('#new-page-modal-input', { timeout: 10000 });
     await page.fill('#new-page-modal-input', title);
+
+    // Check 'Als Unterseite' box if it's there and not disabled
+    const childOpt = page.locator('#modal-opt-child');
+    if (await childOpt.isVisible() && await childOpt.isEnabled() && !(await childOpt.isChecked())) {
+        await childOpt.check({ force: true });
+    }
+
     await page.click('#new-page-modal-submit');
+    
+    // Wait for navigation to the new page by checking the title
+    await expect(page.locator('#page-title')).toHaveValue(title, { timeout: 15000 });
     await ensureSidebarClosed(page);
-    await expect(page.locator('#page-title')).toHaveValue(title);
 
     // 2. Soft delete
     page.once('dialog', dialog => dialog.accept());

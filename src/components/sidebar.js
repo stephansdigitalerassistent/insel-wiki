@@ -122,6 +122,19 @@ function renderTree(container) {
     ? filteredPages
     : filteredPages.filter((p) => !p.parentId);
 
+  // Pin special pages to the top
+  if (!searchFilter) {
+    const pinnedIds = ['page-entwicklung', 'page-tests'];
+    rootPages.sort((a, b) => {
+      const aPinned = pinnedIds.indexOf(a.id);
+      const bPinned = pinnedIds.indexOf(b.id);
+      if (aPinned !== -1 && bPinned !== -1) return aPinned - bPinned;
+      if (aPinned !== -1) return -1;
+      if (bPinned !== -1) return 1;
+      return (a.order || 0) - (b.order || 0); // fallback to normal order
+    });
+  }
+
   container.innerHTML = '';
 
   if (rootPages.length === 0) {
