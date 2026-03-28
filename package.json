@@ -36,6 +36,7 @@
     "@tiptap/extension-task-list": "^2.27.2",
     "@tiptap/pm": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
+    "@tiptap/suggestion": "^2.27.2",
     "diff-match-patch": "^1.0.5",
     "firebase": "^12.11.0",
     "firebase-tools": "^15.11.0",

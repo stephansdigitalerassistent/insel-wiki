@@ -5,6 +5,25 @@ export default defineConfig({
   root: '.',
   build: {
     outDir: 'dist',
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@tiptap')) {
+              return 'tiptap';
+            }
+            if (id.includes('firebase')) {
+              return 'firebase';
+            }
+            if (id.includes('yjs')) {
+              return 'yjs';
+            }
+            return 'vendor';
+          }
+        }
+      }
+    }
   },
   server: {
     port: 3000,
