@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && firebase deploy"
+    "deploy": "npm run build && firebase deploy",
+    "test:e2e": "playwright test"
   },
   "keywords": [
     "wiki",
@@ -44,5 +45,8 @@
     "y-protocols": "^1.0.7",
     "y-websocket": "^3.0.0",
     "yjs": "^13.6.30"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }
