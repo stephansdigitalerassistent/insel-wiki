@@ -110,4 +110,31 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await expect(page.locator('#empty-state')).toBeVisible();
   });
 
+  test('Trash: Permanent Deletion', async ({ page }) => {
+    const title = `TEST-Trash-${Date.now()}`;
+    
+    // 1. Create page
+    await page.click('#new-page-btn');
+    await page.fill('#new-page-modal-input', title);
+    await page.click('#new-page-modal-submit');
+    await expect(page.locator('#page-title')).toHaveValue(title);
+
+    // 2. Soft delete
+    page.once('dialog', dialog => dialog.accept());
+    await page.click('#delete-page-btn');
+    await expect(page.locator('#empty-state')).toBeVisible();
+
+    // 3. Open Trash
+    await page.click('.trash-header');
+    const trashItem = page.locator('.trash-item', { hasText: title });
+    await expect(trashItem).toBeVisible();
+
+    // 4. Permanent delete
+    page.once('dialog', dialog => dialog.accept());
+    await trashItem.locator('.btn-danger').click();
+
+    // 5. Verify gone from trash
+    await expect(trashItem).not.toBeVisible();
+  });
+
 });

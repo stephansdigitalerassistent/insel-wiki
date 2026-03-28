@@ -309,7 +309,20 @@ export async function permanentlyDeletePage(pageId) {
       await deleteDoc(snap.ref);
     }
 
-    // 3. Archive the main page document
+    // 3. Archive comments subcollection
+    const commentsRef = collection(db, PAGES_COLLECTION, pageId, 'comments');
+    const commentSnaps = await getDocs(commentsRef);
+    const archivedCommentsRef = collection(db, ARCHIVE_COLLECTION, pageId, 'comments');
+
+    for (const snap of commentSnaps.docs) {
+      await setDoc(doc(archivedCommentsRef, snap.id), {
+        ...snap.data(),
+        archivedAt: serverTimestamp()
+      });
+      await deleteDoc(snap.ref);
+    }
+
+    // 4. Archive the main page document
     const archiveRef = doc(db, ARCHIVE_COLLECTION, pageId);
     await setDoc(archiveRef, {
       ...pageData,
@@ -317,7 +330,7 @@ export async function permanentlyDeletePage(pageId) {
       originalCollection: PAGES_COLLECTION
     });
 
-    // 4. Finally delete the original page
+    // 5. Finally delete the original page
     await deleteDoc(pageRef);
     
     console.log(`[Insel-Wiki] Page ${pageId} successfully moved to archive.`);
