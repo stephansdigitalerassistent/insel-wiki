@@ -9,6 +9,7 @@ import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from './compon
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from './components/history.js';
 import { promptModal, newPageModal } from './components/modal.js';
 import { initComments, loadCommentsForPage } from './components/comments.js';
+import { initDashboard, showDashboard } from './components/dashboard.js';
 
 // --- State ---
 let currentPageId = null;
@@ -228,6 +229,14 @@ async function init() {
   // Init comments
   initComments(appEl);
 
+  // Init dashboard
+  initDashboard(appEl, navigateToPage);
+
+  // Offline listener
+  window.addEventListener('online', () => updateOnlineStatus());
+  window.addEventListener('offline', () => updateOnlineStatus());
+  updateOnlineStatus();
+
   // Global Shortcuts
   window.addEventListener('keydown', (e) => {
     // Ctrl+S or Cmd+S for manual save
@@ -239,6 +248,26 @@ async function init() {
       }
     }
   });
+}
+
+/**
+ * Update the online/offline status UI
+ */
+function updateOnlineStatus() {
+  const isOnline = navigator.onLine;
+  let indicator = document.getElementById('offline-indicator');
+  
+  if (!isOnline) {
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.id = 'offline-indicator';
+      indicator.className = 'offline-status';
+      indicator.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.58 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01"/></svg> Offline-Modus aktiv';
+      document.body.appendChild(indicator);
+    }
+  } else if (indicator) {
+    indicator.remove();
+  }
 }
 
 // --- Auth Handlers ---
