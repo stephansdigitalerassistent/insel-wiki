@@ -12,6 +12,7 @@ export default {
       .map(u => ({
         id: u.id,
         label: u.displayName || u.email || 'Unbekannt',
+        photoURL: u.photoURL,
       }))
       .filter(item => 
         item.label.toLowerCase().startsWith(query.toLowerCase())
@@ -80,7 +81,11 @@ function updateComponent(container, props) {
 
   container.innerHTML = props.items.map((item, index) => `
     <button class="mention-item ${index === props.selectedIndex ? 'is-selected' : ''}" data-id="${item.id}">
-      ${item.label}
+      ${item.photoURL 
+        ? `<img src="${item.photoURL}" class="mention-avatar" />` 
+        : `<div class="mention-avatar-placeholder">${item.label.charAt(0).toUpperCase()}</div>`
+      }
+      <span class="mention-label">${item.label}</span>
     </button>
   `).join('');
 

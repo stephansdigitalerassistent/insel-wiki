@@ -1043,6 +1043,19 @@ html, body {
 
 .mention-item {
   background: transparent; border: none; color: var(--text-secondary); padding: 8px 12px; text-align: left; font-size: 0.85rem; cursor: pointer; transition: all var(--transition-fast); outline: none;
+  display: flex; align-items: center; gap: 8px; width: 100%;
+}
+
+.mention-avatar {
+  width: 20px; height: 20px; border-radius: 50%; object-fit: cover;
+}
+
+.mention-avatar-placeholder {
+  width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: bold; flex-shrink: 0;
+}
+
+.mention-label {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .mention-item:hover, .mention-item.is-selected {
