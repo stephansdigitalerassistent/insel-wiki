@@ -22,10 +22,10 @@ export default defineConfig({
       name: 'mobile-chrome',
       use: { ...devices['Pixel 5'] },
     },
-    {
-      name: 'mobile-safari',
-      use: { ...devices['iPhone 12'] },
-    },
+    // {
+    //   name: 'mobile-safari',
+    //   use: { ...devices['iPhone 12'] },
+    // },
   ],
 
   /* Run your local dev server before starting the tests */

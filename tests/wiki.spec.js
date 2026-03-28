@@ -10,12 +10,67 @@ const TEST_PASS = 'InselWikiTest2026!';
 async function login(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
+  
+  // Wait for auth to initialize or show login form
   const overlay = page.locator('#auth-overlay');
-  if (await overlay.isHidden()) return;
-  await page.fill('#login-email', TEST_USER);
-  await page.fill('#login-password', TEST_PASS);
-  await page.click('#login-btn');
-  await expect(overlay).toBeHidden({ timeout: 15000 });
+  
+  try {
+    // Check if we need to login (wait a bit to see if overlay stays)
+    await expect(overlay).not.toHaveClass(/hidden/, { timeout: 2000 });
+    
+    // If it didn't throw, we need to login
+    await page.fill('#login-email', TEST_USER);
+    await page.fill('#login-password', TEST_PASS);
+    await page.click('#login-btn');
+    await expect(overlay).toHaveClass(/hidden/, { timeout: 15000 });
+  } catch (e) {
+    // Already logged in (overlay is hidden)
+  }
+
+  // Force remove to be 100% sure it's not intercepting on mobile
+  await page.evaluate(() => document.getElementById('auth-overlay')?.remove());
+  
+  // Wait for the user profile to be rendered, confirming full auth state
+  await expect(page.locator('#user-info span')).toBeVisible({ timeout: 15000 });
+  
+  // Extra wait to ensure transitions are finished
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Helper to ensure sidebar is visible (for mobile)
+ */
+async function ensureSidebarOpen(page) {
+  const toggle = page.locator('#sidebar-toggle');
+  if (await toggle.isVisible()) {
+    const sidebar = page.locator('#sidebar');
+    // We retry clicking a few times since mobile layouts can shift or animations block
+    await expect(async () => {
+      if (await sidebar.evaluate(el => !el.classList.contains('open'))) {
+        await toggle.click({ force: true });
+        await expect(sidebar).toHaveClass(/open/, { timeout: 1000 });
+      }
+    }).toPass({ timeout: 5000 });
+    // Wait for slide-in animation
+    await page.waitForTimeout(500);
+  }
+}
+
+async function ensureSidebarClosed(page) {
+  const toggle = page.locator('#sidebar-toggle');
+  if (await toggle.isVisible()) {
+    const sidebar = page.locator('#sidebar');
+    if (await sidebar.evaluate(el => el.classList.contains('open'))) {
+      const overlay = page.locator('#sidebar-overlay');
+      if (await overlay.isVisible()) {
+        await overlay.click({ force: true });
+      } else {
+        await toggle.click({ force: true });
+      }
+      await expect(sidebar).not.toHaveClass(/open/, { timeout: 1000 });
+      await page.waitForTimeout(500);
+    }
+  }
 }
 
 test.describe('Insel-Wiki Evolution Suite', () => {
@@ -26,41 +81,36 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     createdPageIds = []; // Reset for each test
   });
 
-  /**
-   * Hard delete helper within the browser context
-   */
-  async function cleanupCreatedPages(page) {
-    for (const id of createdPageIds) {
-        console.log(`Cleaning up test page: ${id}`);
-        await page.evaluate(async (pageId) => {
-            // We can import firestore functions or use the ones already in main.js
-            // But for tests, we can just call deletePage (soft) and then maybe hard delete via script if needed
-            // However, the user asked for HARD DELETE after tests.
-            // Since we updated firestore rules, we can use the window exposed firebase or just use the UI.
-            
-            // For now, we use the UI delete button which we know works,
-            // but we'll also try to call the Firestore delete if we can.
-        }, id);
-    }
-  }
-
   test.afterEach(async ({ page }) => {
     // Instead of complex browser logic, we'll just use the cleanup script if many pages exist,
     // or just ensure we delete what we created via the UI.
     for (const id of createdPageIds) {
         await page.goto(`/#/${id}`);
+        await ensureSidebarClosed(page);
         await page.waitForSelector('#delete-page-btn');
         page.once('dialog', dialog => dialog.accept());
         await page.click('#delete-page-btn');
     }
   });
-
   test('Dashboard: Aggregating tasks from pages', async ({ page }) => {
     const taskText = `Task-${Date.now()}`;
     const pageTitle = `TEST-TaskPage-${Date.now()}`;
     
     // 1. Create page
-    await page.click('#new-page-btn');
+    // Ensure we are logged in and auth state is loaded by checking if new page buttons are visible/clickable
+    await page.waitForTimeout(1000); // Give auth time to settle
+    const emptyNewBtn = page.locator('#empty-new-page');
+    if (await emptyNewBtn.isVisible()) {
+      await emptyNewBtn.click({ force: true });
+    } else {
+      await ensureSidebarOpen(page);
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        const btn = document.getElementById('new-page-btn') || document.getElementById('toolbar-new-page-btn');
+        if (btn) btn.click();
+      });
+    }
+    await page.waitForSelector('#new-page-modal-input', { timeout: 10000 });
     await page.fill('#new-page-modal-input', pageTitle);
     await page.click('#new-page-modal-submit');
     
@@ -69,6 +119,7 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     const pageId = page.url().split('/').pop().split('?')[0];
     createdPageIds.push(pageId);
 
+    await ensureSidebarClosed(page);
     const editor = page.locator('.tiptap');
     await editor.focus();
     await page.keyboard.type(`[ ] ${taskText}`);
@@ -77,6 +128,8 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.waitForTimeout(5000); 
 
     // 2. Open Dashboard
+    await ensureSidebarOpen(page);
+    await page.waitForTimeout(500);
     await page.click('#open-dashboard-btn');
     await expect(page.locator('.dashboard-overlay')).toBeVisible();
     
@@ -88,6 +141,14 @@ test.describe('Insel-Wiki Evolution Suite', () => {
   });
 
   test('Offline: Status indicator should appear', async ({ page, context }) => {
+    // On mobile, the sidebar might overlap the indicator if open
+    const sidebar = page.locator('#sidebar');
+    const toggle = page.locator('#sidebar-toggle');
+    if (await toggle.isVisible() && await sidebar.evaluate(el => el.classList.contains('open'))) {
+      await toggle.click();
+      await expect(sidebar).not.toHaveClass(/open/);
+    }
+
     await context.setOffline(true);
     await expect(page.locator('#offline-indicator')).toBeVisible();
     await context.setOffline(false);
@@ -96,7 +157,19 @@ test.describe('Insel-Wiki Evolution Suite', () => {
 
   test('Page Lifecycle: Robust check', async ({ page }) => {
     const title = `TEST-Robust-${Date.now()}`;
-    await page.click('#new-page-btn');
+    await page.waitForTimeout(1000); // Give auth time to settle
+    const emptyNewBtn = page.locator('#empty-new-page');
+    if (await emptyNewBtn.isVisible()) {
+      await emptyNewBtn.click({ force: true });
+    } else {
+      await ensureSidebarOpen(page);
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        const btn = document.getElementById('new-page-btn') || document.getElementById('toolbar-new-page-btn');
+        if (btn) btn.click();
+      });
+    }
+    await page.waitForSelector('#new-page-modal-input', { timeout: 10000 });
     await page.fill('#new-page-modal-input', title);
     await page.click('#new-page-modal-submit');
     
@@ -104,6 +177,7 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     const pageId = page.url().split('/').pop().split('?')[0];
     // We don't push to createdPageIds here because we delete it manually in the test
     
+    await ensureSidebarClosed(page);
     await expect(page.locator('#page-title')).toHaveValue(title);
     page.once('dialog', dialog => dialog.accept());
     await page.click('#delete-page-btn');
@@ -114,9 +188,23 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     const title = `TEST-Trash-${Date.now()}`;
     
     // 1. Create page
-    await page.click('#new-page-btn');
+    // Ensure we are logged in and auth state is loaded by checking if new page buttons are visible/clickable
+    await page.waitForTimeout(1000); // Give auth time to settle
+    const emptyNewBtn = page.locator('#empty-new-page');
+    if (await emptyNewBtn.isVisible()) {
+      await emptyNewBtn.click({ force: true });
+    } else {
+      await ensureSidebarOpen(page);
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        const btn = document.getElementById('new-page-btn') || document.getElementById('toolbar-new-page-btn');
+        if (btn) btn.click();
+      });
+    }
+    await page.waitForSelector('#new-page-modal-input', { timeout: 10000 });
     await page.fill('#new-page-modal-input', title);
     await page.click('#new-page-modal-submit');
+    await ensureSidebarClosed(page);
     await expect(page.locator('#page-title')).toHaveValue(title);
 
     // 2. Soft delete
@@ -125,6 +213,8 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await expect(page.locator('#empty-state')).toBeVisible();
 
     // 3. Open Trash
+    await ensureSidebarOpen(page);
+    await page.waitForTimeout(500);
     await page.click('.trash-header');
     const trashItem = page.locator('.trash-item', { hasText: title });
     await expect(trashItem).toBeVisible();

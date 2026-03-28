@@ -703,7 +703,7 @@ html, body {
 }
 
 .auth-overlay.hidden {
-  opacity: 0; pointer-events: none;
+  opacity: 0; pointer-events: none; visibility: hidden;
 }
 
 .auth-card {
