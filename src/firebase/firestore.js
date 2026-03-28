@@ -62,14 +62,16 @@ export async function getPage(pageId) {
 /**
  * Update page content and title
  */
-export async function savePage(pageId, content, title, savedBy = '') {
+export async function savePage(pageId, content, title, savedBy = '', savedByName = '', savedByPhoto = '') {
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
   try {
     await updateDoc(pageRef, {
       content,
       title,
       updatedAt: serverTimestamp(),
-      lastSavedBy: savedBy
+      lastSavedBy: savedBy,
+      lastSavedByName: savedByName,
+      lastSavedByPhoto: savedByPhoto
     });
   } catch (err) {
     console.error('Firestore save error:', err);

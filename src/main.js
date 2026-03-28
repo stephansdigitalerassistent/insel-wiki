@@ -68,6 +68,7 @@ const collabCursorsEl = document.getElementById('collab-cursors');
 const pageTreeEl = document.getElementById('page-tree');
 const emptyState = document.getElementById('empty-state');
 const userInfoEl = document.getElementById('user-info');
+const lastEditedBadge = document.getElementById('last-edited-badge');
 const sidebarToggle = document.getElementById('sidebar-toggle');
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
@@ -469,6 +470,40 @@ function navigateToPage(pageId, title = '') {
   if (sidebarOverlay) sidebarOverlay.classList.remove('show');
 }
 
+/**
+ * Update the 'Last edited by' UI badge
+ */
+function updateLastEditedBadge(pageData) {
+  if (!lastEditedBadge) return;
+
+  if (!pageData || !pageData.lastSavedBy) {
+    lastEditedBadge.classList.add('hidden');
+    return;
+  }
+
+  const date = pageData.updatedAt?.toDate ? pageData.updatedAt.toDate() : new Date(pageData.updatedAt);
+  const timeStr = date.toLocaleString('de-CH', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+  const name = pageData.lastSavedByName || formatDefaultName(pageData.lastSavedBy);
+
+  let avatarHTML = '';
+  if (pageData.lastSavedByPhoto) {
+    avatarHTML = `<img src="${pageData.lastSavedByPhoto}" class="last-edited-avatar" alt="Avatar">`;
+  } else {
+    avatarHTML = `<div class="last-edited-avatar">${name.charAt(0).toUpperCase()}</div>`;
+  }
+
+  lastEditedBadge.innerHTML = `
+    ${avatarHTML}
+    <span>Zuletzt bearbeitet von <strong>${name}</strong> am ${timeStr}</span>
+  `;
+  lastEditedBadge.classList.remove('hidden');
+}
+
 // --- Page Loading ---
 async function loadPage(pageId) {
   // Snapshot the old page before leaving
@@ -503,6 +538,17 @@ async function loadPage(pageId) {
     showEmptyState();
     return;
   }
+
+  updateLastEditedBadge(page);
+
+  // Subscribe to real-time updates for title and metadata
+  currentPageUnsub = subscribeToPage(pageId, (updatedPage) => {
+    if (!updatedPage) return;
+    if (pageTitleInput.value !== updatedPage.title && document.activeElement !== pageTitleInput) {
+      pageTitleInput.value = updatedPage.title || '';
+    }
+    updateLastEditedBadge(updatedPage);
+  });
 
   // Self-heal internal links before loading into editor
   const { markdown: healedMarkdown, changed } = selfHealLinks(page.content || '');
@@ -693,9 +739,17 @@ async function handleSave(pageId, markdown) {
   updateSaveStatus('saving');
   isSnapshotDirty = true; // Trigger history snapshot on next interval
   try {
-    const currentUser = getCurrentUser();
-    await savePage(pageId, markdown, pageTitleInput.value, currentUser?.email || '');
+    const user = getCurrentUser();
+    const userName = user?.displayName || formatDefaultName(user?.email);
+    await savePage(pageId, markdown, pageTitleInput.value, user?.email || '', userName, user?.photoURL || null);
     updateSaveStatus('saved');
+    
+    // Update local last-edited badge immediately
+    updateLastEditedBadge({
+      lastSavedByName: userName,
+      lastSavedByPhoto: user?.photoURL || null,
+      updatedAt: new Date()
+    });
   } catch (err) {
     console.error('Save error:', err);
     updateSaveStatus('error');
