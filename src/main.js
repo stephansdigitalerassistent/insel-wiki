@@ -590,6 +590,12 @@ async function loadPage(pageId) {
   
   collabCursorsEl.innerHTML = '';
 
+  const page = await getPage(pageId);
+  if (!page) {
+    showEmptyState();
+    return;
+  }
+
   currentPageId = pageId;
   currentPageData = page;
   setActivePage(pageId);
@@ -599,23 +605,7 @@ async function loadPage(pageId) {
   editorContainer.classList.remove('hidden');
   emptyState.classList.add('hidden');
 
-  // Load page data
-  const page = await getPage(pageId);
-  if (!page) {
-    showEmptyState();
-    return;
-  }
-
   updateLastEditedBadge(page);
-
-  // Subscribe to real-time updates for title and metadata
-  currentPageUnsub = subscribeToPage(pageId, (updatedPage) => {
-    if (!updatedPage) return;
-    if (pageTitleInput.value !== updatedPage.title && document.activeElement !== pageTitleInput) {
-      pageTitleInput.value = updatedPage.title || '';
-    }
-    updateLastEditedBadge(updatedPage);
-  });
 
   // Self-heal internal links before loading into editor
   const { markdown: healedMarkdown, changed } = selfHealLinks(page.content || '');
