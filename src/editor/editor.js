@@ -61,10 +61,7 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
   // Create Custom Firestore Provider for robust serverless sync
   provider = new FirestoreYjsProvider(pageId, ydoc, user);
   provider.setLoadCallback((hasYjsState) => {
-    // Aggressive fallback: if editor is empty after load (regardless of hasYjsState),
-    // and we have initialContent, try to apply it.
     if (initialContent) {
-      // Small timeout to ensure Yjs sync is definitely tried first
       setTimeout(() => {
         if (editor && editor.isEmpty) {
           console.log(`[Insel-Wiki] Applying fallback content for ${pageId}`);
@@ -86,10 +83,10 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
 
   const extensions = [
     StarterKit.configure({
-      history: false, // Yjs handles undo/redo
-      undoRedo: false, // Collaboration extension provides its own
-      codeBlock: false, // We use the standalone extension
-      link: false, // We configure Link separately below
+      history: false,
+      undoRedo: false,
+      codeBlock: false,
+      link: false,
     }),
     CodeBlock,
     Comment,
@@ -137,15 +134,11 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         const cursor = document.createElement('span');
         cursor.classList.add('collaboration-cursor__caret');
         cursor.setAttribute('style', `border-color: ${cursorUser.color}`);
-
         const label = document.createElement('div');
         label.classList.add('collaboration-cursor__label');
         label.setAttribute('style', `background-color: ${cursorUser.color}`);
-        
-        // Show full name on cursor
         const displayName = cursorUser.name || 'Gast';
         label.insertBefore(document.createTextNode(displayName), null);
-
         cursor.insertBefore(label, null);
         return cursor;
       },
@@ -173,7 +166,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         const attrs = linkMark?.attrs;
 
         if (attrs?.href) {
-          // Variant 3: Detect click on the pseudo-element icon (Mobile only logic)
           if (window.innerWidth <= 768) {
             const range = view.state.doc.resolve(pos).markRange(schema.marks.link);
             if (range && event.clientX > (event.target.getBoundingClientRect().right - 25)) {
@@ -185,8 +177,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
               return true;
             }
           }
-
-          // Desktop: Ctrl+Click
           if (event.ctrlKey || event.metaKey) {
             if (attrs.href.startsWith('#')) {
               window.location.hash = attrs.href;
@@ -198,17 +188,13 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         }
         return false;
       },
-
       handleDOMEvents: {
-        // Variant 5: Double click to open link
         dblclick: (view, event) => {
           const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
           if (pos === undefined) return false;
-
           const { schema } = view.state;
           const marks = view.state.doc.resolve(pos).marks();
           const linkMark = marks.find(mark => mark.type === schema.marks.link);
-          
           if (linkMark?.attrs?.href) {
             const href = linkMark.attrs.href;
             if (href.startsWith('#')) {
@@ -221,7 +207,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           return false;
         }
       },
-
       handlePaste: (view, event, slice) => {
         const items = Array.from(event.clipboardData?.items || []);
         const imageItems = items.filter(item => item.type.startsWith('image/'));
@@ -240,7 +225,7 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
               alert('Fehler beim Hochladen des Bildes: ' + err.message);
             }
           });
-          return true; // prevent default tiptap paste
+          return true;
         }
         return false;
       },
@@ -267,7 +252,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       }
     },
     onUpdate: ({ editor: ed }) => {
-      // Debounced auto-save
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(() => {
         if (saveCallback && currentPageId) {
@@ -280,61 +264,39 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           saveCallback(currentPageId, markdown);
         }
       }, 1500);
-    },
-    onTransaction: ({ editor: ed }) => {
-      const bubbleUrl = document.getElementById('bubble-link-url');
-      if (bubbleUrl && ed.isActive('link')) {
-        const { href } = ed.getAttributes('link');
-        bubbleUrl.href = href;
-        bubbleUrl.textContent = href;
-      }
-    },
+    }
   });
 
-  // Setup Bubble Menu button handlers
-  const bubbleUrl = document.getElementById('bubble-link-url');
-  const bubbleEdit = document.getElementById('bubble-link-edit');
-  const bubbleUnlink = document.getElementById('bubble-link-unlink');
-
-  if (bubbleUrl) {
-    bubbleUrl.onclick = (e) => {
-      e.preventDefault();
-      const href = bubbleUrl.getAttribute('href');
-      if (href && href !== '#') {
-        if (href.startsWith('#')) {
-          window.location.hash = href;
-        } else {
-          window.open(href, '_blank');
-        }
-      }
-    };
+  function getSelectionBoundingRect() {
+    const { view, state } = editor;
+    const { selection } = state;
+    const domSelection = window.getSelection();
+    if (domSelection && domSelection.rangeCount > 0 && !domSelection.isCollapsed) {
+      return domSelection.getRangeAt(0).getBoundingClientRect();
+    }
+    const coords = view.coordsAtPos(selection.from);
+    return new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top);
   }
 
-  if (bubbleEdit) {
-    bubbleEdit.onclick = async () => {
-      const { href } = editor.getAttributes('link');
-      const newUrl = await promptModal('Link bearbeiten:', href);
-      if (newUrl !== null) {
-        editor.chain().focus().extendMarkRange('link').setLink({ href: newUrl }).run();
-      }
-    };
-  }
+  let formatTippy = null;
+  let linkTippy = null;
 
-  if (bubbleUnlink) {
-    bubbleUnlink.onclick = () => {
-      editor.chain().focus().unsetLink().run();
-    };
-  }
-
-  // Format Bubble Menu handlers
   if (formatMenuEl) {
+    formatTippy = tippy(element, {
+      content: formatMenuEl,
+      interactive: true,
+      trigger: 'manual',
+      placement: 'top',
+      appendTo: document.body,
+      zIndex: 1000,
+      getReferenceClientRect: getSelectionBoundingRect
+    });
+    
     formatMenuEl.onclick = async (e) => {
       const btn = e.target.closest('.format-bubble-action');
       if (!btn) return;
-      
       const action = btn.dataset.action;
       const chain = editor.chain().focus();
-
       switch (action) {
         case 'bold': chain.toggleBold().run(); break;
         case 'italic': chain.toggleItalic().run(); break;
@@ -350,40 +312,7 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
     };
   }
 
-  // Configure Manual Tippy.js instances for the Bubble Menus
-  function getSelectionBoundingRect() {
-    const { view, state } = editor;
-    const { selection } = state;
-    
-    // Check real DOM selection first for multi-character selections
-    const domSelection = window.getSelection();
-    if (domSelection && domSelection.rangeCount > 0 && !domSelection.isCollapsed) {
-      return domSelection.getRangeAt(0).getBoundingClientRect();
-    }
-    
-    // Fallback to Tiptap's internal coordinate system for cursors
-    const coords = view.coordsAtPos(selection.from);
-    return new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top);
-  }
-
-  let formatTippy = null;
-  let linkTippy = null;
-
-  if (formatMenuEl) {
-    formatMenuEl.removeAttribute('id');
-    formatTippy = tippy(element, {
-      content: formatMenuEl,
-      interactive: true,
-      trigger: 'manual',
-      placement: 'top',
-      appendTo: document.body,
-      zIndex: 1000,
-      getReferenceClientRect: getSelectionBoundingRect
-    });
-  }
-
   if (linkMenuEl) {
-    linkMenuEl.removeAttribute('id');
     linkTippy = tippy(element, {
       content: linkMenuEl,
       interactive: true,
@@ -391,19 +320,68 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       placement: 'top',
       appendTo: document.body,
       zIndex: 1000,
-      getReferenceClientRect: getSelectionBoundingRect
+      getReferenceClientRect: getSelectionBoundingRect,
+      onShow(instance) {
+        const attrs = editor.getAttributes('link');
+        const urlEl = instance.popper.querySelector('#bubble-link-url');
+        if (urlEl && attrs.href) {
+          urlEl.href = attrs.href;
+          urlEl.textContent = attrs.href;
+          urlEl.target = '_blank';
+          urlEl.rel = 'noopener noreferrer';
+        }
+      }
     });
+
+    const handleLinkBubbleClick = async (e) => {
+      const path = e.composedPath().map(el => el.tagName || 'WINDOW').join(' > ');
+      
+      
+      const editBtn = e.target.closest('#bubble-link-edit');
+      const unlinkBtn = e.target.closest('#bubble-link-unlink');
+      const urlLink = e.target.closest('#bubble-link-url');
+
+      if (editBtn) {
+        
+        e.preventDefault();
+        e.stopPropagation();
+        const { href } = editor.getAttributes('link');
+        const newUrl = await promptModal('Link bearbeiten:', href);
+        if (newUrl !== null) {
+          editor.chain().focus().extendMarkRange('link').setLink({ href: newUrl }).run();
+          if (linkTippy) linkTippy.hide();
+        }
+      } else if (unlinkBtn) {
+        
+        e.preventDefault();
+        e.stopPropagation();
+        editor.chain().focus().unsetLink().run();
+        if (linkTippy) linkTippy.hide();
+      } else if (urlLink) {
+        const href = urlLink.getAttribute('href');
+        if (href && href.startsWith('#')) {
+          e.preventDefault();
+          window.location.hash = href;
+          if (linkTippy) linkTippy.hide();
+        }
+      }
+    };
+    
+    document.addEventListener('click', handleLinkBubbleClick, true);
+    const originalDestroy = editor.destroy;
+    editor.destroy = () => {
+      document.removeEventListener('click', handleLinkBubbleClick, true);
+      if (originalDestroy) originalDestroy.call(editor);
+    };
   }
 
   function updateBubbleMenus() {
     if (!editor || editor.isDestroyed) return;
-    
     const { state, view } = editor;
     const { selection } = state;
     const isFocused = view.hasFocus();
     const isLink = editor.isActive('link');
 
-    // Format Menu Logic
     if (formatTippy) {
       if (isFocused && !selection.empty && !isLink) {
         formatTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
@@ -413,14 +391,8 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       }
     }
 
-    // Link Menu Logic
     if (linkTippy) {
       if (isFocused && isLink) {
-        const attrs = editor.getAttributes('link');
-        if (bubbleUrl && attrs.href) {
-          bubbleUrl.href = attrs.href;
-          bubbleUrl.textContent = attrs.href;
-        }
         linkTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
         linkTippy.show();
       } else {
@@ -434,65 +406,43 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
   editor.on('focus', updateBubbleMenus);
   editor.on('blur', () => {
     setTimeout(() => {
-      // Hide if focus is truly lost from both editor and our popup menus
       if (!element.contains(document.activeElement) &&
           (!formatMenuEl || !formatMenuEl.contains(document.activeElement)) &&
           (!linkMenuEl || !linkMenuEl.contains(document.activeElement))) {
         if (formatTippy) formatTippy.hide();
         if (linkTippy) linkTippy.hide();
       }
-    }, 50);
+    }, 150); // Increased timeout
   });
 
-  // Start initialization of async Provider load
   provider.init();
-
   return editor;
 }
 
-/**
- * Set editor content from Markdown. 
- * Only runs on initial empty load if no Yjs state exists.
- */
 export function setContent(markdown) {
   if (!editor) return;
-  // If content already contains HTML tags, use it directly, otherwise parse as markdown
   const isHtml = /<[a-z][\s\S]*>/i.test(markdown || '');
   const html = isHtml ? markdown : marked.parse(markdown || '');
-  
-  // Set content with emitUpdate = true to ensure it propagates to Yjs
   editor.commands.setContent(html, true);
 }
 
-/**
- * Get current content as Markdown
- */
 export function getMarkdown() {
   if (!editor) return '';
   const html = editor.getHTML();
   return getTurndown().turndown(html);
 }
 
-/**
- * Get current content as HTML
- */
 export function getHTML() {
   if (!editor) return '';
   return editor.getHTML();
 }
 
-/**
- * Set editor editable state
- */
 export function setEditable(editable) {
   if (editor) {
     editor.setEditable(editable);
   }
 }
 
-/**
- * Destroy the editor instance and cleanup sync
- */
 export function destroyEditor() {
   clearTimeout(saveTimeout);
   if (editor) {
@@ -510,23 +460,14 @@ export function destroyEditor() {
   currentPageId = null;
 }
 
-/**
- * Get the current Websocket provider
- */
 export function getProvider() {
   return provider;
 }
 
-/**
- * Get the editor instance (for toolbar actions)
- */
 export function getEditor() {
   return editor;
 }
 
-/**
- * Create the formatting toolbar HTML and bind actions
- */
 export function createFormatToolbar(container) {
   const toolbar = document.createElement('div');
   toolbar.className = 'format-toolbar';
@@ -552,17 +493,12 @@ export function createFormatToolbar(container) {
     <button class="format-btn" data-action="image" title="Bild">🖼</button>
     <button class="format-btn" data-action="comment" title="Kommentar hinzufügen">💬</button>
   `;
-
   container.insertBefore(toolbar, container.firstChild);
-
-  // Bind click events
   toolbar.addEventListener('click', async (e) => {
     const btn = e.target.closest('.format-btn');
     if (!btn || !editor) return;
-
     const action = btn.dataset.action;
     const chain = editor.chain().focus();
-
     switch (action) {
       case 'bold': chain.toggleBold().run(); break;
       case 'italic': chain.toggleItalic().run(); break;
@@ -590,22 +526,17 @@ export function createFormatToolbar(container) {
       case 'comment': {
         const commentId = `comment-${Date.now()}`;
         chain.setComment(commentId).run();
-        // Trigger a custom event that main.js can listen to
         const event = new CustomEvent('add-comment', { detail: { commentId } });
         window.dispatchEvent(event);
         break;
       }
     }
-
     updateToolbarState(toolbar);
   });
-
-  // Update active states on selection change
   if (editor) {
     editor.on('selectionUpdate', () => updateToolbarState(toolbar));
     editor.on('transaction', () => updateToolbarState(toolbar));
   }
-
   return toolbar;
 }
 
