@@ -11,7 +11,39 @@ import { promptModal, newPageModal } from './components/modal.js';
 import { initComments, loadCommentsForPage } from './components/comments.js';
 import { initDashboard, showDashboard } from './components/dashboard.js';
 
-// --- State ---
+// --- Utilities (Hoisted) ---
+function debounce(fn, ms) {
+  let timer;
+  let lastArgs;
+  const debounced = (...args) => {
+    lastArgs = args;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      fn(...args);
+      timer = null;
+    }, ms);
+  };
+  debounced.flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      fn(...lastArgs);
+      timer = null;
+    }
+  };
+  debounced.cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  return debounced;
+}
+
+// --- State & Shared Utilities ---
+const debouncedUpdateTitle = debounce((id, title) => {
+  if (id && canEdit()) {
+    updatePageTitle(id, title);
+  }
+}, 800);
+
 let currentPageId = null;
 let currentPageData = null;
 let currentPageUnsub = null;
@@ -20,7 +52,6 @@ let currentSessionId = null;
 let formatToolbar = null;
 let historySnapshotInterval = null;
 const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-let debouncedUpdateTitle = null;
 
 // History optimization
 let lastSnapshotContent = '';
@@ -205,13 +236,6 @@ async function init() {
       }
     });
   }
-
-  // Title input — save on change
-  debouncedUpdateTitle = debounce((id, title) => {
-    if (id && canEdit()) {
-      updatePageTitle(id, title);
-    }
-  }, 800);
 
   pageTitleInput.addEventListener('input', () => {
     if (currentPageId && canEdit()) {
@@ -910,32 +934,6 @@ async function handleHistoryToggle() {
     // Compact history in the background when viewing it
     // console.log('[Insel-Wiki] Page loaded successfully', currentPageId);
   }
-}
-
-// --- Utilities ---
-function debounce(fn, ms) {
-  let timer;
-  let lastArgs;
-  const debounced = (...args) => {
-    lastArgs = args;
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      fn(...args);
-      timer = null;
-    }, ms);
-  };
-  debounced.flush = () => {
-    if (timer) {
-      clearTimeout(timer);
-      fn(...lastArgs);
-      timer = null;
-    }
-  };
-  debounced.cancel = () => {
-    clearTimeout(timer);
-    timer = null;
-  };
-  return debounced;
 }
 
 async function handleCopyLink() {

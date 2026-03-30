@@ -33,11 +33,17 @@ let provider = null;
 let currentPageId = null;
 let saveCallback = null;
 let saveTimeout = null;
+let turndownInstance = null;
 
-const turndown = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-});
+function getTurndown() {
+  if (!turndownInstance) {
+    turndownInstance = new TurndownService({
+      headingStyle: 'atx',
+      codeBlockStyle: 'fenced',
+    });
+  }
+  return turndownInstance;
+}
 
 /**
  * Initialize the editor for a given page
@@ -277,7 +283,7 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       saveTimeout = setTimeout(() => {
         if (saveCallback && currentPageId) {
           const html = ed.getHTML();
-          let markdown = turndown.turndown(html);
+          let markdown = getTurndown().turndown(html);
           if (markdown.length > 100000) {
             markdown = markdown.substring(0, 100000);
             console.warn('[Insel-Wiki] Saved content exceeded 100,000 characters and was truncated.');
@@ -382,7 +388,7 @@ export function setContent(markdown) {
 export function getMarkdown() {
   if (!editor) return '';
   const html = editor.getHTML();
-  return turndown.turndown(html);
+  return getTurndown().turndown(html);
 }
 
 /**
