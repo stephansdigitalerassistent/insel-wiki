@@ -1,7 +1,7 @@
 // Tiptap WYSIWYG Editor with Yjs collaboration
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
-import { BubbleMenu } from '@tiptap/extension-bubble-menu';
+import tippy from 'tippy.js';
 import { Collaboration } from '@tiptap/extension-collaboration';
 import { CollaborationCursor } from '@tiptap/extension-collaboration-cursor';
 import { Placeholder } from '@tiptap/extension-placeholder';
@@ -74,6 +74,16 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
     }
   });
 
+  const linkMenuEl = document.getElementById('link-bubble-menu');
+  const formatMenuEl = document.getElementById('format-bubble-menu');
+  
+  if (linkMenuEl) {
+      linkMenuEl.style.display = 'flex';
+  }
+  if (formatMenuEl) {
+      formatMenuEl.style.display = 'flex';
+  }
+
   const extensions = [
     StarterKit.configure({
       history: false, // Yjs handles undo/redo
@@ -99,33 +109,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       openOnClick: false,
       HTMLAttributes: {
         class: 'editable-link',
-      },
-    }),
-    BubbleMenu.configure({
-      element: document.getElementById('link-bubble-menu'),
-      tippyOptions: {
-        duration: 0,
-        touch: true,
-        appendTo: document.body,
-        zIndex: 1000,
-      },
-      shouldShow: ({ editor, from, to }) => {
-        // Only show link menu when a link is active and there is no text selection
-        return editor.isActive('link') && from === to;
-      },
-    }),
-    BubbleMenu.configure({
-      name: 'format-bubble',
-      element: document.getElementById('format-bubble-menu'),
-      tippyOptions: {
-        duration: 0,
-        touch: true,
-        appendTo: document.body,
-        zIndex: 1000,
-      },
-      shouldShow: ({ editor, from, to }) => {
-        // Only show formatting menu when text is selected and it's NOT a link
-        return from !== to && !editor.isActive('link');
       },
     }),
     TaskList,
@@ -173,6 +156,12 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
     element,
     extensions,
     autofocus: 'end',
+    onCreate: ({ editor }) => {
+       window.editor = editor;
+    },
+    onDestroy: () => {
+       window.editor = null;
+    },
     editorProps: {
       attributes: {
         class: 'tiptap',
@@ -338,9 +327,8 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
   }
 
   // Format Bubble Menu handlers
-  const formatBubble = document.getElementById('format-bubble-menu');
-  if (formatBubble) {
-    formatBubble.onclick = async (e) => {
+  if (formatMenuEl) {
+    formatMenuEl.onclick = async (e) => {
       const btn = e.target.closest('.format-bubble-action');
       if (!btn) return;
       
@@ -361,6 +349,100 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       }
     };
   }
+
+  // Configure Manual Tippy.js instances for the Bubble Menus
+  function getSelectionBoundingRect() {
+    const { view, state } = editor;
+    const { selection } = state;
+    
+    // Check real DOM selection first for multi-character selections
+    const domSelection = window.getSelection();
+    if (domSelection && domSelection.rangeCount > 0 && !domSelection.isCollapsed) {
+      return domSelection.getRangeAt(0).getBoundingClientRect();
+    }
+    
+    // Fallback to Tiptap's internal coordinate system for cursors
+    const coords = view.coordsAtPos(selection.from);
+    return new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top);
+  }
+
+  let formatTippy = null;
+  let linkTippy = null;
+
+  if (formatMenuEl) {
+    formatMenuEl.removeAttribute('id');
+    formatTippy = tippy(element, {
+      content: formatMenuEl,
+      interactive: true,
+      trigger: 'manual',
+      placement: 'top',
+      appendTo: document.body,
+      zIndex: 1000,
+      getReferenceClientRect: getSelectionBoundingRect
+    });
+  }
+
+  if (linkMenuEl) {
+    linkMenuEl.removeAttribute('id');
+    linkTippy = tippy(element, {
+      content: linkMenuEl,
+      interactive: true,
+      trigger: 'manual',
+      placement: 'top',
+      appendTo: document.body,
+      zIndex: 1000,
+      getReferenceClientRect: getSelectionBoundingRect
+    });
+  }
+
+  function updateBubbleMenus() {
+    if (!editor || editor.isDestroyed) return;
+    
+    const { state, view } = editor;
+    const { selection } = state;
+    const isFocused = view.hasFocus();
+    const isLink = editor.isActive('link');
+
+    // Format Menu Logic
+    if (formatTippy) {
+      if (isFocused && !selection.empty && !isLink) {
+        formatTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
+        formatTippy.show();
+      } else {
+        formatTippy.hide();
+      }
+    }
+
+    // Link Menu Logic
+    if (linkTippy) {
+      if (isFocused && isLink) {
+        const attrs = editor.getAttributes('link');
+        if (bubbleUrl && attrs.href) {
+          bubbleUrl.href = attrs.href;
+          bubbleUrl.textContent = attrs.href;
+        }
+        linkTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
+        linkTippy.show();
+      } else {
+        linkTippy.hide();
+      }
+    }
+  }
+
+  editor.on('selectionUpdate', updateBubbleMenus);
+  editor.on('transaction', updateBubbleMenus);
+  editor.on('focus', updateBubbleMenus);
+  editor.on('blur', () => {
+    setTimeout(() => {
+      // Hide if focus is truly lost from both editor and our popup menus
+      if (!element.contains(document.activeElement) &&
+          (!formatMenuEl || !formatMenuEl.contains(document.activeElement)) &&
+          (!linkMenuEl || !linkMenuEl.contains(document.activeElement))) {
+        if (formatTippy) formatTippy.hide();
+        if (linkTippy) linkTippy.hide();
+      }
+    }, 50);
+  });
 
   // Start initialization of async Provider load
   provider.init();
