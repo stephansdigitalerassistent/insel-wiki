@@ -1,7 +1,7 @@
 // Insel-Wiki — Main Application Bootstrap
 import { initAuth, onAuthChange, login, logout, isLoggedIn, canEdit, getCurrentUser, getAccessRequestLink, updateUserProfile } from './firebase/auth.js';
 import { uploadAvatar } from './firebase/storage.js';
-import { formatDefaultName } from './utils/string.js';
+import { formatDefaultName, slugify } from './utils/string.js';
 import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, restorePage, getDeletedPages, permanentlyDeletePage, getChildren, subscribeToPage, createRegistrationRequest, subscribeToRegistrationRequest, cancelRegistrationRequest } from './firebase/firestore.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor } from './editor/editor.js';
 import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from './firebase/presence.js';
@@ -957,24 +957,12 @@ function selfHealLinks(markdown) {
   });
 
   return { markdown: healedMarkdown, changed };
-}
+  }
 
-/**
- * Convert title to URL-safe slug
- */
-function slugify(text) {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')     // Replace spaces with -
-    .replace(/[^\w-]+/g, '')   // Remove all non-word chars
-    .replace(/--+/g, '-');     // Replace multiple - with single -
-}
+  /**
+  * Update the UI with a breadcrumb trail.
+  */
 
-/**
- * Resize an image file using Canvas to a max dimension
- */
 async function resizeAvatar(file, maxDim = 256) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

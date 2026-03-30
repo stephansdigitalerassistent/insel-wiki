@@ -144,13 +144,18 @@ export function createEditor(element, pageId, user, onSave) {
       handleClick: (view, pos, event) => {
         const { schema } = view.state;
         const attrs = view.state.doc.resolve(pos).marks().find(mark => mark.type === schema.marks.link)?.attrs;
-        
+
         if (attrs?.href && (event.ctrlKey || event.metaKey)) {
-          window.open(attrs.href, '_blank');
+          if (attrs.href.startsWith('#')) {
+            window.location.hash = attrs.href;
+          } else {
+            window.open(attrs.href, '_blank');
+          }
           return true;
         }
         return false;
       },
+
       handlePaste: (view, event, slice) => {
         const items = Array.from(event.clipboardData?.items || []);
         const imageItems = items.filter(item => item.type.startsWith('image/'));
@@ -221,8 +226,23 @@ export function createEditor(element, pageId, user, onSave) {
   });
 
   // Setup Bubble Menu button handlers
+  const bubbleUrl = document.getElementById('bubble-link-url');
   const bubbleEdit = document.getElementById('bubble-link-edit');
   const bubbleUnlink = document.getElementById('bubble-link-unlink');
+
+  if (bubbleUrl) {
+    bubbleUrl.onclick = (e) => {
+      e.preventDefault();
+      const href = bubbleUrl.getAttribute('href');
+      if (href && href !== '#') {
+        if (href.startsWith('#')) {
+          window.location.hash = href;
+        } else {
+          window.open(href, '_blank');
+        }
+      }
+    };
+  }
 
   if (bubbleEdit) {
     bubbleEdit.onclick = async () => {
