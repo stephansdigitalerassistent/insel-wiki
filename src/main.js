@@ -13,12 +13,14 @@ import { initDashboard, showDashboard } from './components/dashboard.js';
 
 // --- State ---
 let currentPageId = null;
+let currentPageData = null;
 let currentPageUnsub = null;
 let currentPresenceUnsub = null;
 let currentSessionId = null;
 let formatToolbar = null;
 let historySnapshotInterval = null;
 const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+let debouncedUpdateTitle = null;
 
 // History optimization
 let lastSnapshotContent = '';
@@ -205,11 +207,17 @@ async function init() {
   }
 
   // Title input — save on change
-  pageTitleInput.addEventListener('input', debounce(() => {
-    if (currentPageId && canEdit()) {
-      updatePageTitle(currentPageId, pageTitleInput.value);
+  debouncedUpdateTitle = debounce((id, title) => {
+    if (id && canEdit()) {
+      updatePageTitle(id, title);
     }
-  }, 800));
+  }, 800);
+
+  pageTitleInput.addEventListener('input', () => {
+    if (currentPageId && canEdit()) {
+      debouncedUpdateTitle(currentPageId, pageTitleInput.value);
+    }
+  });
 
   // Init auth
   const user = await initAuth();
@@ -535,6 +543,11 @@ function updateLastEditedBadge(pageData) {
 
 // --- Page Loading ---
 async function loadPage(pageId) {
+  // Flush any pending title change for the old page
+  if (debouncedUpdateTitle) {
+    debouncedUpdateTitle.flush();
+  }
+
   // Snapshot the old page before leaving
   await snapshotCurrentPage();
 
@@ -554,6 +567,7 @@ async function loadPage(pageId) {
   collabCursorsEl.innerHTML = '';
 
   currentPageId = pageId;
+  currentPageData = page;
   setActivePage(pageId);
   loadCommentsForPage(pageId);
 
@@ -607,7 +621,7 @@ async function loadPage(pageId) {
     color: getColorForEmail(user?.email || 'Gast')
   };
   
-  const ed = createEditor(editorEl, pageId, fullUser, handleSave);
+  const ed = createEditor(editorEl, pageId, fullUser, handleSave, page.content || '');
 
   // Create format toolbar (once)
   if (!formatToolbar) {
@@ -640,13 +654,16 @@ async function loadPage(pageId) {
   window.removeEventListener('beforeunload', handleUnload);
   window.addEventListener('beforeunload', handleUnload);
 
-  // Subscribe to real-time updates for this page
+  // Subscribe to real-time updates for the current page (consolidated)
   currentPageUnsub = subscribeToPage(pageId, (updatedPage) => {
     if (updatedPage && updatedPage.id === currentPageId) {
-      // Update title if changed externally
+      currentPageData = updatedPage;
+      // Update title if changed externally (and not being typed into)
       if (document.activeElement !== pageTitleInput && updatedPage.title !== pageTitleInput.value) {
         pageTitleInput.value = updatedPage.title || '';
       }
+      
+      updateLastEditedBadge(updatedPage);
       updateBreadcrumb(pageId);
       
       // Keep URL synced with title
@@ -889,7 +906,7 @@ async function handleDeletePage() {
 async function handleHistoryToggle() {
   if (currentPageId) {
     toggleHistoryPanel();
-    loadHistory(currentPageId);
+    loadHistory(currentPageId, currentPageData, getMarkdown);
     // Compact history in the background when viewing it
     // console.log('[Insel-Wiki] Page loaded successfully', currentPageId);
   }
@@ -898,10 +915,27 @@ async function handleHistoryToggle() {
 // --- Utilities ---
 function debounce(fn, ms) {
   let timer;
-  return (...args) => {
+  let lastArgs;
+  const debounced = (...args) => {
+    lastArgs = args;
     clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), ms);
+    timer = setTimeout(() => {
+      fn(...args);
+      timer = null;
+    }, ms);
   };
+  debounced.flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      fn(...lastArgs);
+      timer = null;
+    }
+  };
+  debounced.cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  return debounced;
 }
 
 async function handleCopyLink() {

@@ -159,6 +159,17 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
         </button>
       </div>
+
+      <!-- Format Bubble Menu (Mobile optimization) -->
+      <div id="format-bubble-menu" class="bubble-menu" style="display: none;">
+        <button class="bubble-btn format-bubble-action" data-action="bold"><b>B</b></button>
+        <button class="bubble-btn format-bubble-action" data-action="italic"><i>I</i></button>
+        <button class="bubble-btn format-bubble-action" data-action="h1">H1</button>
+        <button class="bubble-btn format-bubble-action" data-action="h2">H2</button>
+        <button class="bubble-btn format-bubble-action" data-action="bulletList">•</button>
+        <div class="bubble-divider"></div>
+        <button class="bubble-btn format-bubble-action" data-action="link">🔗</button>
+      </div>
       <!-- Header / Toolbar -->
       <header id="toolbar" class="toolbar">
         <button id="sidebar-toggle" class="btn-icon mobile-only" title="Menü">
@@ -239,9 +250,18 @@
       <!-- Empty state -->
       <div id="empty-state" class="empty-state hidden">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        <h2>Willkommen im Insel-Wiki</h2>
-        <p>Erstelle eine neue Seite um loszulegen.</p>
-        <button id="empty-new-page" class="btn btn-primary">+ Neue Seite</button>
+        <h2>Willkommen im Insel-Wiki 🏝️</h2>
+        <p style="max-width: 600px; text-align: center; line-height: 1.5; color: var(--text-secondary);">
+          Dies ist ein privates Projekt von <strong>Stephan</strong>, da er ohne ein Wiki einfach nicht arbeiten kann. 
+          Es dient dem Wissensaustausch und der kollaborativen Dokumentation.
+        </p>
+        <div style="margin: 12px 0; padding: 16px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; border-left: 4px solid #f59e0b; text-align: left; max-width: 600px;">
+          <strong style="display: block; margin-bottom: 4px; color: #f59e0b;">⚠️ Wichtiger Sicherheitshinweis</strong>
+          <span style="font-size: 0.9rem; color: var(--text-secondary);">
+            Dieses Wiki ist <strong>nicht</strong> für geschützte Daten klassifiziert. Bitte speichere hier daher <strong>keine Informationen mit der Klassifizierung INTERN oder höher</strong>.
+          </span>
+        </div>
+        <button id="empty-new-page" class="btn btn-primary">+ Neue Seite erstellen</button>
       </div>
     </main>
   </div>

@@ -42,7 +42,7 @@ const turndown = new TurndownService({
 /**
  * Initialize the editor for a given page
  */
-export function createEditor(element, pageId, user, onSave) {
+export function createEditor(element, pageId, user, onSave, initialContent) {
   // Clean up previous editor
   destroyEditor();
 
@@ -55,7 +55,17 @@ export function createEditor(element, pageId, user, onSave) {
   // Create Custom Firestore Provider for robust serverless sync
   provider = new FirestoreYjsProvider(pageId, ydoc, user);
   provider.setLoadCallback((hasYjsState) => {
-    // Page loaded successfully
+    // Aggressive fallback: if editor is empty after load (regardless of hasYjsState),
+    // and we have initialContent, try to apply it.
+    if (initialContent) {
+      // Small timeout to ensure Yjs sync is definitely tried first
+      setTimeout(() => {
+        if (editor && editor.isEmpty) {
+          console.log(`[Insel-Wiki] Applying fallback content for ${pageId}`);
+          setContent(initialContent);
+        }
+      }, 500);
+    }
   });
 
   const extensions = [
@@ -87,9 +97,29 @@ export function createEditor(element, pageId, user, onSave) {
     }),
     BubbleMenu.configure({
       element: document.getElementById('link-bubble-menu'),
+      tippyOptions: {
+        duration: 0,
+        touch: true,
+        appendTo: document.body,
+        zIndex: 1000,
+      },
       shouldShow: ({ editor, from, to }) => {
-        // Only show bubble menu when a link is active
-        return editor.isActive('link');
+        // Only show link menu when a link is active and there is no text selection
+        return editor.isActive('link') && from === to;
+      },
+    }),
+    BubbleMenu.configure({
+      name: 'format-bubble',
+      element: document.getElementById('format-bubble-menu'),
+      tippyOptions: {
+        duration: 0,
+        touch: true,
+        appendTo: document.body,
+        zIndex: 1000,
+      },
+      shouldShow: ({ editor, from, to }) => {
+        // Only show formatting menu when text is selected and it's NOT a link
+        return from !== to && !editor.isActive('link');
       },
     }),
     TaskList,
@@ -143,17 +173,58 @@ export function createEditor(element, pageId, user, onSave) {
       },
       handleClick: (view, pos, event) => {
         const { schema } = view.state;
-        const attrs = view.state.doc.resolve(pos).marks().find(mark => mark.type === schema.marks.link)?.attrs;
+        const marks = view.state.doc.resolve(pos).marks();
+        const linkMark = marks.find(mark => mark.type === schema.marks.link);
+        const attrs = linkMark?.attrs;
 
-        if (attrs?.href && (event.ctrlKey || event.metaKey)) {
-          if (attrs.href.startsWith('#')) {
-            window.location.hash = attrs.href;
-          } else {
-            window.open(attrs.href, '_blank');
+        if (attrs?.href) {
+          // Variant 3: Detect click on the pseudo-element icon (Mobile only logic)
+          if (window.innerWidth <= 768) {
+            const range = view.state.doc.resolve(pos).markRange(schema.marks.link);
+            if (range && event.clientX > (event.target.getBoundingClientRect().right - 25)) {
+               if (attrs.href.startsWith('#')) {
+                window.location.hash = attrs.href;
+              } else {
+                window.open(attrs.href, '_blank');
+              }
+              return true;
+            }
           }
-          return true;
+
+          // Desktop: Ctrl+Click
+          if (event.ctrlKey || event.metaKey) {
+            if (attrs.href.startsWith('#')) {
+              window.location.hash = attrs.href;
+            } else {
+              window.open(attrs.href, '_blank');
+            }
+            return true;
+          }
         }
         return false;
+      },
+
+      handleDOMEvents: {
+        // Variant 5: Double click to open link
+        dblclick: (view, event) => {
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+          if (pos === undefined) return false;
+
+          const { schema } = view.state;
+          const marks = view.state.doc.resolve(pos).marks();
+          const linkMark = marks.find(mark => mark.type === schema.marks.link);
+          
+          if (linkMark?.attrs?.href) {
+            const href = linkMark.attrs.href;
+            if (href.startsWith('#')) {
+              window.location.hash = href;
+            } else {
+              window.open(href, '_blank');
+            }
+            return true;
+          }
+          return false;
+        }
       },
 
       handlePaste: (view, event, slice) => {
@@ -260,6 +331,31 @@ export function createEditor(element, pageId, user, onSave) {
     };
   }
 
+  // Format Bubble Menu handlers
+  const formatBubble = document.getElementById('format-bubble-menu');
+  if (formatBubble) {
+    formatBubble.onclick = async (e) => {
+      const btn = e.target.closest('.format-bubble-action');
+      if (!btn) return;
+      
+      const action = btn.dataset.action;
+      const chain = editor.chain().focus();
+
+      switch (action) {
+        case 'bold': chain.toggleBold().run(); break;
+        case 'italic': chain.toggleItalic().run(); break;
+        case 'h1': chain.toggleHeading({ level: 1 }).run(); break;
+        case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
+        case 'bulletList': chain.toggleBulletList().run(); break;
+        case 'link': {
+          const url = await promptModal('URL eingeben:', 'https://...');
+          if (url) chain.setLink({ href: url }).run();
+          break;
+        }
+      }
+    };
+  }
+
   // Start initialization of async Provider load
   provider.init();
 
@@ -272,8 +368,12 @@ export function createEditor(element, pageId, user, onSave) {
  */
 export function setContent(markdown) {
   if (!editor) return;
-  const html = marked.parse(markdown || '');
-  editor.commands.setContent(html, false);
+  // If content already contains HTML tags, use it directly, otherwise parse as markdown
+  const isHtml = /<[a-z][\s\S]*>/i.test(markdown || '');
+  const html = isHtml ? markdown : marked.parse(markdown || '');
+  
+  // Set content with emitUpdate = true to ensure it propagates to Yjs
+  editor.commands.setContent(html, true);
 }
 
 /**

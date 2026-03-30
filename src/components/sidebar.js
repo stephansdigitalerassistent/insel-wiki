@@ -11,7 +11,20 @@ let trashExpanded = false;
 let trashContainer = null;
 let lastTreeFingerprint = null;
 let draggedPageId = null;
-const collapsedFolders = new Set();
+const expandedFolders = new Set();
+
+/**
+ * Helper to get all parent IDs of a page
+ */
+function getParentPath(pageId) {
+  const path = [];
+  let current = allPages.find(p => p.id === pageId);
+  while (current && current.parentId) {
+    path.push(current.parentId);
+    current = allPages.find(p => p.id === current.parentId);
+  }
+  return path;
+}
 
 /**
  * Get a fingerprint of the tree structure and titles
@@ -36,10 +49,40 @@ export function initSidebar(treeContainer, onNavigate) {
   unsubscribe = subscribeToPages((pages) => {
     allPages = pages;
     
+    let shouldRender = false;
+
+    // Refresh active page state (ensures path is expanded when data loads)
+    if (activePageId) {
+      const oldExpandedCount = expandedFolders.size;
+      
+      // 1. Auto-expand parents
+      const parents = getParentPath(activePageId);
+      parents.forEach(id => expandedFolders.add(id));
+
+      // 2. Auto-expand active page itself if it has children
+      const hasChildren = allPages.some(p => p.parentId === activePageId);
+      if (hasChildren) {
+        const page = allPages.find(p => p.id === activePageId);
+        if (page) {
+          const siblings = allPages.filter(p => p.parentId === page.parentId && p.id !== activePageId);
+          siblings.forEach(s => expandedFolders.delete(s.id));
+          expandedFolders.add(activePageId);
+        }
+      }
+      
+      if (expandedFolders.size !== oldExpandedCount) {
+        shouldRender = true;
+      }
+    }
+
     // Only re-render tree if structure or titles changed (ignore updatedAt/content changes)
     const fingerprint = getTreeFingerprint(pages);
     if (fingerprint !== lastTreeFingerprint) {
       lastTreeFingerprint = fingerprint;
+      shouldRender = true;
+    }
+
+    if (shouldRender) {
       renderTree(treeContainer);
     }
 
@@ -79,6 +122,26 @@ export function initSidebar(treeContainer, onNavigate) {
  */
 export function setActivePage(pageId) {
   activePageId = pageId;
+  
+  if (pageId) {
+    // 1. Auto-expand parents of the active page
+    const parents = getParentPath(pageId);
+    parents.forEach(id => expandedFolders.add(id));
+
+    // 2. Intelligent space-saving: when selecting a page that is a folder, 
+    // expand it and collapse its siblings.
+    const page = allPages.find(p => p.id === pageId);
+    const hasChildren = allPages.some(p => p.parentId === pageId);
+    
+    if (hasChildren && page) {
+      // Collapse siblings
+      const siblings = allPages.filter(p => p.parentId === page.parentId && p.id !== pageId);
+      siblings.forEach(s => expandedFolders.delete(s.id));
+      
+      expandedFolders.add(pageId);
+    }
+  }
+
   const treeContainer = document.getElementById('page-tree');
   if (treeContainer) renderTree(treeContainer);
 }
@@ -124,7 +187,7 @@ function renderTree(container) {
 
   // Pin special pages to the top
   if (!searchFilter) {
-    const pinnedIds = ['page-entwicklung', 'page-tests'];
+    const pinnedIds = ['page-entwicklung', 'page-umgesetztes', 'page-tests'];
     rootPages.sort((a, b) => {
       const aPinned = pinnedIds.indexOf(a.id);
       const bPinned = pinnedIds.indexOf(b.id);
@@ -169,25 +232,25 @@ function createTreeItem(page, allFilteredPages) {
 
   // Expand button
   if (hasChildren) {
-    const isCollapsed = collapsedFolders.has(page.id);
+    const isExpanded = expandedFolders.has(page.id);
     const expandBtn = document.createElement('button');
-    expandBtn.className = `expand-btn ${isCollapsed ? '' : 'expanded'}`;
+    expandBtn.className = `expand-btn ${isExpanded ? 'expanded' : ''}`;
     expandBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18l6-6-6-6"/></svg>`;
     expandBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const willBeCollapsed = expandBtn.classList.contains('expanded');
-      expandBtn.classList.toggle('expanded');
+      const isNowExpanded = !expandBtn.classList.contains('expanded');
       
-      const childContainer = item.querySelector('.tree-children');
-      if (childContainer) {
-        childContainer.classList.toggle('collapsed');
-      }
-
-      if (willBeCollapsed) {
-        collapsedFolders.add(page.id);
+      if (isNowExpanded) {
+        // Intelligent space-saving: Collapse siblings when expanding this one
+        const siblings = allFilteredPages.filter(p => p.parentId === page.parentId && p.id !== page.id);
+        siblings.forEach(s => expandedFolders.delete(s.id));
+        
+        expandedFolders.add(page.id);
       } else {
-        collapsedFolders.delete(page.id);
+        expandedFolders.delete(page.id);
       }
+      
+      renderTree(document.getElementById('page-tree'));
     });
     row.appendChild(expandBtn);
   } else {
@@ -236,6 +299,20 @@ function createTreeItem(page, allFilteredPages) {
   }
 
   row.addEventListener('click', () => {
+    // If clicking the active page, toggle its expansion
+    if (page.id === activePageId && hasChildren) {
+      if (expandedFolders.has(page.id)) {
+        expandedFolders.delete(page.id);
+      } else {
+        // Expand and collapse siblings
+        const siblings = allFilteredPages.filter(p => p.parentId === page.parentId && p.id !== page.id);
+        siblings.forEach(s => expandedFolders.delete(s.id));
+        expandedFolders.add(page.id);
+      }
+      renderTree(document.getElementById('page-tree'));
+      return;
+    }
+
     if (onNavigateCallback) onNavigateCallback(page.id);
   });
   if (canEdit() && !searchFilter) {
@@ -309,7 +386,7 @@ function createTreeItem(page, allFilteredPages) {
         newOrder = targetChildren.length;
         
         // Auto-expand folder on drop
-        collapsedFolders.delete(page.id);
+        expandedFolders.add(page.id);
       } else {
         newParentId = page.parentId;
         // Determine the order amongst siblings
@@ -333,9 +410,10 @@ function createTreeItem(page, allFilteredPages) {
 
   // Render children
   if (hasChildren) {
+    const isExpanded = expandedFolders.has(page.id);
     const childContainer = document.createElement('div');
-    childContainer.className = `tree-children ${collapsedFolders.has(page.id) ? 'collapsed' : ''}`;
-    children.forEach((child) => {
+    childContainer.className = `tree-children ${isExpanded ? '' : 'collapsed'}`;
+    children.sort((a, b) => (a.order || 0) - (b.order || 0)).forEach((child) => {
       childContainer.appendChild(createTreeItem(child, allFilteredPages));
     });
     item.appendChild(childContainer);
