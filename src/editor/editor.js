@@ -177,10 +177,10 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           const linkNode = event.target.closest('a');
           
           if (linkNode) {
-            const range = view.state.doc.resolve(pos).markRange(schema.marks.link);
             const rect = linkNode.getBoundingClientRect();
             
-            if (range && event.clientX > (rect.right - 30)) {
+            // Click near the right edge of the link → navigate directly
+            if (event.clientX > (rect.right - 30)) {
                if (attrs.href.startsWith('#')) {
                 window.location.hash = attrs.href;
               } else {
