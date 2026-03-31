@@ -1,13 +1,36 @@
 // Mention suggestions — dropdown list logic
 import tippy from 'tippy.js';
 import { getUsers } from '../firebase/firestore.js';
+import { auth } from '../firebase/config.js';
 
 export default {
   items: async ({ query }) => {
     // 1. Fetch users from Firestore
-    const users = await getUsers();
+    let users = await getUsers();
     
-    // 2. Map to mention format and filter by query
+    // 2. Identify current user and append '(Ich)'
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      // Check if user is already in the list
+      const existingUserIndex = users.findIndex(u => u.id === currentUser.uid);
+      
+      const meLabel = (currentUser.displayName || currentUser.email || 'Unbekannt') + ' (Ich)';
+      
+      if (existingUserIndex >= 0) {
+        // Update existing entry
+        users[existingUserIndex].displayName = meLabel;
+      } else {
+        // Add if completely missing
+        users.push({
+          id: currentUser.uid,
+          displayName: meLabel,
+          email: currentUser.email,
+          photoURL: currentUser.photoURL
+        });
+      }
+    }
+    
+    // 3. Map to mention format and filter by query
     return users
       .map(u => ({
         id: u.id,
@@ -15,8 +38,14 @@ export default {
         photoURL: u.photoURL,
       }))
       .filter(item => 
-        item.label.toLowerCase().startsWith(query.toLowerCase())
+        item.label.toLowerCase().includes(query.toLowerCase())
       )
+      // Sort so "(Ich)" comes first if it matches
+      .sort((a, b) => {
+        if (a.label.includes('(Ich)')) return -1;
+        if (b.label.includes('(Ich)')) return 1;
+        return a.label.localeCompare(b.label);
+      })
       .slice(0, 10);
   },
 

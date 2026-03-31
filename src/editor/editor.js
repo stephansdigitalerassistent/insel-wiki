@@ -103,6 +103,7 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       inline: true,
     }),
     Link.configure({
+      autolink: true,
       openOnClick: false,
       HTMLAttributes: {
         class: 'editable-link',
@@ -189,6 +190,17 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         return false;
       },
       handleDOMEvents: {
+        keydown: (view, event) => {
+          if (event.key === ' ') {
+            const { selection } = view.state;
+            const { schema } = view.state;
+            if (selection.empty && view.state.doc.rangeHasMark(selection.from - 1, selection.from, schema.marks.link)) {
+              editor.chain().unsetLink().insertContent(' ').run();
+              return true;
+            }
+          }
+          return false;
+        },
         dblclick: (view, event) => {
           const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
           if (pos === undefined) return false;
@@ -293,22 +305,7 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
     });
     
     formatMenuEl.onclick = async (e) => {
-      const btn = e.target.closest('.format-bubble-action');
-      if (!btn) return;
-      const action = btn.dataset.action;
-      const chain = editor.chain().focus();
-      switch (action) {
-        case 'bold': chain.toggleBold().run(); break;
-        case 'italic': chain.toggleItalic().run(); break;
-        case 'h1': chain.toggleHeading({ level: 1 }).run(); break;
-        case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
-        case 'bulletList': chain.toggleBulletList().run(); break;
-        case 'link': {
-          const url = await promptModal('URL eingeben:', 'https://...');
-          if (url) chain.setLink({ href: url }).run();
-          break;
-        }
-      }
+      // Logic moved to global delegation
     };
   }
 
@@ -333,44 +330,66 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       }
     });
 
-    const handleLinkBubbleClick = async (e) => {
-      const path = e.composedPath().map(el => el.tagName || 'WINDOW').join(' > ');
-      
-      
+    const handleGlobalBubbleClick = async (e) => {
+      // 1. Link Bubble Logic
       const editBtn = e.target.closest('#bubble-link-edit');
       const unlinkBtn = e.target.closest('#bubble-link-unlink');
       const urlLink = e.target.closest('#bubble-link-url');
 
       if (editBtn) {
-        
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         const { href } = editor.getAttributes('link');
         const newUrl = await promptModal('Link bearbeiten:', href);
         if (newUrl !== null) {
           editor.chain().focus().extendMarkRange('link').setLink({ href: newUrl }).run();
           if (linkTippy) linkTippy.hide();
         }
-      } else if (unlinkBtn) {
-        
-        e.preventDefault();
-        e.stopPropagation();
+        return;
+      } 
+      
+      if (unlinkBtn) {
+        e.preventDefault(); e.stopPropagation();
         editor.chain().focus().unsetLink().run();
         if (linkTippy) linkTippy.hide();
-      } else if (urlLink) {
+        return;
+      } 
+      
+      if (urlLink) {
         const href = urlLink.getAttribute('href');
         if (href && href.startsWith('#')) {
           e.preventDefault();
           window.location.hash = href;
           if (linkTippy) linkTippy.hide();
         }
+        return;
+      }
+
+      // 2. Format Bubble Logic
+      const formatBtn = e.target.closest('.format-bubble-action');
+      if (formatBtn) {
+        e.preventDefault(); e.stopPropagation();
+        const action = formatBtn.dataset.action;
+        const chain = editor.chain().focus();
+        switch (action) {
+          case 'bold': chain.toggleBold().run(); break;
+          case 'italic': chain.toggleItalic().run(); break;
+          case 'h1': chain.toggleHeading({ level: 1 }).run(); break;
+          case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
+          case 'bulletList': chain.toggleBulletList().run(); break;
+          case 'link': {
+            const url = await promptModal('URL eingeben:', 'https://...');
+            if (url) chain.setLink({ href: url }).run();
+            break;
+          }
+        }
+        if (formatTippy) formatTippy.hide();
       }
     };
     
-    document.addEventListener('click', handleLinkBubbleClick, true);
+    document.addEventListener('click', handleGlobalBubbleClick, true);
     const originalDestroy = editor.destroy;
     editor.destroy = () => {
-      document.removeEventListener('click', handleLinkBubbleClick, true);
+      document.removeEventListener('click', handleGlobalBubbleClick, true);
       if (originalDestroy) originalDestroy.call(editor);
     };
   }
