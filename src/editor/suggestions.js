@@ -63,14 +63,16 @@ export default {
     let component;
     let popup;
     let selectedIndex = 0;
+    let currentItems = [];
+    let currentCommand = null;
 
-    const renderItems = (props) => {
-      if (props.items.length === 0) {
+    const renderItems = () => {
+      if (currentItems.length === 0) {
         component.innerHTML = '<div class="mention-item no-result">Keine Benutzer gefunden</div>';
         return;
       }
 
-      component.innerHTML = props.items.map((item, index) => `
+      component.innerHTML = currentItems.map((item, index) => `
         <button class="mention-item ${index === selectedIndex ? 'is-selected' : ''}" data-id="${item.id}">
           ${item.photoURL 
             ? `<img src="${item.photoURL}" class="mention-avatar" />` 
@@ -83,8 +85,8 @@ export default {
       // Bind click events
       component.querySelectorAll('.mention-item').forEach((btn, index) => {
         btn.addEventListener('click', () => {
-          const item = props.items[index];
-          if (item) props.command({ id: item.id, label: item.label });
+          const item = currentItems[index];
+          if (item && currentCommand) currentCommand({ id: item.id, label: item.label });
         });
       });
     };
@@ -93,8 +95,12 @@ export default {
       onStart: props => {
         component = document.createElement('div');
         component.className = 'mention-suggestions';
+        
+        currentItems = props.items || [];
+        currentCommand = props.command;
         selectedIndex = 0;
-        renderItems(props);
+        
+        renderItems();
 
         popup = tippy('body', {
           getReferenceClientRect: props.clientRect,
@@ -108,8 +114,11 @@ export default {
       },
 
       onUpdate(props) {
+        currentItems = props.items || [];
+        currentCommand = props.command;
         selectedIndex = 0;
-        renderItems(props);
+        
+        renderItems();
 
         if (popup) {
           popup.setProps({
@@ -124,24 +133,25 @@ export default {
           return true;
         }
         
-        const { items, command } = props;
-
         if (props.event.key === 'ArrowUp') {
-          selectedIndex = (selectedIndex + items.length - 1) % items.length;
-          renderItems(props);
+          if (!currentItems.length) return false;
+          selectedIndex = (selectedIndex + currentItems.length - 1) % currentItems.length;
+          renderItems();
           return true;
         }
 
         if (props.event.key === 'ArrowDown') {
-          selectedIndex = (selectedIndex + 1) % items.length;
-          renderItems(props);
+          if (!currentItems.length) return false;
+          selectedIndex = (selectedIndex + 1) % currentItems.length;
+          renderItems();
           return true;
         }
 
         if (props.event.key === 'Enter') {
-          const item = items[selectedIndex];
-          if (item) {
-            command({ id: item.id, label: item.label });
+          if (!currentItems.length) return false;
+          const item = currentItems[selectedIndex];
+          if (item && currentCommand) {
+            currentCommand({ id: item.id, label: item.label });
           }
           return true;
         }
