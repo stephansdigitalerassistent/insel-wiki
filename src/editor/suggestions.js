@@ -32,11 +32,20 @@ export default {
     
     // 3. Map to mention format and filter by query
     return users
-      .map(u => ({
-        id: u.id,
-        label: u.displayName || u.email || 'Unbekannt',
-        photoURL: u.photoURL,
-      }))
+      .map(u => {
+        // Preference: displayName > Email-Prefix > 'Unbekannt'
+        let name = u.displayName;
+        if (!name && u.email) {
+          name = u.email.split('@')[0]; // Use prefix of email as name
+        }
+        if (!name) name = 'Unbekannt';
+
+        return {
+          id: u.id,
+          label: name,
+          photoURL: u.photoURL,
+        };
+      })
       .filter(item => 
         item.label.toLowerCase().includes(query.toLowerCase())
       )

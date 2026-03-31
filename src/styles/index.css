@@ -586,27 +586,8 @@ html, body {
 .editor .tiptap a {
   color: var(--accent-hover); text-decoration: underline; text-underline-offset: 2px;
   position: relative;
-}
-
-/* Variant 3: Mobile Link Indicator Icon */
-@media (max-width: 768px) {
-  .editor .tiptap a::after {
-    content: " ↗";
-    display: inline-block;
-    font-size: 0.8em;
-    margin-left: 2px;
-    color: var(--accent);
-    background: var(--bg-hover);
-    border-radius: 4px;
-    padding: 0 4px;
-    text-decoration: none;
-    font-weight: bold;
-    width: 20px;
-    height: 20px;
-    line-height: 20px;
-    text-align: center;
-    vertical-align: middle;
-  }
+  /* Allow natural wrapping */
+  display: inline;
 }
 
 .editor .tiptap img {
