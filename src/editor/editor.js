@@ -101,6 +101,12 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       HTMLAttributes: {
         class: 'mention',
       },
+      renderText({ node }) {
+        return `@${node.attrs.label ?? node.attrs.id}`;
+      },
+      renderHTML({ node, HTMLAttributes }) {
+        return ['span', HTMLAttributes, `@${node.attrs.label ?? node.attrs.id}`];
+      },
       suggestion,
     }),
     Placeholder.configure({
