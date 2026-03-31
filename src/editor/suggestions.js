@@ -2,6 +2,7 @@
 import tippy from 'tippy.js';
 import { getUsers } from '../firebase/firestore.js';
 import { auth } from '../firebase/config.js';
+import { formatDefaultName } from '../utils/string.js';
 
 export default {
   items: async ({ query }) => {
@@ -14,7 +15,7 @@ export default {
       // Check if user is already in the list
       const existingUserIndex = users.findIndex(u => u.id === currentUser.uid);
       
-      const meLabel = (currentUser.displayName || currentUser.email || 'Unbekannt') + ' (Ich)';
+      const meLabel = (currentUser.displayName || formatDefaultName(currentUser.email) || 'Unbekannt') + ' (Ich)';
       
       if (existingUserIndex >= 0) {
         // Update existing entry
@@ -33,10 +34,10 @@ export default {
     // 3. Map to mention format and filter by query
     return users
       .map(u => {
-        // Preference: displayName > Email-Prefix > 'Unbekannt'
+        // Preference: displayName > Formatted Email > 'Unbekannt'
         let name = u.displayName;
         if (!name && u.email) {
-          name = u.email.split('@')[0]; // Use prefix of email as name
+          name = formatDefaultName(u.email);
         }
         if (!name) name = 'Unbekannt';
 
