@@ -70,14 +70,17 @@ export class FirestoreYjsProvider {
           Y.applyUpdate(this.ydoc, updateArr, this);
         }
       });
-      // Compact: Save new state and delete old updates
-      try {
-        const newState = Y.encodeStateAsUpdate(this.ydoc);
-        await setDoc(this.stateDocRef, { state: Bytes.fromUint8Array(newState), updatedAt: serverTimestamp() });
-        pendingUpdates.forEach(change => deleteDoc(change.ref).catch(() => {}));
-      } catch (err) {
-        console.error('[FirestoreYjs] Compaction error:', err);
-      }
+      // Defer compaction — don't block the editor from loading
+      setTimeout(() => {
+        try {
+          const newState = Y.encodeStateAsUpdate(this.ydoc);
+          setDoc(this.stateDocRef, { state: Bytes.fromUint8Array(newState), updatedAt: serverTimestamp() })
+            .then(() => pendingUpdates.forEach(change => deleteDoc(change.ref).catch(() => {})))
+            .catch(() => {});
+        } catch (err) {
+          console.error('[FirestoreYjs] Compaction error:', err);
+        }
+      }, 1000);
     }
 
     // Inform editor that binary state load is complete
@@ -111,9 +114,10 @@ export class FirestoreYjsProvider {
     });
 
     // 4. Sync Awareness (Cursors & Selections)
-    // First, clean up all stale awareness docs from old sessions
-    const existingAwareness = await getDocs(this.awarenessRef);
-    existingAwareness.forEach(d => deleteDoc(d.ref).catch(() => {}));
+    // Clean up stale awareness docs in the background
+    getDocs(this.awarenessRef).then(existing => {
+      existing.forEach(d => deleteDoc(d.ref).catch(() => {}));
+    }).catch(() => {});
 
     this.awareness.on('update', ({ added, updated, removed }, origin) => {
       if (origin === 'local') {

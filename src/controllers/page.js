@@ -123,29 +123,41 @@ export function getCurrentPageId() { return currentPageId; }
  * Load a page by ID
  */
 export async function loadPage(pageId) {
-  if (debouncedUpdateTitle) debouncedUpdateTitle.flush();
-  await snapshotCurrentPage();
+  // Skip if we're already on this page
+  if (pageId === currentPageId) return;
 
-  // Cleanup
+  if (debouncedUpdateTitle) debouncedUpdateTitle.flush();
+
+  // Fire-and-forget cleanup (don't block the new page load)
+  const oldPageId = currentPageId;
+  if (oldPageId) {
+    snapshotCurrentPage().catch(() => {});
+    leavePage().catch(() => {});
+  }
+
+  // Cleanup subscriptions synchronously (instant, no network)
   if (currentPageUnsub) { currentPageUnsub(); currentPageUnsub = null; }
   if (currentPresenceUnsub) { currentPresenceUnsub(); currentPresenceUnsub = null; }
-  await leavePage();
   clearInterval(historySnapshotInterval);
   closeHistoryPanel();
   collabCursorsEl.innerHTML = '';
 
+  // Fetch page data (the only blocking await before rendering)
   const page = await getPage(pageId);
   if (!page) { showEmptyState(); return; }
 
   currentPageId = pageId;
   currentPageData = page;
   setActivePage(pageId);
-  loadCommentsForPage(pageId);
 
+  // Show editor container immediately
   editorContainer.classList.remove('hidden');
   emptyState.classList.add('hidden');
+  pageTitleInput.value = page.title || '';
+  updateBreadcrumb(pageId);
+  updateSaveStatus('saved');
 
-  // Self-heal internal links
+  // Self-heal internal links (sync, no network)
   const { markdown: healedMarkdown, changed } = selfHealLinks(page.content || '');
   if (changed) {
     page.content = healedMarkdown;
@@ -155,8 +167,6 @@ export async function loadPage(pageId) {
       }
     }, 2000);
   }
-
-  pageTitleInput.value = page.title || '';
 
   const user = getCurrentUser();
   const userName = user?.displayName || formatDefaultName(user?.email);
@@ -168,6 +178,7 @@ export async function loadPage(pageId) {
     color: getColorForEmail(user?.email || 'Gast')
   };
 
+  // Create editor (Yjs provider.init() runs internally)
   createEditor(editorEl, pageId, fullUser, handleSave, page.content || '');
 
   if (!formatToolbar) {
@@ -177,8 +188,6 @@ export async function loadPage(pageId) {
 
   setEditable(canEdit());
   pageTitleInput.readOnly = !canEdit();
-  updateBreadcrumb(pageId);
-  updateSaveStatus('saved');
 
   historySnapshotInterval = setInterval(() => snapshotCurrentPage(), SNAPSHOT_INTERVAL_MS);
 
@@ -186,6 +195,8 @@ export async function loadPage(pageId) {
   window.removeEventListener('beforeunload', handleUnload);
   window.addEventListener('beforeunload', handleUnload);
 
+  // --- Non-blocking parallel work (doesn't delay page render) ---
+  // Subscribe to page updates
   currentPageUnsub = subscribeToPage(pageId, (updatedPage) => {
     if (updatedPage && updatedPage.id === currentPageId) {
       currentPageData = updatedPage;
@@ -201,15 +212,18 @@ export async function loadPage(pageId) {
     }
   });
 
-  if (user) {
-    currentSessionId = await joinPage(pageId, fullUser);
-  }
-
+  // Comments, presence, and history snapshot — all in parallel, non-blocking
+  loadCommentsForPage(pageId);
   currentPresenceUnsub = subscribeToPresence(pageId, (users) => renderPresence(users));
 
+  if (user) {
+    joinPage(pageId, fullUser).then(id => { currentSessionId = id; }).catch(() => {});
+  }
+
   isSnapshotDirty = false;
-  const latestSnap = await getLatestHistorySnapshot(pageId);
-  lastSnapshotContent = latestSnap ? latestSnap.content : (page.content || '');
+  getLatestHistorySnapshot(pageId).then(snap => {
+    lastSnapshotContent = snap ? snap.content : (page.content || '');
+  }).catch(() => {});
 
   if (!page.title || page.title === 'Neue Seite') {
     setTimeout(() => { pageTitleInput.focus(); pageTitleInput.select(); }, 100);
