@@ -74,11 +74,18 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
   const linkMenuEl = document.getElementById('link-bubble-menu');
   const formatMenuEl = document.getElementById('format-bubble-menu');
   
+  // Prevent focus loss when clicking/touching inside the bubble menus
+  const preventBlur = (e) => e.preventDefault();
+
   if (linkMenuEl) {
       linkMenuEl.style.display = 'flex';
+      linkMenuEl.addEventListener('mousedown', preventBlur);
+      linkMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
   }
   if (formatMenuEl) {
       formatMenuEl.style.display = 'flex';
+      formatMenuEl.addEventListener('mousedown', preventBlur);
+      formatMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
   }
 
   const extensions = [
@@ -167,9 +174,13 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         const attrs = linkMark?.attrs;
 
         if (attrs?.href) {
-          if (window.innerWidth <= 768) {
+          const linkNode = event.target.closest('a');
+          
+          if (linkNode) {
             const range = view.state.doc.resolve(pos).markRange(schema.marks.link);
-            if (range && event.clientX > (event.target.getBoundingClientRect().right - 25)) {
+            const rect = linkNode.getBoundingClientRect();
+            
+            if (range && event.clientX > (rect.right - 30)) {
                if (attrs.href.startsWith('#')) {
                 window.location.hash = attrs.href;
               } else {
