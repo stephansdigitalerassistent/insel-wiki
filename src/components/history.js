@@ -35,7 +35,7 @@ export async function loadHistory(pageId, livePageData, getLiveContent) {
           <span style="font-weight: 600; color: var(--success); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Aktuelle Version</span>
           <span class="history-date" style="font-size: 0.7rem;">Gerade eben</span>
         </div>
-        <div class="history-user">${livePageData.lastSavedByByName || livePageData.lastSavedBy}</div>
+        <div class="history-user">${livePageData.lastSavedByName || livePageData.lastSavedBy}</div>
       `;
 
       liveEl.addEventListener('click', async () => {

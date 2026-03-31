@@ -2,6 +2,15 @@
 import { subscribeToPages, createPage, getDeletedPages, restorePage, permanentlyDeletePage, updatePageHierarchy } from '../firebase/firestore.js';
 import { canEdit } from '../firebase/auth.js';
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 let allPages = [];
 let unsubscribe = null;
 let onNavigateCallback = null;
@@ -288,9 +297,11 @@ function createTreeItem(page, allFilteredPages) {
     if (start > 0) text = '…' + text;
     if (end < page.content.length) text = text + '…';
     
-    // Highlight the term
-    const regex = new RegExp(`(${searchFilter})`, 'gi');
-    snippet.innerHTML = text.replace(regex, '<mark>$1</mark>');
+    // Escape HTML first, then highlight the search term safely
+    const escaped = escapeHtml(text);
+    const escapedFilter = escapeHtml(searchFilter);
+    const regex = new RegExp(`(${escapeRegex(escapedFilter)})`, 'gi');
+    snippet.innerHTML = escaped.replace(regex, '<mark>$1</mark>');
     
     item.appendChild(row);
     item.appendChild(snippet);

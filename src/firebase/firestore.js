@@ -455,31 +455,5 @@ export async function getUsers() {
   return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-/**
- * Registration logic
- */
-export async function createRegistrationRequest(tokenId, email, password) {
-  const reqRef = doc(db, 'registration_requests', tokenId);
-  await setDoc(reqRef, {
-    email,
-    password, // Hash this in a real production app!
-    status: 'pending',
-    createdAt: serverTimestamp()
-  });
-}
 
-export function subscribeToRegistrationRequest(tokenId, callback) {
-  const reqRef = doc(db, 'registration_requests', tokenId);
-  return onSnapshot(reqRef, (snap) => {
-    if (snap.exists()) {
-      callback(snap.id, snap.data());
-    } else {
-      callback(null);
-    }
-  });
-}
 
-export async function cancelRegistrationRequest(tokenId) {
-  const reqRef = doc(db, 'registration_requests', tokenId);
-  await deleteDoc(reqRef);
-}

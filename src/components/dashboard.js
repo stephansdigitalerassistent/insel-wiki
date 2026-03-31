@@ -46,19 +46,19 @@ export function showDashboard() {
   renderTasks();
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderTasks(filter = 'all') {
   const list = document.getElementById('dashboard-tasks-list');
   const pages = getAllPages();
   let allTasks = [];
 
-  console.log(`[Dashboard] Rendering tasks for ${pages.length} pages`);
-
   pages.forEach(page => {
     if (page.content) {
       const tasks = extractTasks(page.content, page.id, page.title);
-      if (tasks.length > 0) {
-        console.log(`[Dashboard] Found ${tasks.length} tasks in ${page.title}`);
-      }
       allTasks = allTasks.concat(tasks);
     }
   });
@@ -69,14 +69,23 @@ function renderTasks(filter = 'all') {
   }
 
   list.innerHTML = allTasks.map(task => `
-    <div class="task-card ${task.status}" onclick="window.dispatchEvent(new CustomEvent('nav-to-task', {detail: {pageId: '${task.pageId}', line: ${task.lineIndex}}}))">
+    <div class="task-card ${task.status}" data-page-id="${escapeHtml(task.pageId)}" data-line="${task.lineIndex}">
       <div class="task-status-icon">${task.status === 'completed' ? '✅' : '⭕'}</div>
       <div class="task-body">
-        <div class="task-text">${task.text}</div>
-        <div class="task-meta">In: <strong>${task.pageTitle}</strong></div>
+        <div class="task-text">${escapeHtml(task.text)}</div>
+        <div class="task-meta">In: <strong>${escapeHtml(task.pageTitle)}</strong></div>
       </div>
     </div>
   `).join('');
+
+  // Proper event delegation instead of inline onclick
+  list.querySelectorAll('.task-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const pageId = card.dataset.pageId;
+      dashboardOverlay.classList.add('hidden');
+      if (onNavigateCallback) onNavigateCallback(pageId);
+    });
+  });
 }
 
 // Listen for navigation requests

@@ -119,6 +119,11 @@ export function closeComments() {
   }
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderCommentsList() {
   const list = document.getElementById('comments-list');
   if (!list) return;
@@ -129,9 +134,9 @@ function renderCommentsList() {
   }
 
   list.innerHTML = commentsData.map(c => `
-    <div class="comment-item" data-id="${c.id}">
-      <div class="comment-user">${c.userName}</div>
-      <div class="comment-text">${c.text}</div>
+    <div class="comment-item" data-id="${escapeHtml(c.id)}">
+      <div class="comment-user">${escapeHtml(c.userName)}</div>
+      <div class="comment-text">${escapeHtml(c.text)}</div>
       <div class="comment-date">${formatTimestamp(c.createdAt)}</div>
     </div>
   `).join('');
