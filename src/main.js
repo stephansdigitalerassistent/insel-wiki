@@ -536,33 +536,8 @@ function navigateToPage(pageId, title = '') {
  */
 function updateLastEditedBadge(pageData) {
   if (!lastEditedBadge) return;
-
-  if (!pageData || !pageData.lastSavedBy) {
-    lastEditedBadge.classList.add('hidden');
-    return;
-  }
-
-  const date = pageData.updatedAt?.toDate ? pageData.updatedAt.toDate() : new Date(pageData.updatedAt);
-  const timeStr = date.toLocaleString('de-CH', { 
-    day: '2-digit', 
-    month: '2-digit', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
-  const name = pageData.lastSavedByName || formatDefaultName(pageData.lastSavedBy);
-
-  let avatarHTML = '';
-  if (pageData.lastSavedByPhoto) {
-    avatarHTML = `<img src="${pageData.lastSavedByPhoto}" class="last-edited-avatar" alt="Avatar">`;
-  } else {
-    avatarHTML = `<div class="last-edited-avatar">${name.charAt(0).toUpperCase()}</div>`;
-  }
-
-  lastEditedBadge.innerHTML = `
-    ${avatarHTML}
-    <span>Zuletzt bearbeitet von <strong>${name}</strong> am ${timeStr}</span>
-  `;
-  lastEditedBadge.classList.remove('hidden');
+  // Always hide the badge per user request
+  lastEditedBadge.classList.add('hidden');
 }
 
 // --- Page Loading ---

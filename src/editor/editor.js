@@ -316,7 +316,22 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
     });
     
     formatMenuEl.onclick = async (e) => {
-      // Logic moved to global delegation
+      const btn = e.target.closest('.format-bubble-action');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const chain = editor.chain().focus();
+      switch (action) {
+        case 'bold': chain.toggleBold().run(); break;
+        case 'italic': chain.toggleItalic().run(); break;
+        case 'h1': chain.toggleHeading({ level: 1 }).run(); break;
+        case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
+        case 'bulletList': chain.toggleBulletList().run(); break;
+        case 'link': {
+          const url = await promptModal('URL eingeben:', 'https://...');
+          if (url) chain.setLink({ href: url }).run();
+          break;
+        }
+      }
     };
   }
 
@@ -341,8 +356,8 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       }
     });
 
-    const handleGlobalBubbleClick = async (e) => {
-      // 1. Link Bubble Logic
+    // Remove old global event listener and attach directly to the tippy content element
+    linkMenuEl.onclick = async (e) => {
       const editBtn = e.target.closest('#bubble-link-edit');
       const unlinkBtn = e.target.closest('#bubble-link-unlink');
       const urlLink = e.target.closest('#bubble-link-url');
@@ -374,34 +389,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         }
         return;
       }
-
-      // 2. Format Bubble Logic
-      const formatBtn = e.target.closest('.format-bubble-action');
-      if (formatBtn) {
-        e.preventDefault(); e.stopPropagation();
-        const action = formatBtn.dataset.action;
-        const chain = editor.chain().focus();
-        switch (action) {
-          case 'bold': chain.toggleBold().run(); break;
-          case 'italic': chain.toggleItalic().run(); break;
-          case 'h1': chain.toggleHeading({ level: 1 }).run(); break;
-          case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
-          case 'bulletList': chain.toggleBulletList().run(); break;
-          case 'link': {
-            const url = await promptModal('URL eingeben:', 'https://...');
-            if (url) chain.setLink({ href: url }).run();
-            break;
-          }
-        }
-        if (formatTippy) formatTippy.hide();
-      }
-    };
-    
-    document.addEventListener('click', handleGlobalBubbleClick, true);
-    const originalDestroy = editor.destroy;
-    editor.destroy = () => {
-      document.removeEventListener('click', handleGlobalBubbleClick, true);
-      if (originalDestroy) originalDestroy.call(editor);
     };
   }
 
