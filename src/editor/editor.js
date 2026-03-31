@@ -17,6 +17,7 @@ import { CodeBlock } from '@tiptap/extension-code-block';
 import { CharacterCount } from '@tiptap/extension-character-count';
 import { Comment } from './Comment.js';
 import { Mention } from '@tiptap/extension-mention';
+import { mergeAttributes } from '@tiptap/core';
 import suggestion from './suggestions.js';
 import * as Y from 'yjs';
 import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
@@ -97,15 +98,16 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
     }),
     CodeBlock,
     Comment,
-    Mention.configure({
-      HTMLAttributes: {
-        class: 'mention',
-      },
+    Mention.extend({
       renderText({ node }) {
         return `@${node.attrs.label ?? node.attrs.id}`;
       },
       renderHTML({ node, HTMLAttributes }) {
-        return ['span', HTMLAttributes, `@${node.attrs.label ?? node.attrs.id}`];
+        return ['span', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes), `@${node.attrs.label ?? node.attrs.id}`];
+      },
+    }).configure({
+      HTMLAttributes: {
+        class: 'mention',
       },
       suggestion,
     }),
