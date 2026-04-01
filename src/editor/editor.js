@@ -187,8 +187,8 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           if (linkNode) {
             const rect = linkNode.getBoundingClientRect();
             
-            // Click near the right edge of the link → navigate directly
-            if (event.clientX > (rect.right - 30)) {
+            // INCREASED HIT AREA for mobile (40px)
+            if (event.clientX > (rect.right - 40)) {
                if (attrs.href.startsWith('#')) {
                 window.location.hash = attrs.href;
               } else {
@@ -323,9 +323,12 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       getReferenceClientRect: getSelectionBoundingRect
     });
     
-    formatMenuEl.onclick = async (e) => {
+    // Use pointerdown for instant reaction on mobile and to prevent blur
+    const handleFormatClick = async (e) => {
       const btn = e.target.closest('.format-bubble-action');
       if (!btn) return;
+      
+      e.preventDefault(); e.stopPropagation();
       const action = btn.dataset.action;
       const chain = editor.chain().focus();
       switch (action) {
@@ -340,7 +343,11 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           break;
         }
       }
+      // Delay hide to allow visual feedback
+      setTimeout(() => { if (formatTippy) formatTippy.hide(); }, 100);
     };
+
+    formatMenuEl.addEventListener('pointerdown', handleFormatClick);
   }
 
   if (linkMenuEl) {
@@ -364,50 +371,52 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       }
     });
 
-    // Remove old global event listener and attach directly to the tippy content element
-    linkMenuEl.onclick = async (e) => {
+    const handleLinkClick = async (e) => {
       const editBtn = e.target.closest('#bubble-link-edit');
       const unlinkBtn = e.target.closest('#bubble-link-unlink');
       const urlLink = e.target.closest('#bubble-link-url');
 
-      if (editBtn) {
+      if (editBtn || unlinkBtn || urlLink) {
         e.preventDefault(); e.stopPropagation();
+      }
+
+      if (editBtn) {
         const { href } = editor.getAttributes('link');
         const newUrl = await promptModal('Link bearbeiten:', href);
         if (newUrl !== null) {
           editor.chain().focus().extendMarkRange('link').setLink({ href: newUrl }).run();
           if (linkTippy) linkTippy.hide();
         }
-        return;
-      } 
-      
-      if (unlinkBtn) {
-        e.preventDefault(); e.stopPropagation();
+      } else if (unlinkBtn) {
         editor.chain().focus().unsetLink().run();
         if (linkTippy) linkTippy.hide();
-        return;
-      } 
-      
-      if (urlLink) {
+      } else if (urlLink) {
         const href = urlLink.getAttribute('href');
         if (href && href.startsWith('#')) {
-          e.preventDefault();
           window.location.hash = href;
-          if (linkTippy) linkTippy.hide();
+        } else if (href) {
+          window.open(href, '_blank');
         }
-        return;
+        if (linkTippy) linkTippy.hide();
       }
     };
+
+    linkMenuEl.addEventListener('pointerdown', handleLinkClick);
   }
 
   function updateBubbleMenus() {
     if (!editor || editor.isDestroyed) return;
     const { state, view } = editor;
     const { selection } = state;
-    const isFocused = view.hasFocus();
+    
+    // More relaxed focus check for mobile: either editor has focus OR a bubble is open
+    const isFocused = view.hasFocus() || 
+                     (document.activeElement && (formatMenuEl?.contains(document.activeElement) || linkMenuEl?.contains(document.activeElement)));
+    
     const isLink = editor.isActive('link');
 
     if (formatTippy) {
+      // Show format menu if focused and something is selected
       if (isFocused && !selection.empty && !isLink) {
         formatTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
         formatTippy.show();
@@ -417,7 +426,9 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
     }
 
     if (linkTippy) {
-      if (isFocused && isLink) {
+      // For links, we show it even if focus is temporarily lost (mobile keyboard shifts)
+      // as long as the cursor is actually inside a link mark.
+      if (isLink) {
         linkTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
         linkTippy.show();
       } else {
@@ -429,6 +440,11 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
   editor.on('selectionUpdate', updateBubbleMenus);
   editor.on('transaction', updateBubbleMenus);
   editor.on('focus', updateBubbleMenus);
+  
+  // CRITICAL: Global selectionchange listener for mobile Chrome
+  const onSelectionChange = () => updateBubbleMenus();
+  document.addEventListener('selectionchange', onSelectionChange);
+  
   editor.on('blur', () => {
     setTimeout(() => {
       if (!element.contains(document.activeElement) &&
@@ -437,7 +453,12 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         if (formatTippy) formatTippy.hide();
         if (linkTippy) linkTippy.hide();
       }
-    }, 150); // Increased timeout
+    }, 250); // Increased timeout for mobile
+  });
+
+  // Cleanup selection listener when editor is destroyed
+  editor.on('destroy', () => {
+    document.removeEventListener('selectionchange', onSelectionChange);
   });
 
   provider.init();
