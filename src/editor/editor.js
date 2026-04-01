@@ -182,21 +182,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         const attrs = linkMark?.attrs;
 
         if (attrs?.href) {
-          const linkNode = event.target.closest('a');
-          
-          if (linkNode) {
-            const rect = linkNode.getBoundingClientRect();
-            
-            // INCREASED HIT AREA for mobile (40px)
-            if (event.clientX > (rect.right - 40)) {
-               if (attrs.href.startsWith('#')) {
-                window.location.hash = attrs.href;
-              } else {
-                window.open(attrs.href, '_blank');
-              }
-              return true;
-            }
-          }
           if (event.ctrlKey || event.metaKey) {
             if (attrs.href.startsWith('#')) {
               window.location.hash = attrs.href;
