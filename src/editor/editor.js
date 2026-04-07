@@ -77,7 +77,12 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
   const formatMenuEl = document.getElementById('format-bubble-menu');
   
   // Prevent focus loss when clicking/touching inside the bubble menus
-  const preventBlur = (e) => e.preventDefault();
+  const preventBlur = (e) => {
+    // Only prevent blur for buttons, not for the URL link itself
+    if (e.target.closest('button')) {
+      e.preventDefault();
+    }
+  };
 
   if (linkMenuEl) {
       linkMenuEl.style.display = 'flex';
@@ -185,14 +190,14 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         const attrs = linkMark?.attrs;
 
         if (attrs?.href) {
-          if (event.ctrlKey || event.metaKey) {
-            if (attrs.href.startsWith('#')) {
-              window.location.hash = attrs.href;
-            } else {
-              window.open(attrs.href, '_blank');
-            }
-            return true;
+          // Open on simple click OR Ctrl/Cmd click
+          // (Normal clicks in TipTap are often intercepted, so we handle it here)
+          if (attrs.href.startsWith('#')) {
+            window.location.hash = attrs.href;
+          } else {
+            window.open(attrs.href, '_blank');
           }
+          return true;
         }
         return false;
       },
@@ -443,7 +448,8 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       const urlLink = e.target.closest('#bubble-link-url');
 
       if (editBtn || unlinkBtn || urlLink) {
-        e.preventDefault(); e.stopPropagation();
+        // e.preventDefault(); // Don't prevent default for links to allow standard navigation
+        e.stopPropagation();
       }
 
       if (editBtn) {
@@ -468,17 +474,18 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         editor.chain().focus().unsetLink().run();
         if (linkTippy) linkTippy.hide();
       } else if (urlLink) {
+        // Handled by browser if we don't preventDefault, but we do manual for hash links
         const href = urlLink.getAttribute('href');
         if (href && href.startsWith('#')) {
+          e.preventDefault();
           window.location.hash = href;
-        } else if (href) {
-          window.open(href, '_blank');
+          if (linkTippy) linkTippy.hide();
         }
-        if (linkTippy) linkTippy.hide();
       }
     };
 
-    linkMenuEl.addEventListener('pointerdown', handleLinkClick);
+    // Use click instead of pointerdown for links to ensure standard behavior works
+    linkMenuEl.addEventListener('click', handleLinkClick);
   }
 
   function updateBubbleMenus() {
