@@ -194,13 +194,12 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           const linkMark = marks.find(mark => mark.type === schema.marks.link);
           const href = linkMark?.attrs?.href;
 
-          if (href) {
-            console.log('[Insel-Wiki] Link clicked:', href);
+          if (href && (event.ctrlKey || event.metaKey)) {
+            console.log('[Insel-Wiki] Link Ctrl+clicked:', href);
             // Internal links: use navigateTo
             if (href.startsWith('#')) {
               const parts = href.replace('#/', '').replace('#', '').split('/');
               const targetPageId = parts[0];
-              console.log('[Insel-Wiki] Internal nav to:', targetPageId);
               navigateTo(targetPageId);
             } else {
               // External links: open in new tab
