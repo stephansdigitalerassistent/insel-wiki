@@ -123,6 +123,8 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       HTMLAttributes: {
         class: 'editable-link',
       },
+    }).extend({
+      inclusive: false,
     }),
     TaskList,
     TaskItem.configure({
@@ -229,15 +231,16 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
               
               const result = await linkModal(href || '', selectedText || '');
               if (result) {
-                editor.chain().focus().extendMarkRange('link').insertContent({
-                  type: 'text',
-                  text: result.text,
-                  marks: [{ type: 'link', attrs: { href: result.url } }]
-                }).run();
-              } else if (result === null && href) {
-                // If user cleared the link in modal or cancelled? 
-                // linkModal returns null on cancel. 
-                // But my linkModal only returns non-null if url is present.
+                editor.chain().focus()
+                  .extendMarkRange('link')
+                  .insertContent({
+                    type: 'text',
+                    text: result.text,
+                    marks: [{ type: 'link', attrs: { href: result.url } }]
+                  })
+                  .insertContent(' ')
+                  .unsetMark('link')
+                  .run();
               }
             })();
             return true;
@@ -259,14 +262,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
             return true;
           }
 
-          if (key === ' ') {
-            const { selection } = view.state;
-            const { schema } = view.state;
-            if (selection.empty && view.state.doc.rangeHasMark(selection.from - 1, selection.from, schema.marks.link)) {
-              editor.chain().focus().unsetLink().insertContent(' ').run();
-              return true;
-            }
-          }
           return false;
         },
         dblclick: (view, event) => {
@@ -391,11 +386,16 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           const selectedText = editor.state.doc.textBetween(from, to, ' ');
           const result = await linkModal('', selectedText);
           if (result) {
-            editor.chain().focus().extendMarkRange('link').insertContent({
-              type: 'text',
-              text: result.text,
-              marks: [{ type: 'link', attrs: { href: result.url } }]
-            }).run();
+            editor.chain().focus()
+              .extendMarkRange('link')
+              .insertContent({
+                type: 'text',
+                text: result.text,
+                marks: [{ type: 'link', attrs: { href: result.url } }]
+              })
+              .insertContent(' ')
+              .unsetMark('link')
+              .run();
           }
           break;
         }
@@ -445,11 +445,16 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         
         const result = await linkModal(href || '', selectedText);
         if (result) {
-          editor.chain().focus().extendMarkRange('link').insertContent({
-            type: 'text',
-            text: result.text,
-            marks: [{ type: 'link', attrs: { href: result.url } }]
-          }).run();
+          editor.chain().focus()
+            .extendMarkRange('link')
+            .insertContent({
+              type: 'text',
+              text: result.text,
+              marks: [{ type: 'link', attrs: { href: result.url } }]
+            })
+            .insertContent(' ')
+            .unsetMark('link')
+            .run();
           if (linkTippy) linkTippy.hide();
         }
       } else if (unlinkBtn) {
@@ -629,11 +634,16 @@ export function createFormatToolbar(container) {
         const selectedText = editor.state.doc.textBetween(from, to, ' ');
         const result = await linkModal('', selectedText);
         if (result) {
-          editor.chain().focus().extendMarkRange('link').insertContent({
-            type: 'text',
-            text: result.text,
-            marks: [{ type: 'link', attrs: { href: result.url } }]
-          }).run();
+          editor.chain().focus()
+            .extendMarkRange('link')
+            .insertContent({
+              type: 'text',
+              text: result.text,
+              marks: [{ type: 'link', attrs: { href: result.url } }]
+            })
+            .insertContent(' ')
+            .unsetMark('link')
+            .run();
         }
         break;
       }
