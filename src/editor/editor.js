@@ -195,11 +195,67 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       },
       handleDOMEvents: {
         keydown: (view, event) => {
-          if (event.key === ' ') {
+          const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
+          const isMod = ctrlKey || metaKey;
+
+          // Robust handling for Ctrl+Alt shortcuts (fixes Edge/Windows/AltGr issues)
+          if (isMod && altKey && !shiftKey) {
+            if (code === 'Digit1') {
+              editor.chain().focus().toggleHeading({ level: 1 }).run();
+              return true;
+            }
+            if (code === 'Digit2') {
+              editor.chain().focus().toggleHeading({ level: 2 }).run();
+              return true;
+            }
+            if (code === 'Digit3') {
+              editor.chain().focus().toggleHeading({ level: 3 }).run();
+              return true;
+            }
+            if (code === 'KeyC') {
+              editor.chain().focus().toggleCodeBlock().run();
+              return true;
+            }
+          }
+
+          // Ctrl+K for Link
+          if (isMod && key === 'k') {
+            event.preventDefault();
+            (async () => {
+              const { href } = editor.getAttributes('link');
+              const url = await promptModal('Link einfügen:', href || 'https://');
+              if (url !== null) {
+                if (url === '') {
+                  editor.chain().focus().extendMarkRange('link').unsetLink().run();
+                } else {
+                  editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+                }
+              }
+            })();
+            return true;
+          }
+
+          // Ctrl+S for Save
+          if (isMod && key === 's') {
+            event.preventDefault();
+            if (saveCallback && currentPageId) {
+              const markdown = getMarkdown();
+              saveCallback(currentPageId, markdown);
+            }
+            return true;
+          }
+
+          // Ctrl+Enter for Horizontal Rule
+          if (isMod && key === 'Enter') {
+            editor.chain().focus().setHorizontalRule().run();
+            return true;
+          }
+
+          if (key === ' ') {
             const { selection } = view.state;
             const { schema } = view.state;
             if (selection.empty && view.state.doc.rangeHasMark(selection.from - 1, selection.from, schema.marks.link)) {
-              editor.chain().unsetLink().insertContent(' ').run();
+              editor.chain().focus().unsetLink().insertContent(' ').run();
               return true;
             }
           }
@@ -505,22 +561,22 @@ export function createFormatToolbar(container) {
   toolbar.innerHTML = `
     <button class="format-btn" data-action="bold" title="Fett (Ctrl+B)"><b>B</b></button>
     <button class="format-btn" data-action="italic" title="Kursiv (Ctrl+I)"><i>I</i></button>
-    <button class="format-btn" data-action="strike" title="Durchgestrichen">S̶</button>
-    <button class="format-btn" data-action="code" title="Code">&lt;&gt;</button>
+    <button class="format-btn" data-action="strike" title="Durchgestrichen (Ctrl+Shift+X)">S̶</button>
+    <button class="format-btn" data-action="code" title="Code (Ctrl+E)">&lt;&gt;</button>
     <div class="divider"></div>
-    <button class="format-btn" data-action="h1" title="Überschrift 1">H1</button>
-    <button class="format-btn" data-action="h2" title="Überschrift 2">H2</button>
-    <button class="format-btn" data-action="h3" title="Überschrift 3">H3</button>
+    <button class="format-btn" data-action="h1" title="Überschrift 1 (Ctrl+Alt+1)">H1</button>
+    <button class="format-btn" data-action="h2" title="Überschrift 2 (Ctrl+Alt+2)">H2</button>
+    <button class="format-btn" data-action="h3" title="Überschrift 3 (Ctrl+Alt+3)">H3</button>
     <div class="divider"></div>
-    <button class="format-btn" data-action="bulletList" title="Aufzählung">•</button>
-    <button class="format-btn" data-action="orderedList" title="Nummerierung">1.</button>
-    <button class="format-btn" data-action="taskList" title="Aufgabenliste">☑</button>
+    <button class="format-btn" data-action="bulletList" title="Aufzählung (Ctrl+Shift+8)">•</button>
+    <button class="format-btn" data-action="orderedList" title="Nummerierung (Ctrl+Shift+7)">1.</button>
+    <button class="format-btn" data-action="taskList" title="Aufgabenliste (Ctrl+Shift+9)">☑</button>
     <div class="divider"></div>
-    <button class="format-btn" data-action="blockquote" title="Zitat">❝</button>
-    <button class="format-btn" data-action="codeBlock" title="Code-Block">▤</button>
-    <button class="format-btn" data-action="horizontalRule" title="Trennlinie">—</button>
+    <button class="format-btn" data-action="blockquote" title="Zitat (Ctrl+Shift+B)">❝</button>
+    <button class="format-btn" data-action="codeBlock" title="Code-Block (Ctrl+Alt+C)">▤</button>
+    <button class="format-btn" data-action="horizontalRule" title="Trennlinie (Ctrl+Enter)">—</button>
     <div class="divider"></div>
-    <button class="format-btn" data-action="link" title="Link">🔗</button>
+    <button class="format-btn" data-action="link" title="Link (Ctrl+K)">🔗</button>
     <button class="format-btn" data-action="image" title="Bild">🖼</button>
     <button class="format-btn" data-action="comment" title="Kommentar hinzufügen">💬</button>
   `;
