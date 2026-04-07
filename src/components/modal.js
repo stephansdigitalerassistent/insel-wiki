@@ -1,8 +1,10 @@
+import { getAllPages } from './sidebar.js';
+import { slugify } from '../utils/string.js';
+
 /**
  * Custom Promise-based modal for getting user inputs.
  * Replaces the native and ugly `window.prompt()`.
  */
-
 export function promptModal(title, placeholder = '', defaultValue = '') {
   return new Promise((resolve) => {
     // 1. Create overlay
@@ -85,6 +87,154 @@ export function promptModal(title, placeholder = '', defaultValue = '') {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) cancel();
     });
+  });
+}
+
+/**
+ * Advanced modal for inserting and editing links.
+ * Features: display text editing, page search, and recently visited pages.
+ */
+export function linkModal(initialUrl = '', initialText = '') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-box link-modal-box';
+    
+    const header = document.createElement('h3');
+    header.className = 'modal-title';
+    header.textContent = initialUrl ? 'Link bearbeiten' : 'Link einfügen';
+    
+    // 1. Text Field
+    const textGroup = document.createElement('div');
+    textGroup.className = 'form-group';
+    textGroup.innerHTML = '<label>Anzeigetext</label>';
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.className = 'modal-input';
+    textInput.placeholder = 'Link-Text…';
+    textInput.value = initialText;
+    textGroup.appendChild(textInput);
+
+    // 2. URL/Search Field
+    const urlGroup = document.createElement('div');
+    urlGroup.className = 'form-group';
+    urlGroup.innerHTML = '<label>Ziel (URL oder Seite suchen)</label>';
+    const urlInput = document.createElement('input');
+    urlInput.type = 'text';
+    urlInput.className = 'modal-input';
+    urlInput.placeholder = 'https://... oder Seitentitel…';
+    urlInput.value = initialUrl;
+    urlGroup.appendChild(urlInput);
+
+    // 3. Dropdown Container
+    const dropdown = document.createElement('div');
+    dropdown.className = 'link-search-dropdown hidden';
+    urlGroup.style.position = 'relative';
+    urlGroup.appendChild(dropdown);
+
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = 'Abbrechen';
+    
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'btn btn-primary';
+    submitBtn.textContent = 'Speichern';
+    
+    actions.appendChild(cancelBtn);
+    actions.appendChild(submitBtn);
+
+    modal.appendChild(header);
+    modal.appendChild(textGroup);
+    modal.appendChild(urlGroup);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const allPages = getAllPages() || [];
+    let recentPages = [];
+    try {
+      recentPages = JSON.parse(localStorage.getItem('recent_pages') || '[]');
+    } catch(e) {}
+
+    const updateDropdown = (filter = '') => {
+      dropdown.innerHTML = '';
+      let results = [];
+
+      if (!filter) {
+        // Show recent pages if no filter
+        if (recentPages.length > 0) {
+          const dHeader = document.createElement('div');
+          dHeader.className = 'dropdown-header';
+          dHeader.textContent = 'Zuletzt besucht';
+          dropdown.appendChild(dHeader);
+          results = recentPages.slice(0, 5);
+        }
+      } else {
+        const f = filter.toLowerCase();
+        results = allPages.filter(p => p.title.toLowerCase().includes(f)).slice(0, 8);
+      }
+
+      if (results.length > 0) {
+        results.forEach(p => {
+          const item = document.createElement('div');
+          item.className = 'dropdown-item';
+          item.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span>${p.title}</span>
+          `;
+          item.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent blur on input
+            urlInput.value = `#/${p.id}/${slugify(p.title)}`;
+            if (!textInput.value) textInput.value = p.title;
+            dropdown.classList.add('hidden');
+          });
+          dropdown.appendChild(item);
+        });
+        dropdown.classList.remove('hidden');
+      } else {
+        dropdown.classList.add('hidden');
+      }
+    };
+
+    urlInput.addEventListener('focus', () => updateDropdown(urlInput.value));
+    urlInput.addEventListener('input', () => updateDropdown(urlInput.value));
+    urlInput.addEventListener('blur', () => {
+      // Small delay to allow click on dropdown items
+      setTimeout(() => dropdown.classList.add('hidden'), 200);
+    });
+
+    const cleanup = () => document.body.removeChild(overlay);
+    const submit = () => {
+      const url = urlInput.value.trim();
+      const text = textInput.value.trim();
+      cleanup();
+      resolve(url ? { url, text: text || url } : null);
+    };
+    const cancel = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    submitBtn.addEventListener('click', submit);
+    cancelBtn.addEventListener('click', cancel);
+    [textInput, urlInput].forEach(el => el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') cancel();
+    }));
+
+    setTimeout(() => {
+      if (initialText) {
+        urlInput.focus();
+        urlInput.select();
+      } else {
+        textInput.focus();
+      }
+    }, 10);
   });
 }
 

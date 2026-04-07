@@ -150,6 +150,20 @@ export async function loadPage(pageId) {
   currentPageData = page;
   setActivePage(pageId);
 
+  // Track recently visited pages
+  try {
+    const recentJson = localStorage.getItem('recent_pages') || '[]';
+    let recent = JSON.parse(recentJson);
+    // Remove if already exists to move to top
+    recent = recent.filter(p => p.id !== pageId);
+    recent.unshift({ id: pageId, title: page.title, timestamp: Date.now() });
+    // Keep last 10
+    if (recent.length > 10) recent = recent.slice(0, 10);
+    localStorage.setItem('recent_pages', JSON.stringify(recent));
+  } catch (e) {
+    console.warn('Failed to update recent pages', e);
+  }
+
   // Show editor container immediately
   editorContainer.classList.remove('hidden');
   emptyState.classList.add('hidden');

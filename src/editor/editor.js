@@ -25,7 +25,7 @@ import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
 // For Markdown conversion
 import TurndownService from 'turndown';
 import { marked } from 'marked';
-import { promptModal } from '../components/modal.js';
+import { promptModal, linkModal } from '../components/modal.js';
 import { uploadImageFile } from '../firebase/storage.js';
 
 let editor = null;
@@ -223,13 +223,21 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
             event.preventDefault();
             (async () => {
               const { href } = editor.getAttributes('link');
-              const url = await promptModal('Link einfügen:', href || 'https://');
-              if (url !== null) {
-                if (url === '') {
-                  editor.chain().focus().extendMarkRange('link').unsetLink().run();
-                } else {
-                  editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-                }
+              const { state } = editor;
+              const { from, to } = state.selection;
+              const selectedText = state.doc.textBetween(from, to, ' ');
+              
+              const result = await linkModal(href || '', selectedText || '');
+              if (result) {
+                editor.chain().focus().extendMarkRange('link').insertContent({
+                  type: 'text',
+                  text: result.text,
+                  marks: [{ type: 'link', attrs: { href: result.url } }]
+                }).run();
+              } else if (result === null && href) {
+                // If user cleared the link in modal or cancelled? 
+                // linkModal returns null on cancel. 
+                // But my linkModal only returns non-null if url is present.
               }
             })();
             return true;
@@ -379,8 +387,16 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
         case 'bulletList': chain.toggleBulletList().run(); break;
         case 'link': {
-          const url = await promptModal('URL eingeben:', 'https://...');
-          if (url) chain.setLink({ href: url }).run();
+          const { from, to } = editor.state.selection;
+          const selectedText = editor.state.doc.textBetween(from, to, ' ');
+          const result = await linkModal('', selectedText);
+          if (result) {
+            editor.chain().focus().extendMarkRange('link').insertContent({
+              type: 'text',
+              text: result.text,
+              marks: [{ type: 'link', attrs: { href: result.url } }]
+            }).run();
+          }
           break;
         }
       }
@@ -423,9 +439,17 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
 
       if (editBtn) {
         const { href } = editor.getAttributes('link');
-        const newUrl = await promptModal('Link bearbeiten:', href);
-        if (newUrl !== null) {
-          editor.chain().focus().extendMarkRange('link').setLink({ href: newUrl }).run();
+        const { state } = editor;
+        const { from, to } = state.selection;
+        const selectedText = state.doc.textBetween(from, to, ' ');
+        
+        const result = await linkModal(href || '', selectedText);
+        if (result) {
+          editor.chain().focus().extendMarkRange('link').insertContent({
+            type: 'text',
+            text: result.text,
+            marks: [{ type: 'link', attrs: { href: result.url } }]
+          }).run();
           if (linkTippy) linkTippy.hide();
         }
       } else if (unlinkBtn) {
@@ -601,8 +625,16 @@ export function createFormatToolbar(container) {
       case 'codeBlock': chain.toggleCodeBlock().run(); break;
       case 'horizontalRule': chain.setHorizontalRule().run(); break;
       case 'link': {
-        const url = await promptModal('URL eingeben:', 'https://...');
-        if (url) chain.setLink({ href: url }).run();
+        const { from, to } = editor.state.selection;
+        const selectedText = editor.state.doc.textBetween(from, to, ' ');
+        const result = await linkModal('', selectedText);
+        if (result) {
+          editor.chain().focus().extendMarkRange('link').insertContent({
+            type: 'text',
+            text: result.text,
+            marks: [{ type: 'link', attrs: { href: result.url } }]
+          }).run();
+        }
         break;
       }
       case 'image': {

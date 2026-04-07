@@ -882,6 +882,27 @@ html, body {
   border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
+/* --- Link Search Dropdown --- */
+.link-search-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); box-shadow: var(--glass-shadow); z-index: 2100; max-height: 240px; overflow-y: auto; margin-top: -20px; /* pull up to overlap with input margin */ animation: fadeIn var(--transition-fast) forwards;
+}
+
+.dropdown-header {
+  padding: 10px 14px 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 1px solid var(--border);
+}
+
+.dropdown-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.dropdown-item:hover {
+  background: var(--bg-hover); color: var(--text-primary);
+}
+
+.dropdown-item svg {
+  opacity: 0.6; flex-shrink: 0;
+}
+
 .modal-input[type="file"] {
   padding: 8px 12px; background: var(--bg-elevated); cursor: pointer; color: var(--text-secondary);
 }
