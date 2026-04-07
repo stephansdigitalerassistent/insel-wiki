@@ -26,6 +26,7 @@ import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
 import TurndownService from 'turndown';
 import { marked } from 'marked';
 import { promptModal, linkModal } from '../components/modal.js';
+import { getAllPages } from '../components/sidebar.js';
 import { uploadImageFile } from '../firebase/storage.js';
 
 let editor = null;
@@ -417,7 +418,19 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         const urlEl = instance.popper.querySelector('#bubble-link-url');
         if (urlEl && attrs.href) {
           urlEl.href = attrs.href;
-          urlEl.textContent = attrs.href;
+          
+          let displayText = attrs.href;
+          if (attrs.href.startsWith('#/')) {
+            const parts = attrs.href.split('/');
+            const pageId = parts[1];
+            const allPages = getAllPages();
+            const page = allPages.find(p => p.id === pageId);
+            if (page) {
+              displayText = `📄 ${page.title}`;
+            }
+          }
+          
+          urlEl.textContent = displayText;
           urlEl.target = '_blank';
           urlEl.rel = 'noopener noreferrer';
         }
