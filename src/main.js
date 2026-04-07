@@ -30,6 +30,7 @@ function closeSidebarOnMobile() {
 // --- Routing ---
 function handleRoute() {
   const hash = window.location.hash.replace('#/', '').replace('#', '');
+  console.log('[Insel-Wiki] Routing to hash:', window.location.hash, 'parsed pageId:', hash.split('/')[0]);
   if (hash) {
     const pageId = hash.split('/')[0];
     loadPage(pageId).then(() => closeSidebarOnMobile());

@@ -27,6 +27,7 @@ import TurndownService from 'turndown';
 import { marked } from 'marked';
 import { promptModal, linkModal } from '../components/modal.js';
 import { getAllPages } from '../components/sidebar.js';
+import { navigateTo } from '../controllers/page.js';
 import { uploadImageFile } from '../firebase/storage.js';
 
 let editor = null;
@@ -186,20 +187,21 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       handleDOMEvents: {
         click: (view, event) => {
           const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
-          console.log('[Insel-Wiki] click pos:', pos);
           if (pos === undefined) return false;
           
           const { schema } = view.state;
           const marks = view.state.doc.resolve(pos).marks();
           const linkMark = marks.find(mark => mark.type === schema.marks.link);
           const href = linkMark?.attrs?.href;
-          console.log('[Insel-Wiki] click href:', href);
 
           if (href) {
-            console.log('[Insel-Wiki] Opening link via click:', href);
-            // Internal links: update location.hash
+            console.log('[Insel-Wiki] Link clicked:', href);
+            // Internal links: use navigateTo
             if (href.startsWith('#')) {
-              window.location.hash = href;
+              const parts = href.replace('#/', '').replace('#', '').split('/');
+              const targetPageId = parts[0];
+              console.log('[Insel-Wiki] Internal nav to:', targetPageId);
+              navigateTo(targetPageId);
             } else {
               // External links: open in new tab
               window.open(href, '_blank');
@@ -276,17 +278,16 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         },
         dblclick: (view, event) => {
           const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
-          console.log('[Insel-Wiki] dblclick pos:', pos);
           if (pos === undefined) return false;
           const { schema } = view.state;
           const marks = view.state.doc.resolve(pos).marks();
           const linkMark = marks.find(mark => mark.type === schema.marks.link);
           const href = linkMark?.attrs?.href;
-          console.log('[Insel-Wiki] dblclick href:', href);
           if (href) {
-            console.log('[Insel-Wiki] Opening link via dblclick:', href);
+            console.log('[Insel-Wiki] Link double-clicked:', href);
             if (href.startsWith('#')) {
-              window.location.hash = href;
+              const parts = href.replace('#/', '').replace('#', '').split('/');
+              navigateTo(parts[0]);
             } else {
               window.open(href, '_blank');
             }
@@ -434,7 +435,9 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           urlEl.href = attrs.href;
           
           let displayText = attrs.href;
+          let isInternal = false;
           if (attrs.href.startsWith('#/')) {
+            isInternal = true;
             const parts = attrs.href.split('/');
             const pageId = parts[1];
             const allPages = getAllPages();
@@ -445,8 +448,13 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           }
           
           urlEl.textContent = displayText;
-          urlEl.target = '_blank';
-          urlEl.rel = 'noopener noreferrer';
+          if (isInternal) {
+            urlEl.removeAttribute('target');
+            urlEl.removeAttribute('rel');
+          } else {
+            urlEl.target = '_blank';
+            urlEl.rel = 'noopener noreferrer';
+          }
         }
       }
     });
@@ -455,8 +463,6 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       const editBtn = e.target.closest('#bubble-link-edit');
       const unlinkBtn = e.target.closest('#bubble-link-unlink');
       const urlLink = e.target.closest('#bubble-link-url');
-
-      console.log('[Insel-Wiki] bubble click target:', e.target);
 
       if (editBtn || unlinkBtn || urlLink) {
         e.stopPropagation();
@@ -487,17 +493,14 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         if (linkTippy) linkTippy.hide();
       } else if (urlLink) {
         const href = urlLink.getAttribute('href');
-        console.log('[Insel-Wiki] bubble url click href:', href);
         if (href) {
-          e.preventDefault();
           if (href.startsWith('#')) {
-            console.log('[Insel-Wiki] bubble hash nav:', href);
-            window.location.hash = href;
-          } else {
-            console.log('[Insel-Wiki] bubble window.open:', href);
-            window.open(href, '_blank');
+            e.preventDefault();
+            const parts = href.replace('#/', '').replace('#', '').split('/');
+            navigateTo(parts[0]);
+            if (linkTippy) linkTippy.hide();
           }
-          if (linkTippy) linkTippy.hide();
+          // External links follow default behavior since we removed e.preventDefault()
         }
       }
     };

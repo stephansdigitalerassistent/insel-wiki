@@ -64,6 +64,14 @@ let historyBtn, printBtn, addChildBtn, deletePageBtn, toolbarNewPageBtn, copyLin
 
 let navigateCallback = null;
 
+export function navigateTo(pageId, title = '') {
+  if (navigateCallback) {
+    navigateCallback(pageId, title);
+  } else {
+    window.location.hash = title ? `#/${pageId}/${slugify(title)}` : `#/${pageId}`;
+  }
+}
+
 /**
  * Initialize the page controller
  */
