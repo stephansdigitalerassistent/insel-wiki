@@ -100,7 +100,7 @@ export function initPageController(opts) {
   pageTitleInput.addEventListener('input', () => {
     if (currentPageId && canEdit()) {
       debouncedUpdateTitle(currentPageId, pageTitleInput.value);
-      document.title = `Insel Wiki - ${pageTitleInput.value || 'Ohne Titel'}`;
+      document.title = `Insel-Wiki - ${pageTitleInput.value || 'Ohne Titel'}`;
     }
   });
 
@@ -150,7 +150,7 @@ export async function loadPage(pageId) {
   currentPageId = pageId;
   currentPageData = page;
   setActivePage(pageId);
-  document.title = `Insel Wiki - ${page.title || 'Ohne Titel'}`;
+  document.title = `Insel-Wiki - ${page.title || 'Ohne Titel'}`;
 
   // Track recently visited pages
   try {
@@ -218,7 +218,7 @@ export async function loadPage(pageId) {
       currentPageData = updatedPage;
       if (document.activeElement !== pageTitleInput && updatedPage.title !== pageTitleInput.value) {
         pageTitleInput.value = updatedPage.title || '';
-        document.title = `Insel Wiki - ${updatedPage.title || 'Ohne Titel'}`;
+        document.title = `Insel-Wiki - ${updatedPage.title || 'Ohne Titel'}`;
       }
       updateBreadcrumb(pageId);
       const slug = slugify(updatedPage.title || '');
