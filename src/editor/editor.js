@@ -233,13 +233,17 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
               if (result) {
                 editor.chain().focus()
                   .extendMarkRange('link')
-                  .insertContent({
-                    type: 'text',
-                    text: result.text,
-                    marks: [{ type: 'link', attrs: { href: result.url } }]
-                  })
-                  .insertContent(' ')
-                  .unsetMark('link')
+                  .insertContent([
+                    {
+                      type: 'text',
+                      text: result.text,
+                      marks: [{ type: 'link', attrs: { href: result.url } }]
+                    },
+                    {
+                      type: 'text',
+                      text: ' '
+                    }
+                  ])
                   .run();
               }
             })();
@@ -388,13 +392,17 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           if (result) {
             editor.chain().focus()
               .extendMarkRange('link')
-              .insertContent({
-                type: 'text',
-                text: result.text,
-                marks: [{ type: 'link', attrs: { href: result.url } }]
-              })
-              .insertContent(' ')
-              .unsetMark('link')
+              .insertContent([
+                {
+                  type: 'text',
+                  text: result.text,
+                  marks: [{ type: 'link', attrs: { href: result.url } }]
+                },
+                {
+                  type: 'text',
+                  text: ' '
+                }
+              ])
               .run();
           }
           break;
@@ -447,13 +455,17 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         if (result) {
           editor.chain().focus()
             .extendMarkRange('link')
-            .insertContent({
-              type: 'text',
-              text: result.text,
-              marks: [{ type: 'link', attrs: { href: result.url } }]
-            })
-            .insertContent(' ')
-            .unsetMark('link')
+            .insertContent([
+              {
+                type: 'text',
+                text: result.text,
+                marks: [{ type: 'link', attrs: { href: result.url } }]
+              },
+              {
+                type: 'text',
+                text: ' '
+              }
+            ])
             .run();
           if (linkTippy) linkTippy.hide();
         }
@@ -636,13 +648,17 @@ export function createFormatToolbar(container) {
         if (result) {
           editor.chain().focus()
             .extendMarkRange('link')
-            .insertContent({
-              type: 'text',
-              text: result.text,
-              marks: [{ type: 'link', attrs: { href: result.url } }]
-            })
-            .insertContent(' ')
-            .unsetMark('link')
+            .insertContent([
+              {
+                type: 'text',
+                text: result.text,
+                marks: [{ type: 'link', attrs: { href: result.url } }]
+              },
+              {
+                type: 'text',
+                text: ' '
+              }
+            ])
             .run();
         }
         break;
