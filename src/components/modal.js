@@ -1,5 +1,6 @@
 import { getAllPages } from './sidebar.js';
 import { slugify } from '../utils/string.js';
+import { getCurrentPageId } from '../controllers/page.js';
 
 /**
  * Custom Promise-based modal for getting user inputs.
@@ -160,7 +161,9 @@ export function linkModal(initialUrl = '', initialText = '') {
     const allPages = getAllPages() || [];
     let recentPages = [];
     try {
-      recentPages = JSON.parse(localStorage.getItem('recent_pages') || '[]');
+      const currentPageId = getCurrentPageId();
+      recentPages = JSON.parse(localStorage.getItem('recent_pages') || '[]')
+        .filter(p => p.id !== currentPageId);
     } catch(e) {}
 
     let selectedIndex = -1;
