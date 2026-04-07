@@ -183,25 +183,31 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       attributes: {
         class: 'tiptap',
       },
-      handleClick: (view, pos, event) => {
-        const { schema } = view.state;
-        const marks = view.state.doc.resolve(pos).marks();
-        const linkMark = marks.find(mark => mark.type === schema.marks.link);
-        const attrs = linkMark?.attrs;
-
-        if (attrs?.href) {
-          // Open on simple click OR Ctrl/Cmd click
-          // (Normal clicks in TipTap are often intercepted, so we handle it here)
-          if (attrs.href.startsWith('#')) {
-            window.location.hash = attrs.href;
-          } else {
-            window.open(attrs.href, '_blank');
-          }
-          return true;
-        }
-        return false;
-      },
       handleDOMEvents: {
+        click: (view, event) => {
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+          console.log('[Insel-Wiki] click pos:', pos);
+          if (pos === undefined) return false;
+          
+          const { schema } = view.state;
+          const marks = view.state.doc.resolve(pos).marks();
+          const linkMark = marks.find(mark => mark.type === schema.marks.link);
+          const href = linkMark?.attrs?.href;
+          console.log('[Insel-Wiki] click href:', href);
+
+          if (href) {
+            console.log('[Insel-Wiki] Opening link via click:', href);
+            // Internal links: update location.hash
+            if (href.startsWith('#')) {
+              window.location.hash = href;
+            } else {
+              // External links: open in new tab
+              window.open(href, '_blank');
+            }
+            return true;
+          }
+          return false;
+        },
         keydown: (view, event) => {
           const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
           const isMod = ctrlKey || metaKey;
@@ -270,12 +276,15 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         },
         dblclick: (view, event) => {
           const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+          console.log('[Insel-Wiki] dblclick pos:', pos);
           if (pos === undefined) return false;
           const { schema } = view.state;
           const marks = view.state.doc.resolve(pos).marks();
           const linkMark = marks.find(mark => mark.type === schema.marks.link);
-          if (linkMark?.attrs?.href) {
-            const href = linkMark.attrs.href;
+          const href = linkMark?.attrs?.href;
+          console.log('[Insel-Wiki] dblclick href:', href);
+          if (href) {
+            console.log('[Insel-Wiki] Opening link via dblclick:', href);
             if (href.startsWith('#')) {
               window.location.hash = href;
             } else {
@@ -447,12 +456,14 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
       const unlinkBtn = e.target.closest('#bubble-link-unlink');
       const urlLink = e.target.closest('#bubble-link-url');
 
+      console.log('[Insel-Wiki] bubble click target:', e.target);
+
       if (editBtn || unlinkBtn || urlLink) {
-        // e.preventDefault(); // Don't prevent default for links to allow standard navigation
         e.stopPropagation();
       }
 
       if (editBtn) {
+        e.preventDefault();
         const { href } = editor.getAttributes('link');
         const { state } = editor;
         const { from, to } = state.selection;
@@ -471,14 +482,21 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
           if (linkTippy) linkTippy.hide();
         }
       } else if (unlinkBtn) {
+        e.preventDefault();
         editor.chain().focus().unsetLink().run();
         if (linkTippy) linkTippy.hide();
       } else if (urlLink) {
-        // Handled by browser if we don't preventDefault, but we do manual for hash links
         const href = urlLink.getAttribute('href');
-        if (href && href.startsWith('#')) {
+        console.log('[Insel-Wiki] bubble url click href:', href);
+        if (href) {
           e.preventDefault();
-          window.location.hash = href;
+          if (href.startsWith('#')) {
+            console.log('[Insel-Wiki] bubble hash nav:', href);
+            window.location.hash = href;
+          } else {
+            console.log('[Insel-Wiki] bubble window.open:', href);
+            window.open(href, '_blank');
+          }
           if (linkTippy) linkTippy.hide();
         }
       }
