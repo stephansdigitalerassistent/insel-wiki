@@ -131,8 +131,8 @@ export function linkModal(initialUrl = '', initialText = '') {
     // 3. Dropdown Container
     const dropdown = document.createElement('div');
     dropdown.className = 'link-search-dropdown hidden';
-    urlGroup.style.position = 'relative';
-    urlGroup.appendChild(dropdown);
+    modal.style.position = 'relative'; // modal is now the anchor for the absolute dropdown
+    modal.appendChild(dropdown);
 
     const actions = document.createElement('div');
     actions.className = 'modal-actions';
@@ -161,7 +161,8 @@ export function linkModal(initialUrl = '', initialText = '') {
       recentPages = JSON.parse(localStorage.getItem('recent_pages') || '[]');
     } catch(e) {}
 
-    const updateDropdown = (filter = '') => {
+    const updateDropdown = (inputEl) => {
+      const filter = inputEl.value;
       dropdown.innerHTML = '';
       let results = [];
 
@@ -190,22 +191,34 @@ export function linkModal(initialUrl = '', initialText = '') {
           item.addEventListener('mousedown', (e) => {
             e.preventDefault(); // Prevent blur on input
             urlInput.value = `#/${p.id}/${slugify(p.title)}`;
-            if (!textInput.value) textInput.value = p.title;
+            if (!textInput.value || textInput.value === filter) {
+               textInput.value = p.title;
+            }
             dropdown.classList.add('hidden');
           });
           dropdown.appendChild(item);
         });
+        
+        // Position dropdown below the current input field
+        const rect = inputEl.getBoundingClientRect();
+        const modalRect = modal.getBoundingClientRect();
+        dropdown.style.top = `${rect.bottom - modalRect.top + 5}px`;
+        dropdown.style.left = `${rect.left - modalRect.left}px`;
+        dropdown.style.width = `${rect.width}px`;
+        
         dropdown.classList.remove('hidden');
       } else {
         dropdown.classList.add('hidden');
       }
     };
 
-    urlInput.addEventListener('focus', () => updateDropdown(urlInput.value));
-    urlInput.addEventListener('input', () => updateDropdown(urlInput.value));
-    urlInput.addEventListener('blur', () => {
-      // Small delay to allow click on dropdown items
-      setTimeout(() => dropdown.classList.add('hidden'), 200);
+    [textInput, urlInput].forEach(el => {
+      el.addEventListener('focus', () => updateDropdown(el));
+      el.addEventListener('input', () => updateDropdown(el));
+      el.addEventListener('blur', () => {
+        // Small delay to allow click on dropdown items
+        setTimeout(() => dropdown.classList.add('hidden'), 200);
+      });
     });
 
     const cleanup = () => document.body.removeChild(overlay);
