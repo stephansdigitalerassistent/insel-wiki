@@ -61,7 +61,9 @@ export function promptModal(title, placeholder = '', defaultValue = '') {
 
     // Cleanup function
     const cleanup = () => {
-      document.body.removeChild(overlay);
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
     };
 
     // Event listeners
@@ -268,6 +270,24 @@ export function linkModal(initialUrl = '', initialText = '') {
       return false;
     };
 
+    const cleanup = () => {
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
+    };
+
+    const submit = () => {
+      const url = urlInput.value.trim();
+      const text = textInput.value.trim();
+      cleanup();
+      resolve(url ? { url, text: text || url } : null);
+    };
+
+    const cancel = () => {
+      cleanup();
+      resolve(null);
+    };
+
     [textInput, urlInput].forEach(el => {
       el.addEventListener('focus', () => updateDropdown(el));
       el.addEventListener('input', () => updateDropdown(el));
@@ -281,24 +301,8 @@ export function linkModal(initialUrl = '', initialText = '') {
       });
     });
 
-    const cleanup = () => document.body.removeChild(overlay);
-    const submit = () => {
-      const url = urlInput.value.trim();
-      const text = textInput.value.trim();
-      cleanup();
-      resolve(url ? { url, text: text || url } : null);
-    };
-    const cancel = () => {
-      cleanup();
-      resolve(null);
-    };
-
     submitBtn.addEventListener('click', submit);
     cancelBtn.addEventListener('click', cancel);
-    [textInput, urlInput].forEach(el => el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') submit();
-      if (e.key === 'Escape') cancel();
-    }));
 
     setTimeout(() => {
       if (initialText) {
@@ -383,7 +387,9 @@ export function newPageModal(canBeChild = false) {
     }, 10);
 
     const cleanup = () => {
-      document.body.removeChild(overlay);
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
     };
 
     const submit = () => {
