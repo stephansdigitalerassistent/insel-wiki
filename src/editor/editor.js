@@ -238,6 +238,12 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
             event.preventDefault();
             (async () => {
               const { href } = editor.getAttributes('link');
+              
+              // Select the whole link if we are currently inside one
+              if (editor.isActive('link')) {
+                editor.chain().focus().extendMarkRange('link').run();
+              }
+              
               const { state } = editor;
               const { from, to } = state.selection;
               const selectedText = state.doc.textBetween(from, to, ' ');
@@ -395,6 +401,9 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
         case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
         case 'bulletList': chain.toggleBulletList().run(); break;
         case 'link': {
+          if (editor.isActive('link')) {
+            editor.chain().focus().extendMarkRange('link').run();
+          }
           const { from, to } = editor.state.selection;
           const selectedText = editor.state.doc.textBetween(from, to, ' ');
           const result = await linkModal('', selectedText);
@@ -469,7 +478,14 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
 
       if (editBtn) {
         e.preventDefault();
+        
+        // 1. Get the current attributes
         const { href } = editor.getAttributes('link');
+        
+        // 2. Select the whole link mark range so we can read its text correctly
+        editor.chain().focus().extendMarkRange('link').run();
+        
+        // 3. Read text from the NEW selection (which is the whole link)
         const { state } = editor;
         const { from, to } = state.selection;
         const selectedText = state.doc.textBetween(from, to, ' ');
@@ -664,6 +680,9 @@ export function createFormatToolbar(container) {
       case 'codeBlock': chain.toggleCodeBlock().run(); break;
       case 'horizontalRule': chain.setHorizontalRule().run(); break;
       case 'link': {
+        if (editor.isActive('link')) {
+          editor.chain().focus().extendMarkRange('link').run();
+        }
         const { from, to } = editor.state.selection;
         const selectedText = editor.state.doc.textBetween(from, to, ' ');
         const result = await linkModal('', selectedText);
