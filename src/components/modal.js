@@ -161,13 +161,24 @@ export function linkModal(initialUrl = '', initialText = '') {
       recentPages = JSON.parse(localStorage.getItem('recent_pages') || '[]');
     } catch(e) {}
 
+    let selectedIndex = -1;
+    let currentResults = [];
+
+    const selectResult = (p, filterValue) => {
+      urlInput.value = `#/${p.id}/${slugify(p.title)}`;
+      if (!textInput.value || textInput.value === filterValue) {
+         textInput.value = p.title;
+      }
+      dropdown.classList.add('hidden');
+      selectedIndex = -1;
+    };
+
     const updateDropdown = (inputEl) => {
       const filter = inputEl.value;
       dropdown.innerHTML = '';
       let results = [];
 
       if (!filter) {
-        // Show recent pages if no filter
         if (recentPages.length > 0) {
           const dHeader = document.createElement('div');
           dHeader.className = 'dropdown-header';
@@ -177,47 +188,96 @@ export function linkModal(initialUrl = '', initialText = '') {
         }
       } else {
         const f = filter.toLowerCase();
-        results = allPages.filter(p => p.title.toLowerCase().includes(f)).slice(0, 8);
+        // Sort by whether it's in recent pages first
+        const matched = allPages.filter(p => p.title.toLowerCase().includes(f));
+        const matchedRecent = recentPages.filter(p => p.title.toLowerCase().includes(f));
+        
+        // Merge and deduplicate
+        const recentIds = new Set(matchedRecent.map(p => p.id));
+        const others = matched.filter(p => !recentIds.has(p.id));
+        
+        results = [...matchedRecent, ...others].slice(0, 10);
       }
 
+      currentResults = results;
+      selectedIndex = -1;
+
       if (results.length > 0) {
-        results.forEach(p => {
+        results.forEach((p, idx) => {
           const item = document.createElement('div');
           item.className = 'dropdown-item';
+          item.dataset.index = idx;
           item.innerHTML = `
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             <span>${p.title}</span>
           `;
           item.addEventListener('mousedown', (e) => {
-            e.preventDefault(); // Prevent blur on input
-            urlInput.value = `#/${p.id}/${slugify(p.title)}`;
-            if (!textInput.value || textInput.value === filter) {
-               textInput.value = p.title;
-            }
-            dropdown.classList.add('hidden');
+            e.preventDefault();
+            selectResult(p, filter);
           });
           dropdown.appendChild(item);
         });
         
-        // Position dropdown below the current input field
         const rect = inputEl.getBoundingClientRect();
         const modalRect = modal.getBoundingClientRect();
         dropdown.style.top = `${rect.bottom - modalRect.top + 5}px`;
         dropdown.style.left = `${rect.left - modalRect.left}px`;
         dropdown.style.width = `${rect.width}px`;
-        
         dropdown.classList.remove('hidden');
       } else {
         dropdown.classList.add('hidden');
       }
     };
 
+    const updateHighlight = () => {
+      const items = dropdown.querySelectorAll('.dropdown-item');
+      items.forEach((item, idx) => {
+        item.classList.toggle('selected', idx === selectedIndex);
+        if (idx === selectedIndex) {
+          item.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    };
+
+    const handleKeyNavigation = (e, inputEl) => {
+      if (dropdown.classList.contains('hidden')) return false;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex + 1) % currentResults.length;
+        updateHighlight();
+        return true;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length;
+        updateHighlight();
+        return true;
+      }
+      if (e.key === 'Enter' && selectedIndex >= 0) {
+        e.preventDefault();
+        selectResult(currentResults[selectedIndex], inputEl.value);
+        return true;
+      }
+      if (e.key === 'Tab' && selectedIndex >= 0) {
+         // Auto-complete on Tab if something is selected
+         e.preventDefault();
+         selectResult(currentResults[selectedIndex], inputEl.value);
+         return true;
+      }
+      return false;
+    };
+
     [textInput, urlInput].forEach(el => {
       el.addEventListener('focus', () => updateDropdown(el));
       el.addEventListener('input', () => updateDropdown(el));
       el.addEventListener('blur', () => {
-        // Small delay to allow click on dropdown items
         setTimeout(() => dropdown.classList.add('hidden'), 200);
+      });
+      el.addEventListener('keydown', (e) => {
+        if (handleKeyNavigation(e, el)) return;
+        if (e.key === 'Enter') submit();
+        if (e.key === 'Escape') cancel();
       });
     });
 
