@@ -117,9 +117,9 @@ export async function updateUserProfile(displayName, photoURL) {
     updatedAt: serverTimestamp()
   }, { merge: true });
 
-  // Refresh standard fields so they propagate to state changes
-  // Firebase Auth does not trigger onAuthStateChanged after updateProfile
-  currentUser = { ...currentUser, displayName, photoURL };
+  // Firebase Auth does not trigger onAuthStateChanged after updateProfile.
+  // We use the updated User object from the SDK to keep all methods (getIdToken, etc.) intact.
+  currentUser = auth.currentUser;
   
   // Trigger listeners manually
   authListeners.forEach((cb) => cb(currentUser));
