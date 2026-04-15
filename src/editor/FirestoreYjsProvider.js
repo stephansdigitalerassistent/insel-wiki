@@ -14,7 +14,8 @@ import {
   deleteDoc,
   getDocs,
   limit,
-  where
+  where,
+  runTransaction
 } from 'firebase/firestore';
 
 export class FirestoreYjsProvider {
@@ -71,12 +72,29 @@ export class FirestoreYjsProvider {
         }
       });
       // Defer compaction — don't block the editor from loading
-      setTimeout(() => {
+      // Use a transaction to prevent race conditions when multiple clients load simultaneously
+      setTimeout(async () => {
         try {
-          const newState = Y.encodeStateAsUpdate(this.ydoc);
-          setDoc(this.stateDocRef, { state: Bytes.fromUint8Array(newState), updatedAt: serverTimestamp() })
-            .then(() => pendingUpdates.forEach(change => deleteDoc(change.ref).catch(() => {})))
-            .catch(() => {});
+          await runTransaction(db, async (transaction) => {
+            const stateSnap = await transaction.get(this.stateDocRef);
+            const existingData = stateSnap.data();
+            
+            // Skip compaction if another client already compacted within the last 10 seconds
+            if (existingData?.updatedAt) {
+              const lastCompacted = existingData.updatedAt.toDate();
+              if (Date.now() - lastCompacted.getTime() < 10000) {
+                return; // Another client already compacted — skip
+              }
+            }
+            
+            const newState = Y.encodeStateAsUpdate(this.ydoc);
+            transaction.set(this.stateDocRef, { 
+              state: Bytes.fromUint8Array(newState), 
+              updatedAt: serverTimestamp() 
+            });
+          });
+          // Clean up compacted updates after successful transaction
+          pendingUpdates.forEach(change => deleteDoc(change.ref).catch(() => {}));
         } catch (err) {
           console.error('[FirestoreYjs] Compaction error:', err);
         }
