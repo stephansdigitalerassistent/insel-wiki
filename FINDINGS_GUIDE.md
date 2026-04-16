@@ -2,6 +2,9 @@
 
 Dieses Dokument beschreibt, wie Fehler oder Entdeckungen im Insel-Wiki direkt durch das Erstellen von Unterseiten gemeldet und automatisch behoben werden können.
 
+## Wo finde ich diesen Guide?
+Du findest diesen Guide im Bereich **🚀 Weiterentwicklung** in der Seitenleiste.
+
 ## Einen Fehler melden
 1. Erstelle eine **neue Unterseite** direkt unter diesem Findings Guide.
 2. Beschreibe das Problem im **Titel** der Seite (z.B. "Der Login-Button ist im Dark Mode schwer zu sehen").
@@ -15,6 +18,3 @@ Dieses Dokument beschreibt, wie Fehler oder Entdeckungen im Insel-Wiki direkt du
 
 ## Korrektur anwenden
 Nach der Freigabe schreibt der Bot den korrigierten Code direkt in die entsprechenden Dateien auf dem Server und markiert den Status als `fixed`.
-
-## Überprüfung
-Prüfe die Änderungen auf `insel-wiki.web.app` und lösche oder archiviere deine Finding-Seite, wenn du zufrieden bist.
