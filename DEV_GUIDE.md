@@ -3,20 +3,22 @@
 Dieses Dokument erklärt, wie die DevOps-Automatisierung für das Insel-Wiki funktioniert.
 
 ## Funktionsweise
-Die DevOps-Automatisierung wird durch Einträge in der Firestore-Collection `devops_tasks` gesteuert. Ein Daemon auf dem Server hört auf diese Einträge und führt die gewünschten Aktionen aus.
+Die DevOps-Automatisierung wird direkt durch das Erstellen von Unterseiten in diesem Guide gesteuert.
 
 ## Einen Task erstellen
-1. Erstelle einen neuen Eintrag in `devops_tasks`.
-2. Setze das Feld `prompt` auf deine Anfrage (z.B. "Führe E2E-Tests aus").
-3. Setze `status` auf `new`.
+1. Erstelle eine **neue Unterseite** direkt unter diesem DevOps Guide.
+2. Der **Titel** der Seite ist die Kurzbeschreibung (z.B. "E2E Tests ausführen").
+3. Der **Inhalt** der Seite kann zusätzliche Details enthalten.
+4. Sobald du die Seite speicherst, erkennt der Bot die neue Anfrage.
 
 ## Freigabe-Prozess
-Der Bot analysiert die Anfrage und erstellt einen Plan im Feld `proposal`.
+Der Bot analysiert die Anfrage und schreibt einen Plan direkt in den Text deiner neuen Seite.
 - **Wichtig:** Der Bot wartet auf deine Freigabe.
-- Ändere den `status` von `proposed` auf `approved`, um die Ausführung zu starten.
+- Suche im Text nach `Status: proposed`.
+- Ändere diesen Text manuell im Editor zu `Status: approved`, um die Ausführung zu starten.
 
 ## Ergebnisse
-Die Logs der Ausführung erscheinen in Echtzeit im Feld `execution_log`. Nach Abschluss wird der `status` auf `completed` gesetzt.
+Die Logs der Ausführung erscheinen in Echtzeit direkt unter deinem Plan auf der Wiki-Seite. Nach Abschluss wird der Status automatisch auf `completed` gesetzt.
 
 ## Sicherheits-Shield
 Der Bot blockiert automatisch gefährliche Befehle oder Zugriffe auf `.env` Dateien und Secrets.

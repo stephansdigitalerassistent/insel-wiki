@@ -1,22 +1,20 @@
 # 🔍 Insel-Wiki Findings & Error Guide
 
-Dieses Dokument beschreibt, wie Fehler oder Entdeckungen im Insel-Wiki gemeldet und automatisch behoben werden können.
-
-## Was ist ein "Finding"?
-Ein Finding ist ein Fehler, ein UI-Bug oder eine fehlende Funktion, die ein Nutzer direkt im Wiki melden kann.
+Dieses Dokument beschreibt, wie Fehler oder Entdeckungen im Insel-Wiki direkt durch das Erstellen von Unterseiten gemeldet und automatisch behoben werden können.
 
 ## Einen Fehler melden
-1. Erstelle einen Eintrag in der Firestore-Collection `devops_findings`.
-2. Beschreibe das Problem im Feld `description` (z.B. "Der Login-Button ist im Dark Mode schwer zu sehen").
-3. Setze `status` auf `new`.
+1. Erstelle eine **neue Unterseite** direkt unter diesem Findings Guide.
+2. Beschreibe das Problem im **Titel** der Seite (z.B. "Der Login-Button ist im Dark Mode schwer zu sehen").
+3. Füge im **Inhalt** der Seite weitere Details oder Screenshots hinzu.
 
 ## Automatische Analyse & Fix
-1. Der Bot erkennt die neue Meldung und wechselt auf `investigating`.
-2. Er sucht in der Codebase nach den betroffenen Dateien und erstellt einen Reparaturvorschlag (`proposal`).
-3. Der Bot wartet auf Freigabe. Ändere den `status` von `proposed` auf `approved`.
+1. Der Bot erkennt die neue Seite und beginnt die Analyse.
+2. Er sucht in der Codebase nach den betroffenen Dateien und schreibt einen Reparaturvorschlag (`proposal`) direkt in deine neue Seite.
+3. Der Bot wartet auf deine Freigabe. Suche nach `Status: proposed` im Text.
+4. Ändere diesen manuell im Editor zu `Status: approved`.
 
 ## Korrektur anwenden
-Nach der Freigabe schreibt der Bot den korrigierten Code direkt in die entsprechenden Dateien auf dem Server und setzt den `status` auf `fixed`.
+Nach der Freigabe schreibt der Bot den korrigierten Code direkt in die entsprechenden Dateien auf dem Server und markiert den Status als `fixed`.
 
 ## Überprüfung
-Prüfe die Änderungen auf `insel-wiki.web.app` und schließe das Finding ab.
+Prüfe die Änderungen auf `insel-wiki.web.app` und lösche oder archiviere deine Finding-Seite, wenn du zufrieden bist.
