@@ -196,7 +196,7 @@ function renderTree(container) {
 
   // Pin special pages to the top
   if (!searchFilter) {
-    const pinnedIds = ['02LIwOpQSGFzYfRfgOwf'];
+    const pinnedIds = ['N3sewJbnFR2oYD8ig2yZ', 'mXuK5BD2X4cJnRDHR3HC', '02LIwOpQSGFzYfRfgOwf'];
     rootPages.sort((a, b) => {
       const aPinned = pinnedIds.indexOf(a.id);
       const bPinned = pinnedIds.indexOf(b.id);
