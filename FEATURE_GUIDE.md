@@ -1,24 +1,31 @@
-# ✨ Insel-Wiki New Feature Guide
+# ✨ New Feature Guide (Benutzerhandbuch)
 
-Dieses Dokument erklärt, wie neue Features für das Insel-Wiki angefordert und automatisch entwickelt werden können.
+Dieses Dokument erklärt dir, wie du neue Funktionen für das Insel-Wiki anfordern kannst. Unser **DevOps-Bot** übernimmt die Analyse und Vorbereitung für dich.
 
-## Funktionsweise
-Die Entwicklung neuer Features wird direkt durch das Erstellen von Unterseiten in diesem Guide gesteuert.
+## So forderst du ein Feature an:
 
-## Ein New Feature erstellen
-1. Erstelle eine **neue Unterseite** direkt unter diesem New Feature Guide.
-2. Der **Titel** der Seite beschreibt das Feature (z.B. "Dunkler Modus für die Suche").
-3. Der **Inhalt** der Seite kann Anforderungen oder Designs enthalten.
-4. Sobald du die Seite speicherst, erkennt der Bot die neue Anfrage.
+1. **Unterseite erstellen:**
+   Erstelle eine neue Unterseite direkt in diesem Ordner (**New Features**).
+   
+2. **Titel & Beschreibung:**
+   - Der **Titel** der Seite ist dein Wunsch (z.B. *"Farbig markierte Aufgabenlisten"*).
+   - Im **Inhalt** beschreibst du kurz, was das Feature können soll.
 
-## Freigabe-Prozess
-Der Bot analysiert die Anfrage und schreibt einen Implementierungsplan direkt in den Text deiner neuen Seite.
-- **Wichtig:** Der Bot wartet auf deine Freigabe.
-- Suche im Text nach `Status: proposed`.
-- Ändere diesen Text manuell im Editor zu `Status: approved`, um die Entwicklung und Tests zu starten.
+3. **Analyse abwarten:**
+   Sobald du die Seite speicherst, erscheint nach wenigen Sekunden ein Text vom Bot. Er setzt den Status auf `analyzing` und dann auf `proposed`.
 
-## Ergebnisse
-Die Logs der Ausführung (Tests, Build, etc.) erscheinen in Echtzeit direkt unter deinem Plan. Nach Abschluss wird der Status automatisch auf `completed` gesetzt.
+## Freigabe & Umsetzung:
 
-## Sicherheits-Shield
-Der Bot blockiert automatisch gefährliche Befehle oder Zugriffe auf `.env` Dateien und Secrets.
+Der Bot schreibt dir einen technischen Plan in die Seite. Wenn du damit einverstanden bist:
+
+1. Klicke auf **Bearbeiten**.
+2. Suche die Zeile `Status: proposed`.
+3. Ändere das Wort `proposed` manuell zu **`approved`**.
+   *(Wichtig: Das Wort muss fettgedruckt bleiben, damit der Bot es erkennt!)*
+4. **Speichern.**
+
+## Was passiert dann?
+Der Bot erkennt deine Freigabe sofort. Er wechselt auf `executing`, führt die notwendigen Befehle auf dem Server aus (Tests, Build, Git-Commit) und schreibt das Ergebnis in ein Log direkt auf deine Seite. Am Ende steht dort `Status: completed`.
+
+---
+*💡 Tipp: Du kannst den Fortschritt live im Wiki verfolgen, während der Bot arbeitet.*

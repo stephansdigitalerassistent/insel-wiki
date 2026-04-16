@@ -1,20 +1,32 @@
-# 🔍 Insel-Wiki Findings & Error Guide
+# 🔍 Findings Guide (Benutzerhandbuch)
 
-Dieses Dokument beschreibt, wie Fehler oder Entdeckungen im Insel-Wiki direkt durch das Erstellen von Unterseiten gemeldet und automatisch behoben werden können.
+Dieses Dokument erklärt dir, wie du Fehler (Bugs) oder Entdeckungen im Insel-Wiki direkt meldest und beheben lässt.
 
-## Wo finde ich diesen Guide?
-Du findest diesen Guide im Bereich **🚀 Weiterentwicklung** in der Seitenleiste.
+## Einen Fehler melden:
 
-## Einen Fehler melden
-1. Erstelle eine **neue Unterseite** direkt unter diesem Findings Guide.
-2. Beschreibe das Problem im **Titel** der Seite (z.B. "Der Login-Button ist im Dark Mode schwer zu sehen").
-3. Füge im **Inhalt** der Seite weitere Details oder Screenshots hinzu.
+1. **Unterseite erstellen:**
+   Erstelle eine neue Unterseite direkt in diesem Ordner (**Findings**).
+   
+2. **Problem beschreiben:**
+   - Der **Titel** der Seite ist der Fehler (z.B. *"Login-Button ist im Dark Mode unsichtbar"*).
+   - Im **Inhalt** kannst du mehr Details schreiben oder eine Fehlermeldung einfügen.
 
-## Automatische Analyse & Fix
-1. Der Bot erkennt die neue Seite und beginnt die Analyse.
-2. Er sucht in der Codebase nach den betroffenen Dateien und schreibt einen Reparaturvorschlag (`proposal`) direkt in deine neue Seite.
-3. Der Bot wartet auf deine Freigabe. Suche nach `Status: proposed` im Text.
-4. Ändere diesen manuell im Editor zu `Status: approved`.
+3. **Bot-Analyse:**
+   Nach dem Speichern wechselt der Bot auf `investigating`. Er scannt den Code und schreibt dir einen Lösungsvorschlag (`proposal`) direkt in die Seite.
 
-## Korrektur anwenden
-Nach der Freigabe schreibt der Bot den korrigierten Code direkt in die entsprechenden Dateien auf dem Server und markiert den Status als `fixed`.
+## Den Bug fixen lassen:
+
+1. **Freigabe geben:**
+   Der Bot hat den Status auf `proposed` gesetzt.
+2. **Editor öffnen:**
+   Klicke auf **Bearbeiten**.
+3. **Status ändern:**
+   Ändere das Wort `proposed` im Text manuell zu **`approved`**.
+   *(Lass das Wort unbedingt fettgedruckt!)*
+4. **Speichern.**
+
+## Was passiert nach der Freigabe?
+Der Bot wechselt auf `fixing`. Er schreibt den korrigierten Code direkt in die entsprechenden Dateien auf dem Server. Sobald dort `Status: fixed` steht, wurde der Bug erfolgreich behoben.
+
+---
+*💡 Tipp: Prüfe danach kurz auf insel-wiki.web.app, ob der Fehler weg ist.*
