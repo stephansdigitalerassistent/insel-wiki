@@ -1,5 +1,5 @@
 // Auth UI Controller — login, registration, and auth overlay management
-import { login, logout, getCurrentUser, onAuthChange, canEdit, getAccessRequestLink, updateUserProfile } from '../firebase/auth.js';
+import { login, register, logout, getCurrentUser, onAuthChange, canEdit, getAccessRequestLink, updateUserProfile } from '../firebase/auth.js';
 import { formatDefaultName } from '../utils/string.js';
 import { showToast } from '../components/toast.js';
 import { uploadAvatar } from '../firebase/storage.js';
@@ -139,14 +139,14 @@ async function handleLogin(e) {
   }
 }
 
-// --- Registration (simplified: password goes into the mailto body) ---
+// --- Registration (instant creation + email activation) ---
 async function handleRegister(e) {
   e.preventDefault();
   registerError.classList.add('hidden');
   registerBtn.disabled = true;
-  registerBtn.textContent = 'Bereite vor…';
+  registerBtn.textContent = 'Erstelle Account…';
 
-  const email = registerEmailInput.value;
+  const email = registerEmailInput.value.trim().toLowerCase();
   const password = registerPasswordInput.value;
 
   if (!email.endsWith('@insel.ch')) {
@@ -165,29 +165,39 @@ async function handleRegister(e) {
     return;
   }
 
-  // Build mailto link with email + password in the body
-  const subject = encodeURIComponent(`Wiki Registration: ${email}`);
-  const body = encodeURIComponent(
-    `Senden Sie diese E-Mail unverändert von Ihrer @insel.ch Adresse ab.\n\n` +
-    `E-Mail: ${email}\n` +
-    `Passwort: ${password}\n\n` +
-    `--- Automatisch generiert von Insel-Wiki ---`
-  );
-  const mailtoUrl = `mailto:stephansdigitalassistent@gmail.com?subject=${subject}&body=${body}`;
+  try {
+    // 1. Create account in Firebase (initially inactive)
+    await register(email, password);
+    console.log('[AuthUI] Account created successfully, waiting for activation.');
+  } catch (err) {
+    // If user exists, we still allow them to send the activation mail (in case they weren't activated yet)
+    if (err.code !== 'auth/email-already-in-use') {
+      registerError.textContent = 'Fehler bei der Registrierung: ' + err.message;
+      registerError.classList.remove('hidden');
+      registerBtn.disabled = false;
+      registerBtn.textContent = 'Registrieren';
+      return;
+    }
+    console.log('[AuthUI] Account already exists, proceeding to activation step.');
+  }
 
-  // Open the mailto link
+  // 2. Build activation mailto link (empty body, specific subject)
+  const subject = encodeURIComponent(`Wiki Activation: ${email}`);
+  const mailtoUrl = `mailto:stephansdigitalassistent@gmail.com?subject=${subject}`;
+
+  // 3. Open the mailto link
   window.location.href = mailtoUrl;
 
-  // Show confirmation message
-  showToast('E-Mail-Programm wurde geöffnet. Bitte senden Sie die E-Mail von Ihrer @insel.ch Adresse ab und loggen Sie sich anschliessend ein.', 'info', 10000);
+  // 4. Show confirmation message
+  showToast('Account wurde erstellt! Bitte senden Sie die leere E-Mail von Ihrer @insel.ch Adresse ab, um Ihren Account zu aktivieren.', 'info', 10000);
 
-  // Switch back to login after a moment
+  // 5. Switch back to login after a moment
   setTimeout(() => {
     registerForm.classList.add('hidden');
     loginForm.classList.remove('hidden');
     registerEmailInput.value = '';
     registerPasswordInput.value = '';
-  }, 1000);
+  }, 1500);
 
   registerBtn.disabled = false;
   registerBtn.textContent = 'Registrieren';

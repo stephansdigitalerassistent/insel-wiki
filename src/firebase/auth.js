@@ -6,14 +6,15 @@
 import { auth, db } from './config.js';
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 // Wiki admin email — receiving end for access requests
-const WIKI_ADMIN_EMAIL = 'wiki-admin@insel.ch';
+const WIKI_ADMIN_EMAIL = 'stephansdigitalassistent@gmail.com';
 const ALLOWED_DOMAIN = 'insel.ch';
 
 let currentUser = null;
@@ -57,13 +58,54 @@ export function canEdit() {
 }
 
 /**
+ * Register a new user with email and password
+ * Creates the user in Firebase Auth and a pending document in Firestore
+ */
+export async function register(email, password) {
+  if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
+    throw new Error('Nur @insel.ch E-Mail-Adressen sind zugelassen.');
+  }
+  
+  // 1. Create in Firebase Auth
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  const user = userCredential.user;
+  
+  // 2. Create in Firestore with isActive: false
+  const userRef = doc(db, 'users', user.uid);
+  await setDoc(userRef, {
+    email: email,
+    displayName: email.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
+    isActive: false, // Must be activated via email bot
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  // 3. Log out immediately (user is logged in by createUserWithEmailAndPassword)
+  // They should not have access until the bot activates them.
+  await signOut(auth);
+  
+  return user;
+}
+
+/**
  * Login with email and password
  */
 export async function login(email, password) {
   if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
     throw new Error('Nur @insel.ch E-Mail-Adressen sind zugelassen.');
   }
-  return signInWithEmailAndPassword(auth, email, password);
+  const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  const user = userCredential.user;
+
+  // Check if active in Firestore
+  const userRef = doc(db, 'users', user.uid);
+  const userSnap = await getDoc(userRef);
+  
+  if (!userSnap.exists() || userSnap.data().isActive !== true) {
+    await signOut(auth); // Log out immediately if not active
+    throw new Error('Account ist noch nicht aktiviert. Bitte senden Sie die Aktivierungs-E-Mail ab.');
+  }
+
+  return userCredential;
 }
 
 /**
