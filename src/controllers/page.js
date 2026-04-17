@@ -223,11 +223,24 @@ export async function loadPage(pageId) {
   // Subscribe to page updates
   currentPageUnsub = subscribeToPage(pageId, (updatedPage) => {
     if (updatedPage && updatedPage.id === currentPageId) {
+      const oldBotStatus = currentPageData?.bot_status;
+      const newBotStatus = updatedPage.bot_status;
+      
       currentPageData = updatedPage;
+
+      // 1. Update Title if not actively editing it
       if (document.activeElement !== pageTitleInput && updatedPage.title !== pageTitleInput.value) {
         pageTitleInput.value = updatedPage.title || '';
         document.title = `Insel-Wiki - ${updatedPage.title || 'Ohne Titel'}`;
       }
+
+      // 2. Force editor reload if bot status changed or if server forced an update
+      // This allows the DevOps-Bot to 'take over' the editor even if the user has it open.
+      if (newBotStatus !== oldBotStatus && newBotStatus !== 'new') {
+        console.log(`[Insel-Wiki] Bot status changed to ${newBotStatus}. Refreshing content.`);
+        setContent(updatedPage.content);
+      }
+
       updateBreadcrumb(pageId);
       const slug = slugify(updatedPage.title || '');
       const newHash = `#/${pageId}/${slug}`;
@@ -294,6 +307,14 @@ function renderPresence(users) {
 // --- Save ---
 async function handleSave(pageId, markdown) {
   if (!canEdit()) return;
+
+  // Bot Protection: Never save an empty string if the bot is currently working.
+  // This happens when the bot forces a clean reload and the editor is temporarily empty.
+  if ((!markdown || markdown.trim() === '') && currentPageData?.bot_status && currentPageData.bot_status !== 'completed' && currentPageData.bot_status !== 'fixed') {
+    console.warn('[Insel-Wiki] Blocked saving empty content during bot operation.');
+    return;
+  }
+
   updateSaveStatus('saving');
   isSnapshotDirty = true;
   try {

@@ -134,10 +134,24 @@ export function getAccessRequestLink() {
  */
 export function initAuth() {
   return new Promise((resolve) => {
-    onAuthStateChanged(auth, (user) => {
-      currentUser = user;
-      authListeners.forEach((cb) => cb(user));
-      resolve(user);
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Double check if still active
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists() || userSnap.data().isActive !== true) {
+          console.warn('[Auth] User session found but user is not active in Firestore. Logging out.');
+          await signOut(auth);
+          currentUser = null;
+        } else {
+          currentUser = user;
+        }
+      } else {
+        currentUser = null;
+      }
+      
+      authListeners.forEach((cb) => cb(currentUser));
+      resolve(currentUser);
     });
   });
 }

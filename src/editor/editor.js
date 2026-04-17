@@ -25,6 +25,13 @@ import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
 // For Markdown conversion
 import TurndownService from 'turndown';
 import { marked } from 'marked';
+
+// Configure marked for GFM and task lists
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+});
+
 import { promptModal, linkModal } from '../components/modal.js';
 import { getAllPages } from '../components/sidebar.js';
 import { navigateTo } from '../controllers/page.js';
@@ -43,6 +50,17 @@ function getTurndown() {
     turndownInstance = new TurndownService({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
+    });
+
+    // Support for Task Lists (Checkboxes)
+    turndownInstance.addRule('taskItems', {
+      filter: function (node) {
+        return node.nodeName === 'LI' && node.getAttribute('data-type') === 'taskItem';
+      },
+      replacement: function (content, node) {
+        const checked = node.getAttribute('data-checked') === 'true';
+        return (checked ? '- [x] ' : '- [ ] ') + content.trim() + '\n';
+      }
     });
   }
   return turndownInstance;
@@ -587,11 +605,24 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
 
 export function setContent(markdown) {
   if (!editor) return;
-  const isHtml = /<[a-z][\s\S]*>/i.test(markdown || '');
-  const html = isHtml ? markdown : marked.parse(markdown || '');
+
+  // Only skip marked if it clearly looks like a full HTML document (e.g. starts with <p> or <div>)
+  // Otherwise, marked handles HTML inside markdown just fine.
+  let html = (markdown?.trim().startsWith('<') && markdown?.trim().endsWith('>'))
+    ? markdown
+    : marked.parse(markdown || '');
+
+  if (typeof html === 'string') {
+    // Post-process HTML for Tiptap TaskList
+    html = html.replace(/<ul>\s*(<li[^>]*><input[^>]*type="checkbox"[^>]*>[\s\S]*?)<\/ul>/gi, '<ul data-type="taskList">$1</ul>');
+    html = html.replace(/<li><input([^>]*)type="checkbox"([^>]*)>(.*?)<\/li>/gi, (match, p1, p2, text) => {
+      const isChecked = p1.includes('checked') || p2.includes('checked');
+      return `<li data-type="taskItem" data-checked="${isChecked}">${text}</li>`;
+    });
+  }
+
   editor.commands.setContent(html, true);
 }
-
 export function getMarkdown() {
   if (!editor) return '';
   const html = editor.getHTML();

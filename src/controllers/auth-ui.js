@@ -117,6 +117,8 @@ export function handleAuthChange(user, { setEditable, formatToolbar, pageTitleIn
     pageTitleInput.readOnly = !canEdit();
   } else {
     authOverlay.classList.remove('hidden');
+    const appLayout = document.getElementById('app');
+    if (appLayout) appLayout.style.display = 'none';
     if (userInfoEl) userInfoEl.innerHTML = '';
   }
 }
@@ -297,4 +299,6 @@ function resizeAvatar(file, maxDim = 256) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+);
 }
