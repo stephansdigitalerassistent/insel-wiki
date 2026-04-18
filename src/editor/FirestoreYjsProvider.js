@@ -1,5 +1,10 @@
 import * as Y from 'yjs';
-import * as awarenessProtocol from 'y-protocols/awareness';
+import { 
+  Awareness, 
+  encodeAwarenessUpdate, 
+  applyAwarenessUpdate, 
+  removeAwarenessStates 
+} from 'y-protocols/awareness';
 import { db } from '../firebase/config.js';
 import { 
   collection, 
@@ -23,7 +28,7 @@ export class FirestoreYjsProvider {
     this.ydoc = ydoc;
     this.doc = ydoc; // Explicitly expose `doc` for Tiptap CollaborationCursor extension
     this.pageId = pageId;
-    this.awareness = new awarenessProtocol.Awareness(ydoc);
+    this.awareness = new Awareness(ydoc);
     this.clientId = this.awareness.clientID;
     
     // Initialize awareness state for ourselves
@@ -141,7 +146,7 @@ export class FirestoreYjsProvider {
       if (origin === 'local') {
         clearTimeout(this.awarenessTimeout);
         this.awarenessTimeout = setTimeout(() => {
-          const state = awarenessProtocol.encodeAwarenessUpdate(this.awareness, [this.clientId]);
+          const state = encodeAwarenessUpdate(this.awareness, [this.clientId]);
           const docRef = doc(this.awarenessRef, this.clientId.toString());
           setDoc(docRef, {
             state: Bytes.fromUint8Array(state),
@@ -152,7 +157,7 @@ export class FirestoreYjsProvider {
     });
 
     // Immediately publish our awareness so other clients see us
-    const initialState = awarenessProtocol.encodeAwarenessUpdate(this.awareness, [this.clientId]);
+    const initialState = encodeAwarenessUpdate(this.awareness, [this.clientId]);
     const myDocRef = doc(this.awarenessRef, this.clientId.toString());
     setDoc(myDocRef, {
       state: Bytes.fromUint8Array(initialState),
@@ -165,9 +170,9 @@ export class FirestoreYjsProvider {
         if (change.doc.id !== this.clientId.toString() && data.state) {
           if (change.type === 'added' || change.type === 'modified') {
             const stateArr = data.state.toUint8Array();
-            awarenessProtocol.applyAwarenessUpdate(this.awareness, stateArr, this);
+            applyAwarenessUpdate(this.awareness, stateArr, this);
           } else if (change.type === 'removed') {
-             awarenessProtocol.removeAwarenessStates(this.awareness, [Number(change.doc.id)], this);
+             removeAwarenessStates(this.awareness, [Number(change.doc.id)], this);
           }
         }
       });
@@ -189,6 +194,6 @@ export class FirestoreYjsProvider {
       deleteDoc(docRef).catch(() => {});
     } catch(e) {}
     
-    awarenessProtocol.removeAwarenessStates(this.awareness, [this.clientId], 'local');
+    removeAwarenessStates(this.awareness, [this.clientId], 'local');
   }
 }

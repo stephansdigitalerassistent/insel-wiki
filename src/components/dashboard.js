@@ -1,5 +1,9 @@
 import { extractTasksFromContent } from '../utils/tasks.js';
 
+export function initDashboard(appEl, navigateTo) {
+  console.log('[Insel-Wiki] Dashboard initialized');
+}
+
 export function renderDashboard(pages) {
   const container = document.getElementById('dashboard-container');
   if (!container) return;

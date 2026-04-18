@@ -300,5 +300,3 @@ function resizeAvatar(file, maxDim = 256) {
     reader.readAsDataURL(file);
   });
 }
-);
-}
