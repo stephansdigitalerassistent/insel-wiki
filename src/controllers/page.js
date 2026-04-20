@@ -183,9 +183,16 @@ export async function loadPage(pageId) {
       
       let html = marked.parse(page.content || '');
       // Ensure tasks look correct in preview
+      // 1. Mark the UL as a task list
+      html = html.replace(/<ul>\s*(<li[^>]*><input[^>]*type="checkbox"[^>]*>[\s\S]*?)<\/ul>/gi, '<ul data-type="taskList">$1</ul>');
+      // 2. Format the LI and keep the checkbox for visual rendering
       html = html.replace(/<li><input([^>]*)type="checkbox"([^>]*)>(.*?)<\/li>/gi, (match, p1, p2, text) => {
         const isChecked = p1.includes('checked') || p2.includes('checked');
-        return `<li data-type="taskItem" data-checked="${isChecked}">${text}</li>`;
+        const checkedAttr = isChecked ? 'checked' : '';
+        return `<li data-type="taskItem" data-checked="${isChecked}">
+          <label><input type="checkbox" ${checkedAttr} disabled style="accent-color: var(--accent); width: 1.1rem; height: 1.1rem; cursor: default;"><span></span></label>
+          <div>${text}</div>
+        </li>`;
       });
       // Wrap in tiptap class to match CSS descendant selectors exactly
       // Do NOT include ProseMirror class, as its injected white-space: pre-wrap renders marked's interstitial newlines as empty lines
