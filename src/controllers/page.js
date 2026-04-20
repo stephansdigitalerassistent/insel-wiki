@@ -182,18 +182,29 @@ export async function loadPage(pageId) {
       staticPreview.className = 'editor'; // Matches CSS wrapper
       
       let html = marked.parse(page.content || '');
-      // Ensure tasks look correct in preview
-      // 1. Mark the UL as a task list
-      html = html.replace(/<ul>\s*(<li[^>]*><input[^>]*type="checkbox"[^>]*>[\s\S]*?)<\/ul>/gi, '<ul data-type="taskList">$1</ul>');
-      // 2. Format the LI and keep the checkbox for visual rendering
+      
+      // IMPROVED TASK LIST RENDERING (Matches Tiptap 1:1)
+      
+      // 1. First, catch cases where marked didn't convert [ ] or [x] to inputs yet
+      html = html.replace(/<li>\s*\[ \]\s*/gi, '<li><input type="checkbox"> ');
+      html = html.replace(/<li>\s*\[x\]\s*/gi, '<li><input type="checkbox" checked> ');
+
+      // 2. Mark the UL as a task list if it contains checkboxes
+      html = html.replace(/<ul>(\s*<li[^>]*><input[^>]*type="checkbox"[^>]*>[\s\S]*?)<\/ul>/gi, '<ul data-type="taskList">$1</ul>');
+      
+      // 3. Transform inputs into the Tiptap-compatible label/span structure
       html = html.replace(/<li><input([^>]*)type="checkbox"([^>]*)>(.*?)<\/li>/gi, (match, p1, p2, text) => {
         const isChecked = p1.includes('checked') || p2.includes('checked');
-        const checkedAttr = isChecked ? 'checked' : '';
+        const checkedAttr = isChecked ? 'checked="checked"' : '';
         return `<li data-type="taskItem" data-checked="${isChecked}">
-          <label><input type="checkbox" ${checkedAttr} disabled style="accent-color: var(--accent); width: 1.1rem; height: 1.1rem; cursor: default;"><span></span></label>
-          <div>${text}</div>
+          <label>
+            <input type="checkbox" ${checkedAttr} disabled style="accent-color: var(--accent); width: 1.1rem; height: 1.1rem; margin: 0; cursor: default;">
+            <span></span>
+          </label>
+          <div>${text.trim()}</div>
         </li>`;
       });
+
       // Wrap in tiptap class to match CSS descendant selectors exactly
       // Do NOT include ProseMirror class, as its injected white-space: pre-wrap renders marked's interstitial newlines as empty lines
       staticPreview.innerHTML = `<div class="tiptap" translate="no">${html}</div>`;
