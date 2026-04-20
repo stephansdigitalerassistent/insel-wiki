@@ -187,8 +187,9 @@ export async function loadPage(pageId) {
         const isChecked = p1.includes('checked') || p2.includes('checked');
         return `<li data-type="taskItem" data-checked="${isChecked}">${text}</li>`;
       });
-      // Wrap in tiptap class to match CSS descendant selectors, exactly as Tiptap does
-      staticPreview.innerHTML = `<div class="tiptap ProseMirror" translate="no">${html}</div>`;
+      // Wrap in tiptap class to match CSS descendant selectors exactly
+      // Do NOT include ProseMirror class, as its injected white-space: pre-wrap renders marked's interstitial newlines as empty lines
+      staticPreview.innerHTML = `<div class="tiptap" translate="no">${html}</div>`;
       
       editorContainer.insertBefore(staticPreview, editorEl);
       editorEl.style.display = 'none'; // Hide real editor until ready
