@@ -859,6 +859,32 @@ html, body {
   100% { background-position: -200% 0; }
 }
 
+/* --- Editor Loading Skeleton --- */
+.editor-loading-overlay {
+  position: absolute;
+  top: 80px; /* Below title wrapper */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-root);
+  padding: 12px 32px 48px;
+  z-index: 50; /* High enough to cover editor but below modals */
+  transition: opacity var(--transition-normal);
+}
+
+.editor-loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.editor-skeleton {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: fadeIn 0.3s ease;
+}
+
 /* --- Utility --- */
 .hidden {
   display: none !important;

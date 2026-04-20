@@ -155,7 +155,7 @@ export async function loadPage(pageId) {
   // Show loading state immediately to improve perceived speed
   currentPageId = pageId;
   setActivePage(pageId);
-  pageTitleInput.value = 'Wird geladen...';
+  pageTitleInput.value = ''; // Clear title during load
   editorContainer.classList.remove('hidden');
   emptyState.classList.add('hidden');
   if (loadingOverlay) loadingOverlay.classList.remove('hidden');
