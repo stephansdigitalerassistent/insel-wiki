@@ -162,44 +162,66 @@ export async function loadPage(pageId) {
   destroyEditor();
   editorEl.innerHTML = ''; // Clear editor immediately
 
-  // Fetch page data
-  const page = await getPage(pageId);
-  if (!page) { showEmptyState(); return; }
+  // --- Variant 1: Optimistic UI Local Caching ---
+  let page = null;
+  const cachedPageJson = localStorage.getItem(`cache_page_${pageId}`);
+  if (cachedPageJson) {
+    try {
+      page = JSON.parse(cachedPageJson);
+      console.log(`[Insel-Wiki] Instant load from cache for ${pageId}`);
+      pageTitleInput.value = page.title || '';
+      document.title = `Insel-Wiki - ${page.title || 'Ohne Titel'}`;
+      if (loadingOverlay) loadingOverlay.classList.add('hidden');
+    } catch (e) {
+      console.warn('Failed to parse page cache', e);
+    }
+  }
 
-  currentPageData = page;
-  document.title = `Insel-Wiki - ${page.title || 'Ohne Titel'}`;
+  // Fetch fresh page data
+  const fetchPromise = getPage(pageId).then(freshPage => {
+    if (!freshPage) {
+      if (!page) showEmptyState();
+      return null;
+    }
+    
+    // Update cache for next time
+    try {
+      localStorage.setItem(`cache_page_${pageId}`, JSON.stringify(freshPage));
+    } catch(e) {}
+    
+    currentPageData = freshPage;
+
+    if (!page) {
+      // No cache was used, update UI now
+      document.title = `Insel-Wiki - ${freshPage.title || 'Ohne Titel'}`;
+      pageTitleInput.value = freshPage.title || '';
+      updateBreadcrumb(pageId);
+    }
+    return freshPage;
+  });
+
+  // If no cache, block until fetch completes
+  if (!page) {
+    page = await fetchPromise;
+    if (!page) return;
+  } else {
+    // If we used cache, just let fetch complete in background
+    fetchPromise.catch(console.error);
+    currentPageData = page; // Set temporarily until fetch completes
+    updateBreadcrumb(pageId);
+  }
 
   // Track recently visited pages
   try {
     const recentJson = localStorage.getItem('recent_pages') || '[]';
     let recent = JSON.parse(recentJson);
-    // Remove if already exists to move to top
     recent = recent.filter(p => p.id !== pageId);
     recent.unshift({ id: pageId, title: page.title, timestamp: Date.now() });
-    // Keep last 10
     if (recent.length > 10) recent = recent.slice(0, 10);
     localStorage.setItem('recent_pages', JSON.stringify(recent));
-  } catch (e) {
-    console.warn('Failed to update recent pages', e);
-  }
+  } catch (e) {}
 
-  // Show editor container immediately
-  editorContainer.classList.remove('hidden');
-  emptyState.classList.add('hidden');
-  pageTitleInput.value = page.title || '';
-  updateBreadcrumb(pageId);
   updateSaveStatus('saved');
-
-  // Self-heal internal links (sync, no network)
-  const { markdown: healedMarkdown, changed } = selfHealLinks(page.content || '');
-  if (changed) {
-    page.content = healedMarkdown;
-    setTimeout(() => {
-      if (canEdit()) {
-        savePage(pageId, healedMarkdown, page.title, 'System (Link-Healer)').catch(console.warn);
-      }
-    }, 2000);
-  }
 
   const user = getCurrentUser();
   const userName = user?.displayName || formatDefaultName(user?.email);
@@ -215,6 +237,22 @@ export async function loadPage(pageId) {
   createEditor(editorEl, pageId, fullUser, handleSave, page.content || '', () => {
     if (loadingOverlay) loadingOverlay.classList.add('hidden');
   });
+
+  // --- Variant 4: Defer Heavy Tasks (Link Healing) ---
+  setTimeout(() => {
+    // Only heal if we fetched fresh data and we are still on this page
+    fetchPromise.then(freshPage => {
+       if (freshPage && currentPageId === pageId) {
+          const { markdown: healedMarkdown, changed } = selfHealLinks(freshPage.content || '');
+          if (changed) {
+            freshPage.content = healedMarkdown;
+            if (canEdit()) {
+              savePage(pageId, healedMarkdown, freshPage.title, 'System (Link-Healer)').catch(console.warn);
+            }
+          }
+       }
+    });
+  }, 1000); // Defer by 1s to allow editor to fully render and idle
 
   if (!formatToolbar) {
     formatToolbar = createFormatToolbar(editorContainer);
