@@ -10,6 +10,7 @@ import { showToast } from '../components/toast.js';
 import { canEdit, getCurrentUser, isLoggedIn } from '../firebase/auth.js';
 import { formatDefaultName, slugify } from '../utils/string.js';
 import { subscribeToPage } from '../firebase/firestore.js';
+import { marked } from 'marked';
 
 // --- State ---
 let currentPageId = null;
@@ -158,9 +159,12 @@ export async function loadPage(pageId) {
   pageTitleInput.value = ''; // Clear title during load
   editorContainer.classList.remove('hidden');
   emptyState.classList.add('hidden');
-  if (loadingOverlay) loadingOverlay.classList.remove('hidden');
   destroyEditor();
   editorEl.innerHTML = ''; // Clear editor immediately
+  
+  // Clean up any old static preview
+  let staticPreview = document.getElementById('static-editor-preview');
+  if (staticPreview) staticPreview.remove();
 
   // --- Variant 1: Optimistic UI Local Caching ---
   let page = null;
@@ -171,10 +175,34 @@ export async function loadPage(pageId) {
       console.log(`[Insel-Wiki] Instant load from cache for ${pageId}`);
       pageTitleInput.value = page.title || '';
       document.title = `Insel-Wiki - ${page.title || 'Ohne Titel'}`;
-      // Overlay is kept visible until editor.js applies the content and calls onReady
+      
+      // CREATE INSTANT READ-ONLY PREVIEW
+      staticPreview = document.createElement('div');
+      staticPreview.id = 'static-editor-preview';
+      staticPreview.className = 'tiptap'; // Use same styling
+      staticPreview.style.padding = '12px 32px 48px';
+      staticPreview.style.flex = '1';
+      staticPreview.style.overflowY = 'auto';
+      
+      let html = marked.parse(page.content || '');
+      // Ensure tasks look correct in preview
+      html = html.replace(/<li><input([^>]*)type="checkbox"([^>]*)>(.*?)<\/li>/gi, (match, p1, p2, text) => {
+        const isChecked = p1.includes('checked') || p2.includes('checked');
+        return `<li data-type="taskItem" data-checked="${isChecked}">${text}</li>`;
+      });
+      staticPreview.innerHTML = html;
+      
+      editorContainer.insertBefore(staticPreview, editorEl);
+      editorEl.style.display = 'none'; // Hide real editor until ready
+      
+      if (loadingOverlay) loadingOverlay.classList.add('hidden');
     } catch (e) {
       console.warn('Failed to parse page cache', e);
     }
+  } else {
+    // No cache, show loading overlay
+    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+    editorEl.style.display = 'block';
   }
 
   // Fetch fresh page data
@@ -236,6 +264,10 @@ export async function loadPage(pageId) {
   // Create editor (Yjs provider.init() runs internally)
   createEditor(editorEl, pageId, fullUser, handleSave, page.content || '', () => {
     if (loadingOverlay) loadingOverlay.classList.add('hidden');
+    // Swap out static preview for real editor
+    const sp = document.getElementById('static-editor-preview');
+    if (sp) sp.remove();
+    editorEl.style.display = 'block';
   });
 
   // --- Variant 4: Defer Heavy Tasks (Link Healing) ---
