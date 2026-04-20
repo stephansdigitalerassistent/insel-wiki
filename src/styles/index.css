@@ -811,13 +811,13 @@ html, body {
 /* --- Editor Loading Skeleton --- */
 .editor-loading-overlay {
   position: absolute;
-  top: 80px; /* Below title wrapper */
+  top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background: var(--bg-root);
-  padding: 12px 32px 48px;
-  z-index: 5;
+  padding: 80px 32px 48px;
+  z-index: 100;
   transition: opacity var(--transition-normal);
 }
 
@@ -832,6 +832,13 @@ html, body {
   flex-direction: column;
   gap: 20px;
   animation: fadeIn 0.3s ease;
+}
+
+.skeleton-loading-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-style: italic;
 }
 
 .skeleton-line {
@@ -859,32 +866,6 @@ html, body {
 @keyframes skeleton-loading {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
-}
-
-/* --- Editor Loading Skeleton --- */
-.editor-loading-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--bg-root);
-  padding: 80px 32px 48px; /* Offset content to align with skeleton */
-  z-index: 100;
-  transition: opacity var(--transition-normal);
-}
-
-.editor-loading-overlay.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.editor-skeleton {
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  animation: fadeIn 0.3s ease;
 }
 
 /* --- Utility --- */
