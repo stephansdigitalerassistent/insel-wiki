@@ -179,10 +179,11 @@ export async function loadPage(pageId) {
       // CREATE INSTANT READ-ONLY PREVIEW
       staticPreview = document.createElement('div');
       staticPreview.id = 'static-editor-preview';
-      staticPreview.className = 'tiptap'; // Use same styling
+      staticPreview.className = 'editor'; // Matches CSS wrapper
       staticPreview.style.padding = '12px 32px 48px';
       staticPreview.style.flex = '1';
       staticPreview.style.overflowY = 'auto';
+      staticPreview.style.background = 'var(--bg-root)';
       
       let html = marked.parse(page.content || '');
       // Ensure tasks look correct in preview
@@ -190,7 +191,8 @@ export async function loadPage(pageId) {
         const isChecked = p1.includes('checked') || p2.includes('checked');
         return `<li data-type="taskItem" data-checked="${isChecked}">${text}</li>`;
       });
-      staticPreview.innerHTML = html;
+      // Wrap in tiptap class to match CSS descendant selectors
+      staticPreview.innerHTML = `<div class="tiptap" style="outline: none; min-height: 300px; font-size: 1rem; line-height: 1.7; color: var(--text-primary);">${html}</div>`;
       
       editorContainer.insertBefore(staticPreview, editorEl);
       editorEl.style.display = 'none'; // Hide real editor until ready
