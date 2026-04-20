@@ -171,7 +171,7 @@ export async function loadPage(pageId) {
       console.log(`[Insel-Wiki] Instant load from cache for ${pageId}`);
       pageTitleInput.value = page.title || '';
       document.title = `Insel-Wiki - ${page.title || 'Ohne Titel'}`;
-      if (loadingOverlay) loadingOverlay.classList.add('hidden');
+      // Overlay is kept visible until editor.js applies the content and calls onReady
     } catch (e) {
       console.warn('Failed to parse page cache', e);
     }
