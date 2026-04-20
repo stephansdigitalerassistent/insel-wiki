@@ -59,7 +59,7 @@ const debouncedUpdateTitle = debounce((id, title) => {
 
 // --- DOM References (set during init) ---
 let editorContainer, editorEl, pageTitleInput, saveStatus, breadcrumbEl;
-let collabCursorsEl, emptyState, lastEditedBadge;
+let collabCursorsEl, emptyState, lastEditedBadge, loadingOverlay;
 let historyBtn, printBtn, addChildBtn, deletePageBtn, toolbarNewPageBtn, copyLinkBtn;
 
 let navigateCallback = null;
@@ -84,6 +84,7 @@ export function initPageController(opts) {
   collabCursorsEl = document.getElementById('collab-cursors');
   emptyState = document.getElementById('empty-state');
   lastEditedBadge = document.getElementById('last-edited-badge');
+  loadingOverlay = document.getElementById('editor-loading-overlay');
   historyBtn = document.getElementById('history-btn');
   printBtn = document.getElementById('print-page-btn');
   addChildBtn = document.getElementById('add-child-btn');
@@ -151,13 +152,21 @@ export async function loadPage(pageId) {
   closeHistoryPanel();
   collabCursorsEl.innerHTML = '';
 
-  // Fetch page data (the only blocking await before rendering)
+  // Show loading state immediately to improve perceived speed
+  currentPageId = pageId;
+  setActivePage(pageId);
+  pageTitleInput.value = 'Wird geladen...';
+  editorContainer.classList.remove('hidden');
+  emptyState.classList.add('hidden');
+  if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+  destroyEditor();
+  editorEl.innerHTML = ''; // Clear editor immediately
+
+  // Fetch page data
   const page = await getPage(pageId);
   if (!page) { showEmptyState(); return; }
 
-  currentPageId = pageId;
   currentPageData = page;
-  setActivePage(pageId);
   document.title = `Insel-Wiki - ${page.title || 'Ohne Titel'}`;
 
   // Track recently visited pages
@@ -203,7 +212,9 @@ export async function loadPage(pageId) {
   };
 
   // Create editor (Yjs provider.init() runs internally)
-  createEditor(editorEl, pageId, fullUser, handleSave, page.content || '');
+  createEditor(editorEl, pageId, fullUser, handleSave, page.content || '', () => {
+    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+  });
 
   if (!formatToolbar) {
     formatToolbar = createFormatToolbar(editorContainer);
@@ -278,6 +289,7 @@ export function showEmptyState() {
   destroyEditor();
   editorContainer.classList.add('hidden');
   emptyState.classList.remove('hidden');
+  if (loadingOverlay) loadingOverlay.classList.add('hidden');
   breadcrumbEl.innerHTML = '';
   if (collabCursorsEl) collabCursorsEl.innerHTML = '';
 }

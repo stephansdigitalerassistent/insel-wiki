@@ -69,7 +69,7 @@ function getTurndown() {
 /**
  * Initialize the editor for a given page
  */
-export function createEditor(element, pageId, user, onSave, initialContent) {
+export function createEditor(element, pageId, user, onSave, initialContent, onReady) {
   // Clean up previous editor
   destroyEditor();
 
@@ -82,13 +82,19 @@ export function createEditor(element, pageId, user, onSave, initialContent) {
   // Create Custom Firestore Provider for robust serverless sync
   provider = new FirestoreYjsProvider(pageId, ydoc, user);
   provider.setLoadCallback((hasYjsState) => {
+    // Hide loading overlay/skeleton
+    if (onReady) onReady();
+
+    // If the provider finishes loading and we still have no content, 
+    // or if the Yjs doc is effectively empty, apply the initialContent (Markdown).
     if (initialContent) {
+      // Use a shorter timeout to allow Yjs binary state to "settle" first
       setTimeout(() => {
         if (editor && editor.isEmpty) {
           console.log(`[Insel-Wiki] Applying fallback content for ${pageId}`);
           setContent(initialContent);
         }
-      }, 500);
+      }, 100);
     }
   });
 
