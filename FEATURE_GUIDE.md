@@ -1,31 +1,31 @@
-# ✨ New Feature Guide (Benutzerhandbuch)
+# ✨ New Feature Guide (User Manual)
 
-Dieses Dokument erklärt dir, wie du neue Funktionen für das Insel-Wiki anfordern kannst. Unser **DevOps-Bot** übernimmt die Analyse und Vorbereitung für dich.
+This document explains how you can request new features for the Insel-Wiki. Our **DevOps-Bot** handles the analysis and preparation for you.
 
-## So forderst du ein Feature an:
+## How to request a feature:
 
-1. **Unterseite erstellen:**
-   Erstelle eine neue Unterseite direkt in diesem Ordner (**New Features**).
+1. **Create a subpage:**
+   Create a new subpage directly in this folder (**New Features**).
    
-2. **Titel & Beschreibung:**
-   - Der **Titel** der Seite ist dein Wunsch (z.B. *"Farbig markierte Aufgabenlisten"*).
-   - Im **Inhalt** beschreibst du kurz, was das Feature können soll.
+2. **Title & Description:**
+   - The **Title** of the page is your request (e.g. *"Color-coded task lists"*).
+   - In the **Content** briefly describe what the feature should do.
 
-3. **Analyse abwarten:**
-   Sobald du die Seite speicherst, erscheint nach wenigen Sekunden ein Text vom Bot. Er setzt den Status auf `analyzing` und dann auf `proposed`.
+3. **Wait for analysis:**
+   As soon as you save the page, text from the bot will appear after a few seconds. It sets the status to `analyzing` and then to `proposed`.
 
-## Freigabe & Umsetzung:
+## Approval & Implementation:
 
-Der Bot schreibt dir einen technischen Plan in die Seite. Wenn du damit einverstanden bist:
+The bot writes a technical plan for you on the page. If you agree with it:
 
-1. Klicke auf **Bearbeiten**.
-2. Suche die Zeile `Status: proposed`.
-3. Ändere das Wort `proposed` manuell zu **`approved`**.
-   *(Wichtig: Das Wort muss fettgedruckt bleiben, damit der Bot es erkennt!)*
-4. **Speichern.**
+1. Click on **Edit**.
+2. Find the line `Status: proposed`.
+3. Manually change the word `proposed` to **`approved`**.
+   *(Important: The word must remain bolded so the bot recognizes it!)*
+4. **Save.**
 
-## Was passiert dann?
-Der Bot erkennt deine Freigabe sofort. Er wechselt auf `executing`, führt die notwendigen Befehle auf dem Server aus (Tests, Build, Git-Commit) und schreibt das Ergebnis in ein Log direkt auf deine Seite. Am Ende steht dort `Status: completed`.
+## What happens then?
+The bot immediately recognizes your approval. It switches to `executing`, executes the necessary commands on the server (tests, build, Git commit), and writes the result to a log directly on your page. At the end, it will say `Status: completed`.
 
 ---
-*💡 Tipp: Du kannst den Fortschritt live im Wiki verfolgen, während der Bot arbeitet.*
+*💡 Tip: You can follow the progress live in the wiki while the bot is working.*

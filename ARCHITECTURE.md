@@ -1,41 +1,41 @@
-# 🏗 Architektur — Insel-Wiki
+# 🏗 Architecture — Insel-Wiki
 
-Das Insel-Wiki folgt einem modularen, ereignisgesteuerten Architektur-Ansatz ohne schwerfällige Frameworks, um maximale Performance und Wartbarkeit zu gewährleisten.
+The Insel-Wiki follows a modular, event-driven architectural approach without heavy frameworks to ensure maximum performance and maintainability.
 
-## 1. Kern-Infrastruktur
+## 1. Core Infrastructure
 
-### **Kollaboration & Synchronisation (Yjs)**
-Das Herzstück der Anwendung ist **Yjs**. 
-- Wir nutzen einen **Custom Firestore Yjs Provider** (`src/editor/FirestoreYjsProvider.js`), der binäre Yjs-State-Updates in Firestore-Dokumenten speichert.
-- Dies ermöglicht konfliktfreies Editieren (CRDTs) ohne einen zentralen Node.js-Backend-Server.
+### **Collaboration & Synchronization (Yjs)**
+The heart of the application is **Yjs**.
+- We use a **Custom Firestore Yjs Provider** (`src/editor/FirestoreYjsProvider.js`), which stores binary Yjs state updates in Firestore documents.
+- This enables conflict-free editing (CRDTs) without a central Node.js backend server.
 
-### **Datenmodell (Firestore)**
-- **`pages/`**: Hauptkollektion für Dokumentinhalte und Metadaten (Titel, Hierarchie).
-- **`pages/{id}/history/`**: Snapshot-basierte Historisierung für Versionierung.
-- **`pages/{id}/comments/`**: Sub-Kollektion für die diskreten Kommentar-Threads einer Seite.
-- **`users/`**: Spiegelung der Authentifizierungsdaten für @Mentions und Autorennachweise.
+### **Data Model (Firestore)**
+- **`pages/`**: Main collection for document contents and metadata (title, hierarchy).
+- **`pages/{id}/history/`**: Snapshot-based historization for versioning.
+- **`pages/{id}/comments/`**: Sub-collection for the discrete comment threads of a page.
+- **`users/`**: Mirroring of authentication data for @Mentions and author attributions.
 
-## 2. Komponenten-Struktur (`src/components/`)
+## 2. Component Structure (`src/components/`)
 
-Die UI ist in unabhängige Module unterteilt, die über den globalen State in `main.js` oder via Custom Events kommunizieren:
+The UI is divided into independent modules that communicate via the global state in `main.js` or via custom events:
 
-- **`sidebar.js`**: Verwaltet den hierarchischen Baum, Drag-and-Drop Logik und die **Deep-Search Engine**.
-- **`comments.js`**: Isoliertes Modul für das Kommentar-Panel und die Firestore-Diskussions-Sync.
-- **`history.js`**: Differenz-Ansicht (using `diff-match-patch`) und Snapshot-Wiederherstellung.
-- **`modal.js`**: Generische Modal-Infrastruktur für Profile, Seiten-Erstellung und Bestätigungen.
+- **`sidebar.js`**: Manages the hierarchical tree, drag-and-drop logic, and the **Deep-Search Engine**.
+- **`comments.js`**: Isolated module for the comment panel and Firestore discussion sync.
+- **`history.js`**: Difference view (using `diff-match-patch`) and snapshot restoration.
+- **`modal.js`**: Generic modal infrastructure for profiles, page creation, and confirmations.
 
-## 3. Editor-Schicht (`src/editor/`)
+## 3. Editor Layer (`src/editor/`)
 
-Basierend auf **Tiptap**, erweitert um medizinisch relevante Funktionen:
-- **Custom Extensions**: `Comment.js` (Mark-Infrastruktur) und `Mention.js` (Vorschlagslogik).
-- **Suggestions**: `suggestions.js` integriert `tippy.js` für die nutzerfreundliche @User-Suche.
+Based on **Tiptap**, extended with medically relevant functions:
+- **Custom Extensions**: `Comment.js` (mark infrastructure) and `Mention.js` (suggestion logic).
+- **Suggestions**: `suggestions.js` integrates `tippy.js` for user-friendly @User search.
 
-## 4. Design-System (`src/styles/`)
+## 4. Design System (`src/styles/`)
 
-- **Utility-First CSS Variables**: Das gesamte Farbschema (Burnham Green) und die Glassmorphism-Effekte werden zentral über CSS-Variablen in `index.css` gesteuert.
-- **Print-Optimization**: Spezielle Media-Queries stellen sicher, dass Protokolle im Spitalalltag sauber auf A4 ausgedruckt werden können.
+- **Utility-First CSS Variables**: The entire color scheme (Burnham Green) and the glassmorphism effects are centrally controlled via CSS variables in `index.css`.
+- **Print Optimization**: Special media queries ensure that protocols can be printed cleanly on A4 in everyday hospital life.
 
 ## 5. Security & Automation
 
-- **WikiBot (`wiki-registration-bot.js`)**: Ein autonomer Node.js Dienst, der E-Mail-basierte Registrierungs-Token validiert, Accounts erstellt und das Mitarbeiterverzeichnis in Firestore initialisiert.
-- **Firestore Rules**: Granulare Zugriffskontrolle, die sicherstellt, dass nur verifizierte `@insel.ch` Nutzer Schreibzugriff haben.
+- **WikiBot (`wiki-registration-bot.js`)**: An autonomous Node.js service that validates email-based registration tokens, creates accounts, and initializes the employee directory in Firestore.
+- **Firestore Rules**: Granular access control ensuring that only verified `@insel.ch` users have write access.

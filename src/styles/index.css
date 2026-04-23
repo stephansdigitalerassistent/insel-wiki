@@ -25,8 +25,12 @@
   --text-muted: #647d75;
   --text-inverse: #04120e;
   
+  /* Brand Colors (WCAG AA Compliant > 4.5:1 on dark bg) */
+  --insel-blue: #5ba6f5;
+  --insel-green: #3db88c;
+  
   /* Accent — Warm Teal (harmonises with Burnham green) */
-  --accent: #3DB88C;
+  --accent: var(--insel-green);
   --accent-hover: #56D4A5;
   --accent-subtle: rgba(61, 184, 140, 0.15);
   --accent-glow: rgba(61, 184, 140, 0.25);
@@ -132,7 +136,7 @@ html, body {
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #56D4A5, #3DB88C);
+  background: linear-gradient(135deg, var(--insel-blue), var(--insel-green));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -433,7 +437,7 @@ html, body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #56D4A5, #3DB88C);
+  background: linear-gradient(135deg, var(--insel-blue), var(--insel-green));
   color: #04120e;
   box-shadow: 0 2px 12px var(--accent-glow);
 }

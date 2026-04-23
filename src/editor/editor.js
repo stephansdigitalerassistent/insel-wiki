@@ -737,7 +737,7 @@ export function createFormatToolbar(container) {
         break;
       }
       case 'image': {
-        const src = await promptModal('Bild-URL eingeben:', 'https://...');
+        const src = await promptModal('Enter image URL:', 'https://...');
         if (src) chain.setImage({ src }).run();
         break;
       }
