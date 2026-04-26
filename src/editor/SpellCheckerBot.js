@@ -1,14 +1,6 @@
 // SpellCheckerBot — AI-powered word-level spell checker using Gemini 3.1 Flash Lite
-// Registers as a virtual collaboration cursor ("🤖 Rechtschreib-Assistent")
-// so other editors can see corrections happening in real-time.
-//
-// Architecture: The bot creates its own Awareness entry (separate clientID)
-// and publishes it to the same Firestore yjs_awareness collection.
-// Other clients' CollaborationCursor extension renders it automatically.
+// Silently corrects dyslexia-typical spelling errors as the user types.
 
-import * as awarenessProtocol from 'y-protocols/awareness';
-import { db } from '../firebase/config.js';
-import { doc, setDoc, deleteDoc, serverTimestamp, Bytes } from 'firebase/firestore';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview';
@@ -49,21 +41,9 @@ export class SpellCheckerBot {
     this.provider = provider;
     this.pageId = provider.pageId;
     this.debounceTimer = null;
-    this.recentlyCorrected = new Set(); // avoid re-correcting same word at same position
+    this.recentlyCorrected = new Set();
     this.isDestroyed = false;
     this._onTransaction = this._onTransaction.bind(this);
-
-    // Create a separate awareness instance for the bot cursor.
-    // This gives us a unique clientID that is different from the user's.
-    this.botAwareness = new awarenessProtocol.Awareness(provider.ydoc);
-    this.botClientId = this.botAwareness.clientID;
-    this.awarenessDocRef = doc(db, 'pages', this.pageId, 'yjs_awareness', `bot-${this.botClientId}`);
-
-    // Register bot identity in awareness
-    this.botAwareness.setLocalStateField('user', {
-      name: BOT_NAME,
-      color: BOT_COLOR,
-    });
   }
 
   /**
@@ -76,26 +56,7 @@ export class SpellCheckerBot {
     }
 
     console.log('[SpellCheckerBot] 🤖 Rechtschreib-Assistent aktiviert');
-
-    // Publish initial awareness so the cursor exists (hidden until first correction)
-    this._publishAwareness();
-
     this.editor.on('transaction', this._onTransaction);
-  }
-
-  /**
-   * Publish the bot's awareness state to Firestore so other clients see the cursor
-   */
-  _publishAwareness() {
-    try {
-      const state = awarenessProtocol.encodeAwarenessUpdate(this.botAwareness, [this.botClientId]);
-      setDoc(this.awarenessDocRef, {
-        state: Bytes.fromUint8Array(state),
-        updatedAt: serverTimestamp()
-      }).catch(() => {});
-    } catch (e) {
-      // Non-critical
-    }
   }
 
   /**
@@ -220,11 +181,7 @@ export class SpellCheckerBot {
 
       if (currentText !== word) return; // Word changed — skip
 
-      // Move bot cursor to the correction site (visible to other editors)
-      this._moveBotCursor(startPos);
-
       // Apply the correction without stealing focus from the user.
-      // We use a raw transaction instead of editor.chain().focus()
       const { tr } = this.editor.state;
       tr.insertText(cleanCorrected, startPos, endPos);
       this.editor.view.dispatch(tr);
@@ -238,45 +195,10 @@ export class SpellCheckerBot {
 
       console.log(`[SpellCheckerBot] ✅ "${word}" → "${cleanCorrected}"`);
 
-      // Hide bot cursor after a short delay
-      setTimeout(() => {
-        if (!this.isDestroyed) this._hideBotCursor();
-      }, 2000);
-
     } catch (err) {
       if (err.name !== 'AbortError') {
         console.warn('[SpellCheckerBot] Correction failed:', err.message);
       }
-    }
-  }
-
-  /**
-   * Move the bot's collaboration cursor to a position in the document.
-   * This writes to Firestore so all connected clients can see it.
-   */
-  _moveBotCursor(pos) {
-    try {
-      // Update the bot awareness with cursor position
-      // The CollaborationCursor extension reads 'cursor' from awareness state
-      this.botAwareness.setLocalStateField('cursor', {
-        anchor: pos,
-        head: pos,
-      });
-      this._publishAwareness();
-    } catch (e) {
-      // Non-critical
-    }
-  }
-
-  /**
-   * Hide the bot cursor by removing cursor state
-   */
-  _hideBotCursor() {
-    try {
-      this.botAwareness.setLocalStateField('cursor', null);
-      this._publishAwareness();
-    } catch (e) {
-      // Non-critical
     }
   }
 
@@ -354,13 +276,6 @@ export class SpellCheckerBot {
     clearTimeout(this.debounceTimer);
     this.editor.off('transaction', this._onTransaction);
     this.recentlyCorrected.clear();
-
-    // Remove bot awareness from Firestore
-    deleteDoc(this.awarenessDocRef).catch(() => {});
-
-    // Clean up local awareness
-    awarenessProtocol.removeAwarenessStates(this.botAwareness, [this.botClientId], 'local');
-
     console.log('[SpellCheckerBot] 🤖 Rechtschreib-Assistent deaktiviert');
   }
 }
