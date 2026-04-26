@@ -24,6 +24,7 @@ const SYSTEM_PROMPT = `Fix dyslexia typos (transpositions, omissions, duplicates
 Output ONLY corrected word. No punctuation, quotes, or explanation.
 If correct, output as is.
 Keep original case.
+Keep German umlauts (ä,ö,ü). Do NOT replace with ae/oe/ue.
 Use Swiss German (replace 'ß' with 'ss').
 Ignore medical terms, acronyms, names.
 Lang: DE/EN.`;
