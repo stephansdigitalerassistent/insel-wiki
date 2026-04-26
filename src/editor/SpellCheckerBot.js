@@ -1,6 +1,14 @@
 // SpellCheckerBot — AI-powered word-level spell checker using Gemini 3.1 Flash Lite
 // Registers as a virtual collaboration cursor ("🤖 Rechtschreib-Assistent")
 // so other editors can see corrections happening in real-time.
+//
+// Architecture: The bot creates its own Awareness entry (separate clientID)
+// and publishes it to the same Firestore yjs_awareness collection.
+// Other clients' CollaborationCursor extension renders it automatically.
+
+import * as awarenessProtocol from 'y-protocols/awareness';
+import { db } from '../firebase/config.js';
+import { doc, setDoc, deleteDoc, serverTimestamp, Bytes } from 'firebase/firestore';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_MODEL = 'gemini-3.1-flash-lite';
@@ -13,14 +21,13 @@ const WORD_SEPARATORS = new Set([' ', '.', ',', '!', '?', ':', ';', '\n', ')', '
 const MIN_WORD_LENGTH = 3;
 
 // Debounce time after a word separator is typed (ms)
-const DEBOUNCE_MS = 400;
+const DEBOUNCE_MS = 500;
 
 // Bot identity for the collaboration cursor
 const BOT_NAME = '🤖 Rechtschreib-Assistent';
 const BOT_COLOR = '#10b981'; // Emerald green
 
 // System prompt for Gemini — optimized for dyslexia-specific corrections
-// Primary focus: character transpositions, letter swaps, omissions, duplications
 const SYSTEM_PROMPT = `Du bist ein Rechtschreibassistent, spezialisiert auf Legasthenie-typische Fehler.
 Häufige Fehlermuster die du korrigieren sollst:
 - Buchstabenvertauschungen (z.B. "Pateint" → "Patient", "Brto" → "Brot")
@@ -40,25 +47,55 @@ export class SpellCheckerBot {
   constructor(editor, provider) {
     this.editor = editor;
     this.provider = provider;
+    this.pageId = provider.pageId;
     this.debounceTimer = null;
-    this.pendingCorrections = new Map(); // word → {pos, endPos}
-    this.recentlyCorreected = new Set(); // avoid re-correcting same position
+    this.recentlyCorrected = new Set(); // avoid re-correcting same word at same position
     this.isDestroyed = false;
     this._onTransaction = this._onTransaction.bind(this);
-    this._lastCursorPos = null;
+
+    // Create a separate awareness instance for the bot cursor.
+    // This gives us a unique clientID that is different from the user's.
+    this.botAwareness = new awarenessProtocol.Awareness(provider.ydoc);
+    this.botClientId = this.botAwareness.clientID;
+    this.awarenessDocRef = doc(db, 'pages', this.pageId, 'yjs_awareness', `bot-${this.botClientId}`);
+
+    // Register bot identity in awareness
+    this.botAwareness.setLocalStateField('user', {
+      name: BOT_NAME,
+      color: BOT_COLOR,
+    });
   }
 
   /**
    * Start listening for word completions
    */
   start() {
-    if (!GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
       console.warn('[SpellCheckerBot] No VITE_GEMINI_API_KEY set — spell check disabled.');
       return;
     }
 
     console.log('[SpellCheckerBot] 🤖 Rechtschreib-Assistent aktiviert');
+
+    // Publish initial awareness so the cursor exists (hidden until first correction)
+    this._publishAwareness();
+
     this.editor.on('transaction', this._onTransaction);
+  }
+
+  /**
+   * Publish the bot's awareness state to Firestore so other clients see the cursor
+   */
+  _publishAwareness() {
+    try {
+      const state = awarenessProtocol.encodeAwarenessUpdate(this.botAwareness, [this.botClientId]);
+      setDoc(this.awarenessDocRef, {
+        state: Bytes.fromUint8Array(state),
+        updatedAt: serverTimestamp()
+      }).catch(() => {});
+    } catch (e) {
+      // Non-critical
+    }
   }
 
   /**
@@ -68,78 +105,62 @@ export class SpellCheckerBot {
     if (this.isDestroyed) return;
     if (!transaction.docChanged) return;
 
-    // Check if the last step was a text insertion
-    const steps = transaction.steps;
-    if (!steps || steps.length === 0) return;
+    // Use the mapped selection position after the transaction to find what was just typed.
+    // This is more reliable than parsing internal step structures.
+    const { selection } = this.editor.state;
+    const cursorPos = selection.from;
 
-    // Get the inserted text from the last step
-    let insertedText = '';
-    let insertPos = null;
+    // Read the character just before the cursor
+    if (cursorPos < 2) return;
 
-    for (const step of steps) {
-      // ReplaceStep with content — this is a text insertion
-      if (step.slice && step.slice.content) {
-        const content = step.slice.content;
-        content.forEach(node => {
-          if (node.isText) {
-            insertedText += node.text;
-            insertPos = step.from;
-          }
-        });
-      }
-    }
+    const charBefore = this.editor.state.doc.textBetween(cursorPos - 1, cursorPos);
 
-    if (!insertedText || insertPos === null) return;
+    // Only proceed if a word separator was just typed
+    if (!WORD_SEPARATORS.has(charBefore)) return;
 
-    // Check if the last character is a word separator
-    const lastChar = insertedText[insertedText.length - 1];
-    if (!WORD_SEPARATORS.has(lastChar)) return;
-
-    // Extract the word before the separator
-    this._extractAndQueueWord(insertPos);
+    // Extract and queue the word before the separator
+    this._extractAndQueueWord(cursorPos - 1);
   }
 
   /**
-   * Extract the word that just ended at the given position
+   * Extract the word that just ended at the given position (position of the separator)
    */
   _extractAndQueueWord(separatorPos) {
-    const { state } = this.editor;
-    const doc = state.doc;
+    const { doc } = this.editor.state;
 
-    // Resolve position to find the text node
+    // Resolve position to find the parent text node
     const $pos = doc.resolve(separatorPos);
-    const textBefore = $pos.parent.textBetween(
-      0,
-      $pos.parentOffset,
-      undefined,
-      '\ufffc' // object replacement char for non-text nodes
-    );
+    const parentNode = $pos.parent;
 
+    // Skip if inside a code block
+    if (parentNode.type.name === 'codeBlock') return;
+
+    // Get all text in this paragraph up to the separator position
+    const textBefore = parentNode.textBetween(0, $pos.parentOffset, undefined, '\ufffc');
     if (!textBefore) return;
 
-    // Find the last word in the text
-    // Match a word that ends right at the cursor (before the separator)
+    // Find the last word in the text (before the separator)
     const wordMatch = textBefore.match(/(\S+)$/);
     if (!wordMatch) return;
 
-    const word = wordMatch[1];
+    const rawWord = wordMatch[1];
 
-    // Clean the word: strip trailing punctuation that might have been included
-    const cleanWord = word.replace(/[.,!?:;)"'»\]}/]+$/, '');
-
-    // Skip conditions
+    // Clean the word: strip trailing punctuation
+    const cleanWord = rawWord.replace(/[.,!?:;)"'»\]}/]+$/, '');
     if (!this._shouldCheck(cleanWord)) return;
 
-    // Calculate the absolute positions of the word in the document
-    const wordStartInParent = textBefore.length - word.length;
-    const absoluteStart = separatorPos - (textBefore.length - wordStartInParent);
+    // Calculate absolute document positions of the word
+    const parentStart = $pos.start(); // absolute start of the parent node's content
+    const wordEndInParent = $pos.parentOffset; // where the separator is
+    const wordStartInParent = wordEndInParent - rawWord.length;
+    const absoluteStart = parentStart + wordStartInParent;
     const absoluteEnd = absoluteStart + cleanWord.length;
 
-    // Skip if we recently corrected at this position
-    const posKey = `${absoluteStart}-${cleanWord}`;
-    if (this.recentlyCorreected.has(posKey)) return;
+    // Skip if we recently corrected this exact word at this position
+    const posKey = `${absoluteStart}:${cleanWord}`;
+    if (this.recentlyCorrected.has(posKey)) return;
 
-    // Debounce: wait a short time to avoid correcting during rapid typing
+    // Debounce: wait a bit to let rapid typing settle
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this._correctWord(cleanWord, absoluteStart, absoluteEnd, posKey);
@@ -158,16 +179,11 @@ export class SpellCheckerBot {
     // Skip mentions and hashtags
     if (word.startsWith('@') || word.startsWith('#')) return false;
 
-    // Skip words that are all numbers or contain numbers mixed with letters (e.g. ICD-10, H2O)
+    // Skip pure numbers
     if (/^\d+$/.test(word)) return false;
 
     // Skip common abbreviations (all caps, 2-5 chars)
     if (/^[A-ZÄÖÜ]{2,5}$/.test(word)) return false;
-
-    // Skip words inside code blocks
-    const { state } = this.editor;
-    const $pos = state.doc.resolve(Math.min(state.doc.content.size, state.selection.from));
-    if ($pos.parent.type.name === 'codeBlock') return false;
 
     // Skip email-like patterns
     if (word.includes('@') || word.includes('.ch') || word.includes('.com')) return false;
@@ -183,51 +199,85 @@ export class SpellCheckerBot {
 
     try {
       const corrected = await this._callGemini(word);
-
       if (this.isDestroyed) return;
 
       // Clean the response (Gemini might add quotes or whitespace)
-      const cleanCorrected = corrected.trim().replace(/^["'«»]+|["'«»]+$/g, '').trim();
+      const cleanCorrected = corrected.trim().replace(/^["'«»`]+|["'«»`]+$/g, '').trim();
 
-      // Only apply if actually different and not empty
-      if (!cleanCorrected || cleanCorrected === word || cleanCorrected.length === 0) return;
+      // Only apply if actually different
+      if (!cleanCorrected || cleanCorrected === word) return;
 
-      // Verify the word at this position hasn't changed since we queued it
+      // Verify the word at this position hasn't changed while we waited for the API
       const { state } = this.editor;
-      const currentText = state.doc.textBetween(
-        Math.max(0, startPos),
-        Math.min(state.doc.content.size, endPos),
-        undefined
-      );
+      const docSize = state.doc.content.size;
+      if (startPos < 0 || endPos > docSize) return;
 
-      if (currentText !== word) {
-        // Word changed while we were waiting — skip
-        return;
+      let currentText;
+      try {
+        currentText = state.doc.textBetween(startPos, endPos);
+      } catch {
+        return; // Position is no longer valid
       }
 
-      // Apply the correction via editor commands
-      this.editor.chain()
-        .focus()
-        .command(({ tr }) => {
-          // Add a decoration class for the flash animation
-          tr.insertText(cleanCorrected, startPos, endPos);
-          return true;
-        })
-        .run();
+      if (currentText !== word) return; // Word changed — skip
+
+      // Move bot cursor to the correction site (visible to other editors)
+      this._moveBotCursor(startPos);
+
+      // Apply the correction without stealing focus from the user.
+      // We use a raw transaction instead of editor.chain().focus()
+      const { tr } = this.editor.state;
+      tr.insertText(cleanCorrected, startPos, endPos);
+      this.editor.view.dispatch(tr);
 
       // Mark as recently corrected to avoid re-checking
-      this.recentlyCorreected.add(posKey);
-      setTimeout(() => this.recentlyCorreected.delete(posKey), 10000);
+      this.recentlyCorrected.add(posKey);
+      setTimeout(() => this.recentlyCorrected.delete(posKey), 15000);
 
       // Apply visual flash at correction site
       this._flashCorrection(startPos, startPos + cleanCorrected.length);
 
-      console.log(`[SpellCheckerBot] Corrected: "${word}" → "${cleanCorrected}"`);
+      console.log(`[SpellCheckerBot] ✅ "${word}" → "${cleanCorrected}"`);
+
+      // Hide bot cursor after a short delay
+      setTimeout(() => {
+        if (!this.isDestroyed) this._hideBotCursor();
+      }, 2000);
+
     } catch (err) {
-      // Silently fail — spell check is a best-effort feature
       if (err.name !== 'AbortError') {
         console.warn('[SpellCheckerBot] Correction failed:', err.message);
       }
+    }
+  }
+
+  /**
+   * Move the bot's collaboration cursor to a position in the document.
+   * This writes to Firestore so all connected clients can see it.
+   */
+  _moveBotCursor(pos) {
+    try {
+      // Update the bot awareness with cursor position
+      // The CollaborationCursor extension reads 'cursor' from awareness state
+      this.botAwareness.setLocalStateField('cursor', {
+        anchor: pos,
+        head: pos,
+      });
+      this._publishAwareness();
+    } catch (e) {
+      // Non-critical
+    }
+  }
+
+  /**
+   * Hide the bot cursor by removing cursor state
+   */
+  _hideBotCursor() {
+    try {
+      this.botAwareness.setLocalStateField('cursor', null);
+      this._publishAwareness();
+    } catch (e) {
+      // Non-critical
     }
   }
 
@@ -254,7 +304,8 @@ export class SpellCheckerBot {
     });
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`);
+      const errorBody = await response.text().catch(() => '');
+      throw new Error(`Gemini API ${response.status}: ${errorBody.substring(0, 200)}`);
     }
 
     const data = await response.json();
@@ -282,18 +333,17 @@ export class SpellCheckerBot {
         position: fixed;
         left: ${startCoords.left}px;
         top: ${startCoords.top}px;
-        width: ${endCoords.right - startCoords.left}px;
+        width: ${Math.max(endCoords.right - startCoords.left, 20)}px;
         height: ${startCoords.bottom - startCoords.top}px;
         pointer-events: none;
         z-index: 999;
       `;
       document.body.appendChild(flash);
 
-      // Remove after animation completes
       flash.addEventListener('animationend', () => flash.remove());
-      setTimeout(() => flash.remove(), 2000); // Fallback cleanup
+      setTimeout(() => flash.remove(), 2000);
     } catch (e) {
-      // Visual flash is non-critical — ignore errors
+      // Visual flash is non-critical
     }
   }
 
@@ -304,8 +354,14 @@ export class SpellCheckerBot {
     this.isDestroyed = true;
     clearTimeout(this.debounceTimer);
     this.editor.off('transaction', this._onTransaction);
-    this.pendingCorrections.clear();
-    this.recentlyCorreected.clear();
+    this.recentlyCorrected.clear();
+
+    // Remove bot awareness from Firestore
+    deleteDoc(this.awarenessDocRef).catch(() => {});
+
+    // Clean up local awareness
+    awarenessProtocol.removeAwarenessStates(this.botAwareness, [this.botClientId], 'local');
+
     console.log('[SpellCheckerBot] 🤖 Rechtschreib-Assistent deaktiviert');
   }
 }
