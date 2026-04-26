@@ -46,6 +46,7 @@ let provider = null;
 let currentPageId = null;
 let saveCallback = null;
 let saveTimeout = null;
+let autoSaveTimer = null;
 let turndownInstance = null;
 let spellCheckerBot = null;
 
@@ -386,20 +387,34 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
       }
     },
     onUpdate: ({ editor: ed }) => {
-      clearTimeout(saveTimeout);
-      saveTimeout = setTimeout(() => {
-        if (saveCallback && currentPageId) {
-          const html = ed.getHTML();
-          let markdown = getTurndown().turndown(html);
-          if (markdown.length > 100000) {
-            markdown = markdown.substring(0, 100000);
-            console.warn('[Insel-Wiki] Saved content exceeded 100,000 characters and was truncated.');
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        if (saveCallback && currentPageId && provider) {
+          // Check if no one else is looking at the page (size <= 1 means only me)
+          if (provider.awareness.getStates().size <= 1) {
+            console.log('[Insel-Wiki] Page idle for 2 minutes & no one else looking. Auto-saving Markdown...');
+            const html = ed.getHTML();
+            let markdown = getTurndown().turndown(html);
+            if (markdown.length > 100000) {
+              markdown = markdown.substring(0, 100000);
+              console.warn('[Insel-Wiki] Saved content exceeded 100,000 characters and was truncated.');
+            }
+            saveCallback(currentPageId, markdown);
           }
-          saveCallback(currentPageId, markdown);
         }
-      }, 1500);
+      }, 120000); // 2 minutes
     }
   });
+
+  if (provider) {
+    // If someone leaves, and we are the last one, start the 2 minute timer
+    provider.awareness.on('change', () => {
+      if (provider.awareness.getStates().size <= 1 && editor) {
+        // Trigger a fake update to reset the timer
+        editor.view.dispatch(editor.state.tr);
+      }
+    });
+  }
 
   function getSelectionBoundingRect() {
     const { view, state } = editor;
@@ -704,6 +719,7 @@ export function setEditable(editable) {
 
 export function destroyEditor() {
   clearTimeout(saveTimeout);
+  clearTimeout(autoSaveTimer);
   if (spellCheckerBot) {
     spellCheckerBot.destroy();
     spellCheckerBot = null;
