@@ -49,6 +49,7 @@ let saveTimeout = null;
 let autoSaveTimer = null;
 let turndownInstance = null;
 let spellCheckerBot = null;
+let isMarkdownDirty = false;
 
 function getTurndown() {
   if (!turndownInstance) {
@@ -89,7 +90,11 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
   destroyEditor();
 
   currentPageId = pageId;
-  saveCallback = onSave;
+  saveCallback = (id, md) => {
+    isMarkdownDirty = false;
+    onSave(id, md);
+  };
+  isMarkdownDirty = false;
 
   // Create Yjs document
   ydoc = new Y.Doc();
@@ -387,6 +392,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
       }
     },
     onUpdate: ({ editor: ed }) => {
+      isMarkdownDirty = true;
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(() => {
         if (saveCallback && currentPageId && provider) {
@@ -720,6 +726,18 @@ export function setEditable(editable) {
 export function destroyEditor() {
   clearTimeout(saveTimeout);
   clearTimeout(autoSaveTimer);
+
+  // Auto-save when leaving the page if we are the last person and have unsaved changes
+  if (isMarkdownDirty && provider && provider.awareness.getStates().size <= 1 && saveCallback && currentPageId && editor) {
+    console.log('[Insel-Wiki] Auto-saving Markdown on page leave (last person).');
+    const html = editor.getHTML();
+    let markdown = getTurndown().turndown(html);
+    if (markdown.length > 100000) markdown = markdown.substring(0, 100000);
+    saveCallback(currentPageId, markdown);
+  }
+
+  isMarkdownDirty = false;
+
   if (spellCheckerBot) {
     spellCheckerBot.destroy();
     spellCheckerBot = null;
