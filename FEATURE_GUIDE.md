@@ -2,30 +2,32 @@
 
 This document explains how you can request new features for the Insel-Wiki. Our **DevOps-Bot** handles the analysis and preparation for you.
 
-## How to request a feature:
+## How to request a feature
 
-1. **Create a subpage:**
-   Create a new subpage directly in this folder (**New Features**).
-   
-2. **Title & Description:**
-   - The **Title** of the page is your request (e.g. *"Color-coded task lists"*).
-   - In the **Content** briefly describe what the feature should do.
+1. **Create a subpage** directly inside the **New Features** folder.
+2. **Title & description:**
+   - The **title** of the page is your request (e.g. *"Color-coded task lists"*).
+   - In the **content**, briefly describe what the feature should do.
+3. **Save.** A few seconds later the bot adds a welcome block and a checkbox:
+   ```
+   - [ ] Start Analysis
+   ```
 
-3. **Wait for analysis:**
-   As soon as you save the page, text from the bot will appear after a few seconds. It sets the status to `analyzing` and then to `proposed`.
+## Approval & implementation
 
-## Approval & Implementation:
+The bot drives the workflow through **checkboxes**, not by editing status text. Only check a box when you want the bot to act.
 
-The bot writes a technical plan for you on the page. If you agree with it:
+1. **Start the analysis:** open the page, tick the **"Start Analysis"** checkbox, save.
+   The bot creates an `Analysis:` subpage and writes a technical plan there.
+2. **Approve the plan:** open the `Analysis:` subpage. At the bottom you'll see:
+   ```
+   - [ ] Approval: Start implementation now
+   - [ ] Restart analysis
+   ```
+   Tick **"Approval: Start implementation now"** and save.
+3. **Watch it run:** the bot creates an `Implementation:` subpage, executes the plan on the server, and streams the log live onto the page. When it shows `Status: completed`, you're done.
 
-1. Click on **Edit**.
-2. Find the line `Status: proposed`.
-3. Manually change the word `proposed` to **`approved`**.
-   *(Important: The word must remain bolded so the bot recognizes it!)*
-4. **Save.**
-
-## What happens then?
-The bot immediately recognizes your approval. It switches to `executing`, executes the necessary commands on the server (tests, build, Git commit), and writes the result to a log directly on your page. At the end, it will say `Status: completed`.
+> 🔒 Only administrators can trigger the implementation step. For everyone else the approval checkbox is a no-op.
 
 ---
 *💡 Tip: You can follow the progress live in the wiki while the bot is working.*

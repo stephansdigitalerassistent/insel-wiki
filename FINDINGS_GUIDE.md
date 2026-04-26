@@ -2,31 +2,32 @@
 
 This document explains how you can directly report and have bugs or findings fixed in the Insel-Wiki.
 
-## Report a bug:
+## Report a bug
 
-1. **Create a subpage:**
-   Create a new subpage directly in this folder (**Findings**).
-   
+1. **Create a subpage** directly inside the **Findings** folder.
 2. **Describe the problem:**
-   - The **Title** of the page is the bug (e.g. *"Login button is invisible in Dark Mode"*).
-   - In the **Content** you can write more details or insert an error message.
+   - The **title** is the bug (e.g. *"Login button is invisible in Dark Mode"*).
+   - In the **content**, write more details or paste an error message.
+3. **Save.** A few seconds later the bot adds a checkbox:
+   ```
+   - [ ] Start Analysis
+   ```
 
-3. **Bot Analysis:**
-   After saving, the bot changes to `investigating`. It scans the code and writes a proposed solution (`proposal`) directly onto the page.
+## Have the bug fixed
 
-## Have the bug fixed:
+The bot is driven by **checkboxes**, not by editing status text. Only check a box when you want the bot to act.
 
-1. **Give approval:**
-   The bot has set the status to `proposed`.
-2. **Open Editor:**
-   Click on **Edit**.
-3. **Change status:**
-   Manually change the word `proposed` in the text to **`approved`**.
-   *(Make sure to leave the word in bold!)*
-4. **Save.**
+1. **Start the analysis:** open the page, tick **"Start Analysis"**, save.
+   The bot creates an `Analysis:` subpage with a proposed fix.
+2. **Approve the fix:** open the `Analysis:` subpage. At the bottom:
+   ```
+   - [ ] Approval: Start implementation now
+   - [ ] Restart analysis
+   ```
+   Tick **"Approval: Start implementation now"** and save.
+3. **Watch it run:** the bot creates an `Implementation:` subpage, applies the fix on the server, and streams the log live. When it shows `Status: completed`, the bug is resolved.
 
-## What happens after approval?
-The bot switches to `fixing`. It writes the corrected code directly to the corresponding files on the server. As soon as it says `Status: fixed` there, the bug has been successfully resolved.
+> 🔒 Only administrators can trigger the implementation step. For everyone else the approval checkbox is a no-op.
 
 ---
-*💡 Tip: Check briefly afterwards on insel-wiki.web.app to see if the error is gone.*
+*💡 Tip: After completion, check briefly on insel-wiki.web.app to confirm the bug is gone.*
