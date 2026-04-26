@@ -1,15 +1,19 @@
 import { extractTasksFromContent } from '../utils/tasks.js';
 import { subscribeToPages } from '../firebase/firestore.js';
+import { onAuthChange } from '../firebase/auth.js';
 
 let unsubscribe = null;
 
 export function initDashboard(appEl, navigateTo) {
   console.log('[Insel-Wiki] Dashboard initialized');
 
-  // Start real-time subscription for the dashboard
-  if (unsubscribe) unsubscribe();
-  unsubscribe = subscribeToPages((pages) => {
-    renderDashboard(pages, navigateTo);
+  onAuthChange((user) => {
+    if (unsubscribe) unsubscribe();
+    if (user) {
+      unsubscribe = subscribeToPages((pages) => {
+        renderDashboard(pages, navigateTo);
+      });
+    }
   });
 }
 

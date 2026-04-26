@@ -39,8 +39,9 @@ service cloud.firestore {
         && request.auth.token.email.matches('.*@insel[.]ch$')
         && (!('lastSavedBy' in request.resource.data)
             || request.resource.data.lastSavedBy == request.auth.token.email);
-      allow delete: if request.auth != null &&
-        (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' ||
+      allow delete: if request.auth != null && 
+        (request.auth.token.email.matches('.*@insel[.]ch$') ||
+         request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' ||
          request.auth.token.email == 'stephansdigitalassistent@gmail.com');
       
       match /history/{historyId} {

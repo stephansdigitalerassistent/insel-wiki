@@ -16,6 +16,7 @@ import { TableHeader } from '@tiptap/extension-table-header';
 import { CodeBlock } from '@tiptap/extension-code-block';
 import { CharacterCount } from '@tiptap/extension-character-count';
 import { Comment } from './Comment.js';
+import { DateNode } from './DateNode.js';
 import { Mention } from '@tiptap/extension-mention';
 import { mergeAttributes } from '@tiptap/core';
 import suggestion from './suggestions.js';
@@ -60,6 +61,16 @@ function getTurndown() {
       replacement: function (content, node) {
         const checked = node.getAttribute('data-checked') === 'true';
         return (checked ? '- [x] ' : '- [ ] ') + content.trim() + '\n';
+      }
+    });
+
+    // Support for DateNode (serializes exactly to ISO format)
+    turndownInstance.addRule('dateNode', {
+      filter: function (node) {
+        return node.nodeName === 'SPAN' && node.getAttribute('data-type') === 'date';
+      },
+      replacement: function (content, node) {
+        return node.innerHTML;
       }
     });
   }
@@ -130,6 +141,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
     }),
     CodeBlock,
     Comment,
+    DateNode,
     Mention.extend({
       renderText({ node }) {
         return `@${node.attrs.label ?? node.attrs.id}`;
@@ -425,6 +437,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
         case 'h1': chain.toggleHeading({ level: 1 }).run(); break;
         case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
         case 'bulletList': chain.toggleBulletList().run(); break;
+        case 'date': chain.insertContent({ type: 'dateNode' }).run(); break;
         case 'link': {
           if (editor.isActive('link')) {
             editor.chain().focus().extendMarkRange('link').run();
@@ -626,6 +639,38 @@ export function setContent(markdown) {
       const isChecked = p1.includes('checked') || p2.includes('checked');
       return `<li data-type="taskItem" data-checked="${isChecked}">${text}</li>`;
     });
+
+    // Safely post-process HTML for DateNode using DOM traversal
+    if (typeof window !== 'undefined' && window.DOMParser) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, null, false);
+      const nodesToReplace = [];
+      let n;
+      while ((n = walker.nextNode())) {
+        if (n.parentNode && (n.parentNode.tagName === 'CODE' || n.parentNode.tagName === 'PRE' || n.parentNode.tagName === 'A')) continue;
+        if (/\b\d{4}-\d{2}-\d{2}\b/.test(n.nodeValue)) {
+          nodesToReplace.push(n);
+        }
+      }
+      nodesToReplace.forEach(textNode => {
+        const frag = document.createDocumentFragment();
+        const parts = textNode.nodeValue.split(/(\b\d{4}-\d{2}-\d{2}\b)/);
+        parts.forEach(part => {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(part)) {
+            const span = document.createElement('span');
+            span.setAttribute('data-type', 'date');
+            span.setAttribute('data-date', part);
+            span.textContent = part;
+            frag.appendChild(span);
+          } else if (part) {
+            frag.appendChild(document.createTextNode(part));
+          }
+        });
+        textNode.parentNode.replaceChild(frag, textNode);
+      });
+      html = doc.body.innerHTML;
+    }
   }
 
   editor.commands.setContent(html, true);
@@ -717,6 +762,7 @@ export function createFormatToolbar(container) {
       case 'blockquote': chain.toggleBlockquote().run(); break;
       case 'codeBlock': chain.toggleCodeBlock().run(); break;
       case 'horizontalRule': chain.setHorizontalRule().run(); break;
+      case 'date': chain.insertContent({ type: 'dateNode' }).run(); break;
       case 'link': {
         if (editor.isActive('link')) {
           editor.chain().focus().extendMarkRange('link').run();

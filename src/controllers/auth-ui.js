@@ -99,6 +99,8 @@ export function initAuthUI(callbacks = {}) {
 export function handleAuthChange(user, { setEditable, formatToolbar, pageTitleInput }) {
   if (user) {
     authOverlay.classList.add('hidden');
+    const appLayout = document.getElementById('app');
+    if (appLayout) appLayout.style.display = '';
     if (userInfoEl) {
       const name = user.displayName || formatDefaultName(user.email);
       let innerHTML = '';
