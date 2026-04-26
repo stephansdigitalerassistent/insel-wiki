@@ -163,6 +163,9 @@ export function initAuth() {
           currentUser = null;
         } else {
           currentUser = user;
+          // Load spell check preference on session restore (critical for page refresh!)
+          spellCheckEnabled = userSnap.data().spellCheckEnabled === true;
+          console.log('[Auth] Session restored. spellCheckEnabled:', spellCheckEnabled);
         }
       } else {
         currentUser = null;

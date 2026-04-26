@@ -625,9 +625,12 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
   provider.init();
 
   // Initialize spell checker bot if enabled for this user
-  if (isSpellCheckEnabled()) {
+  const spellCheckOn = isSpellCheckEnabled();
+  console.log('[Insel-Wiki] SpellCheck enabled:', spellCheckOn, '| API key present:', !!import.meta.env.VITE_GEMINI_API_KEY);
+  if (spellCheckOn) {
     spellCheckerBot = new SpellCheckerBot(editor, provider);
     spellCheckerBot.start();
+    console.log('[Insel-Wiki] SpellCheckerBot instantiated and started');
   }
 
   return editor;

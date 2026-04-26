@@ -11,7 +11,7 @@ import { db } from '../firebase/config.js';
 import { doc, setDoc, deleteDoc, serverTimestamp, Bytes } from 'firebase/firestore';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 // Characters that signal "the previous word is finished"
@@ -106,17 +106,17 @@ export class SpellCheckerBot {
     if (!transaction.docChanged) return;
 
     // Use the mapped selection position after the transaction to find what was just typed.
-    // This is more reliable than parsing internal step structures.
     const { selection } = this.editor.state;
     const cursorPos = selection.from;
 
-    // Read the character just before the cursor
     if (cursorPos < 2) return;
 
     const charBefore = this.editor.state.doc.textBetween(cursorPos - 1, cursorPos);
 
     // Only proceed if a word separator was just typed
     if (!WORD_SEPARATORS.has(charBefore)) return;
+
+    console.log(`[SpellCheckerBot] 🔍 Word separator detected: "${charBefore}" at pos ${cursorPos}`);
 
     // Extract and queue the word before the separator
     this._extractAndQueueWord(cursorPos - 1);
@@ -147,7 +147,13 @@ export class SpellCheckerBot {
 
     // Clean the word: strip trailing punctuation
     const cleanWord = rawWord.replace(/[.,!?:;)"'»\]}/]+$/, '');
-    if (!this._shouldCheck(cleanWord)) return;
+
+    console.log(`[SpellCheckerBot] 📝 Extracted word: "${cleanWord}" (raw: "${rawWord}")`);
+
+    if (!this._shouldCheck(cleanWord)) {
+      console.log(`[SpellCheckerBot] ⏭️ Skipped: "${cleanWord}" (failed shouldCheck)`);
+      return;
+    }
 
     // Calculate absolute document positions of the word
     const parentStart = $pos.start(); // absolute start of the parent node's content
@@ -162,6 +168,7 @@ export class SpellCheckerBot {
 
     // Debounce: wait a bit to let rapid typing settle
     clearTimeout(this.debounceTimer);
+    console.log(`[SpellCheckerBot] ⏳ Queued for correction: "${cleanWord}" at [${absoluteStart}:${absoluteEnd}]`);
     this.debounceTimer = setTimeout(() => {
       this._correctWord(cleanWord, absoluteStart, absoluteEnd, posKey);
     }, DEBOUNCE_MS);
@@ -197,6 +204,8 @@ export class SpellCheckerBot {
   async _correctWord(word, startPos, endPos, posKey) {
     if (this.isDestroyed) return;
 
+    console.log(`[SpellCheckerBot] 🌐 Calling Gemini for: "${word}"`);
+
     try {
       const corrected = await this._callGemini(word);
       if (this.isDestroyed) return;
@@ -204,8 +213,13 @@ export class SpellCheckerBot {
       // Clean the response (Gemini might add quotes or whitespace)
       const cleanCorrected = corrected.trim().replace(/^["'«»`]+|["'«»`]+$/g, '').trim();
 
+      console.log(`[SpellCheckerBot] 🤖 Gemini response: "${word}" → "${cleanCorrected}"`);
+
       // Only apply if actually different
-      if (!cleanCorrected || cleanCorrected === word) return;
+      if (!cleanCorrected || cleanCorrected === word) {
+        console.log(`[SpellCheckerBot] ✓ Word is correct, no change needed`);
+        return;
+      }
 
       // Verify the word at this position hasn't changed while we waited for the API
       const { state } = this.editor;
