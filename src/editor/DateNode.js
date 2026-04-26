@@ -92,6 +92,13 @@ export const DateNode = Node.create({
           return { date: match[1] };
         },
       }),
+      nodeInputRule({
+        find: /(?<=\s|^)\/\/$/,
+        type: this.type,
+        getAttributes: () => {
+          return { date: new Date().toISOString().split('T')[0] };
+        },
+      }),
     ];
   },
 
