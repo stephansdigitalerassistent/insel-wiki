@@ -2,7 +2,7 @@
 // Thin orchestrator that wires together all controllers and components.
 
 import { initAuth, onAuthChange, canEdit } from './firebase/auth.js';
-import { setEditable } from './editor/editor.js';
+import { setEditable, getProvider } from './editor/editor.js';
 import { slugify } from './utils/string.js';
 import { initSidebar } from './components/sidebar.js';
 import { initComments } from './components/comments.js';
@@ -28,7 +28,27 @@ function closeSidebarOnMobile() {
 }
 
 // --- Routing ---
+let isRevertingHash = false;
+let previousHash = window.location.hash;
+
 function handleRoute() {
+  if (isRevertingHash) {
+    isRevertingHash = false;
+    previousHash = window.location.hash;
+    return;
+  }
+
+  const provider = getProvider();
+  if (provider && provider.hasUnsavedChanges) {
+    if (!window.confirm('Es gibt noch ungespeicherte Änderungen (Synchronisation läuft). Möchten Sie die Seite wirklich verlassen?')) {
+      isRevertingHash = true;
+      window.location.hash = previousHash;
+      return;
+    }
+  }
+
+  previousHash = window.location.hash;
+
   const hash = window.location.hash.replace('#/', '').replace('#', '');
   console.log('[Insel-Wiki] Routing to hash:', window.location.hash, 'parsed pageId:', hash.split('/')[0]);
   if (hash) {
@@ -129,6 +149,15 @@ async function init() {
   window.addEventListener('online', updateOnlineStatus);
   window.addEventListener('offline', updateOnlineStatus);
   updateOnlineStatus();
+
+  // Prevent closing tab if unsaved changes exist
+  window.addEventListener('beforeunload', (e) => {
+    const provider = getProvider();
+    if (provider && provider.hasUnsavedChanges) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 }
 
 // --- Go! ---

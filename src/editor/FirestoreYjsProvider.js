@@ -49,6 +49,11 @@ export class FirestoreYjsProvider {
     this.hasYjsState = false;
     this.localUpdateCount = 0;
     this.compactionThreshold = 50;
+    this.pendingWrites = 0;
+  }
+
+  get hasUnsavedChanges() {
+    return this.pendingWrites > 0;
   }
 
   setLoadCallback(callback) {
@@ -126,11 +131,14 @@ export class FirestoreYjsProvider {
     // 3. Sync New Document Updates (Live)
     this.ydoc.on('update', (update, origin) => {
       if (origin !== this) {
+        this.pendingWrites++;
         addDoc(this.updatesRef, {
           update: Bytes.fromUint8Array(update),
           timestamp: serverTimestamp(),
           clientId: this.clientId
-        }).catch(() => {});
+        }).catch(() => {}).finally(() => {
+          this.pendingWrites--;
+        });
 
         // Check if we should trigger background compaction
         this.localUpdateCount++;
