@@ -1,5 +1,5 @@
 // Auth UI Controller — login, registration, and auth overlay management
-import { login, register, logout, getCurrentUser, onAuthChange, canEdit, getAccessRequestLink, updateUserProfile } from '../firebase/auth.js';
+import { login, register, logout, getCurrentUser, onAuthChange, canEdit, getAccessRequestLink, updateUserProfile, isSpellCheckEnabled, setSpellCheckEnabled } from '../firebase/auth.js';
 import { formatDefaultName } from '../utils/string.js';
 import { showToast } from '../components/toast.js';
 import { uploadAvatar } from '../firebase/storage.js';
@@ -9,7 +9,7 @@ let authOverlay, loginForm, loginEmailInput, loginPasswordInput, loginError, log
 let registerForm, registerEmailInput, registerPasswordInput, registerBtn, registerError;
 let showRegisterBtn, showLoginBtn;
 let profileModal, profileNameInput, profileAvatarFile, avatarPreviewContainer, avatarPreviewImg;
-let profileSaveBtn, profileCancelBtn;
+let profileSaveBtn, profileCancelBtn, profileSpellcheck;
 let userInfoEl, requestAccessLink;
 
 let selectedAvatarFile = null;
@@ -44,6 +44,7 @@ export function initAuthUI(callbacks = {}) {
   avatarPreviewImg = document.getElementById('avatar-preview-img');
   profileSaveBtn = document.getElementById('profile-save-btn');
   profileCancelBtn = document.getElementById('profile-cancel-btn');
+  profileSpellcheck = document.getElementById('profile-spellcheck');
 
   // Setup mailto link
   if (requestAccessLink) {
@@ -226,6 +227,10 @@ function openProfileModal() {
   } else {
     avatarPreviewContainer.style.display = 'none';
   }
+  // Load spell check preference
+  if (profileSpellcheck) {
+    profileSpellcheck.checked = isSpellCheckEnabled();
+  }
   profileModal.classList.remove('hidden');
 }
 
@@ -250,7 +255,8 @@ async function handleProfileSave() {
     }
     
     profileSaveBtn.textContent = 'Profil wird aktualisiert...';
-    const updatedUser = await updateUserProfile(newName, newAvatarUrl);
+    const spellCheck = profileSpellcheck ? profileSpellcheck.checked : undefined;
+    const updatedUser = await updateUserProfile(newName, newAvatarUrl, spellCheck);
     closeProfileModal();
     showToast('Profil aktualisiert!', 'success');
     

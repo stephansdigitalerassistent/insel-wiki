@@ -18,6 +18,7 @@ const WIKI_ADMIN_EMAIL = 'stephansdigitalassistent@gmail.com';
 const ALLOWED_DOMAIN = 'insel.ch';
 
 let currentUser = null;
+let spellCheckEnabled = false;
 const authListeners = [];
 
 /**
@@ -55,6 +56,20 @@ export function isLoggedIn() {
 export function canEdit() {
   if (!currentUser || !currentUser.email) return false;
   return currentUser.email.endsWith('@' + ALLOWED_DOMAIN);
+}
+
+/**
+ * Check if spell check is enabled for the current user
+ */
+export function isSpellCheckEnabled() {
+  return spellCheckEnabled;
+}
+
+/**
+ * Set spell check preference (local cache — must be persisted via updateUserProfile)
+ */
+export function setSpellCheckEnabled(enabled) {
+  spellCheckEnabled = enabled;
 }
 
 /**
@@ -104,6 +119,9 @@ export async function login(email, password) {
     await signOut(auth); // Log out immediately if not active
     throw new Error('Account ist noch nicht aktiviert. Bitte senden Sie die Aktivierungs-E-Mail ab.');
   }
+
+  // Cache spell check preference
+  spellCheckEnabled = userSnap.data().spellCheckEnabled === true;
 
   return userCredential;
 }
@@ -159,19 +177,27 @@ export function initAuth() {
 /**
  * Update user profile details (Name, Photo URL)
  */
-export async function updateUserProfile(displayName, photoURL) {
+export async function updateUserProfile(displayName, photoURL, spellCheck) {
   if (!currentUser) throw new Error('Nicht angemeldet.');
   
   await updateProfile(currentUser, { displayName, photoURL });
   
   // Sync with Firestore users collection for mentions/search
   const userRef = doc(db, 'users', currentUser.uid);
-  await setDoc(userRef, {
+  const updateData = {
     displayName,
     photoURL,
     email: currentUser.email,
     updatedAt: serverTimestamp()
-  }, { merge: true });
+  };
+  
+  // Only write spellCheckEnabled if explicitly provided
+  if (spellCheck !== undefined) {
+    updateData.spellCheckEnabled = spellCheck;
+    spellCheckEnabled = spellCheck;
+  }
+  
+  await setDoc(userRef, updateData, { merge: true });
 
   // Firebase Auth does not trigger onAuthStateChanged after updateProfile.
   // We use the updated User object from the SDK to keep all methods (getIdToken, etc.) intact.

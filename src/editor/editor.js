@@ -37,6 +37,8 @@ import { promptModal, linkModal } from '../components/modal.js';
 import { getAllPages } from '../components/sidebar.js';
 import { navigateTo } from '../controllers/page.js';
 import { uploadImageFile } from '../firebase/storage.js';
+import { isSpellCheckEnabled } from '../firebase/auth.js';
+import { SpellCheckerBot } from './SpellCheckerBot.js';
 
 let editor = null;
 let ydoc = null;
@@ -45,6 +47,7 @@ let currentPageId = null;
 let saveCallback = null;
 let saveTimeout = null;
 let turndownInstance = null;
+let spellCheckerBot = null;
 
 function getTurndown() {
   if (!turndownInstance) {
@@ -620,6 +623,13 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
   });
 
   provider.init();
+
+  // Initialize spell checker bot if enabled for this user
+  if (isSpellCheckEnabled()) {
+    spellCheckerBot = new SpellCheckerBot(editor, provider);
+    spellCheckerBot.start();
+  }
+
   return editor;
 }
 
@@ -694,6 +704,10 @@ export function setEditable(editable) {
 
 export function destroyEditor() {
   clearTimeout(saveTimeout);
+  if (spellCheckerBot) {
+    spellCheckerBot.destroy();
+    spellCheckerBot = null;
+  }
   if (editor) {
     editor.destroy();
     editor = null;

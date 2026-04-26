@@ -22,6 +22,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: "485637054444"
           VITE_FIREBASE_APP_ID: "1:485637054444:web:b11ab31e2f31b0fb136ac9"
           VITE_FIREBASE_MEASUREMENT_ID: "G-MYMGER7S1R"
+          VITE_GEMINI_API_KEY: "${{ secrets.VITE_GEMINI_API_KEY }}"
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
