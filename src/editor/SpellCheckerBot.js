@@ -116,8 +116,6 @@ export class SpellCheckerBot {
     // Only proceed if a word separator was just typed
     if (!WORD_SEPARATORS.has(charBefore)) return;
 
-    console.log(`[SpellCheckerBot] 🔍 Word separator detected: "${charBefore}" at pos ${cursorPos}`);
-
     // Extract and queue the word before the separator
     this._extractAndQueueWord(cursorPos - 1);
   }
@@ -148,12 +146,7 @@ export class SpellCheckerBot {
     // Clean the word: strip trailing punctuation
     const cleanWord = rawWord.replace(/[.,!?:;)"'»\]}/]+$/, '');
 
-    console.log(`[SpellCheckerBot] 📝 Extracted word: "${cleanWord}" (raw: "${rawWord}")`);
-
-    if (!this._shouldCheck(cleanWord)) {
-      console.log(`[SpellCheckerBot] ⏭️ Skipped: "${cleanWord}" (failed shouldCheck)`);
-      return;
-    }
+    if (!this._shouldCheck(cleanWord)) return;
 
     // Calculate absolute document positions of the word
     const parentStart = $pos.start(); // absolute start of the parent node's content
@@ -168,7 +161,6 @@ export class SpellCheckerBot {
 
     // Debounce: wait a bit to let rapid typing settle
     clearTimeout(this.debounceTimer);
-    console.log(`[SpellCheckerBot] ⏳ Queued for correction: "${cleanWord}" at [${absoluteStart}:${absoluteEnd}]`);
     this.debounceTimer = setTimeout(() => {
       this._correctWord(cleanWord, absoluteStart, absoluteEnd, posKey);
     }, DEBOUNCE_MS);
@@ -204,8 +196,6 @@ export class SpellCheckerBot {
   async _correctWord(word, startPos, endPos, posKey) {
     if (this.isDestroyed) return;
 
-    console.log(`[SpellCheckerBot] 🌐 Calling Gemini for: "${word}"`);
-
     try {
       const corrected = await this._callGemini(word);
       if (this.isDestroyed) return;
@@ -213,13 +203,8 @@ export class SpellCheckerBot {
       // Clean the response (Gemini might add quotes or whitespace)
       const cleanCorrected = corrected.trim().replace(/^["'«»`]+|["'«»`]+$/g, '').trim();
 
-      console.log(`[SpellCheckerBot] 🤖 Gemini response: "${word}" → "${cleanCorrected}"`);
-
       // Only apply if actually different
-      if (!cleanCorrected || cleanCorrected === word) {
-        console.log(`[SpellCheckerBot] ✓ Word is correct, no change needed`);
-        return;
-      }
+      if (!cleanCorrected || cleanCorrected === word) return;
 
       // Verify the word at this position hasn't changed while we waited for the API
       const { state } = this.editor;
