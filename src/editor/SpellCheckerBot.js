@@ -30,6 +30,7 @@ Häufige Fehlermuster die du korrigieren sollst:
 Regeln:
 - Gib NUR das korrigierte Wort zurück, nichts anderes
 - Wenn das Wort korrekt ist, gib es exakt unverändert zurück
+- Verwende Schweizer Hochdeutsch: KEIN ß, immer ss (z.B. "Strasse" nicht "Straße")
 - Behalte die originale Gross-/Kleinschreibung bei
 - Ändere KEINE Fachbegriffe, Abkürzungen, Eigennamen oder medizinische Termini
 - Das Wort kann Deutsch oder Englisch sein
