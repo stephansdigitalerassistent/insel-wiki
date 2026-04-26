@@ -23,7 +23,7 @@ const BOT_COLOR = '#10b981'; // Emerald green
 const SYSTEM_PROMPT = `Fix dyslexia typos (transpositions, omissions, duplicates, b/d/p/q/ei/ie swaps) for the Target word using Context.
 Output ONLY corrected Target word. No punctuation, quotes, or explanation.
 If correct, output as is.
-Keep original case.
+Keep original case unless you are very sure it needs changing (use carefully).
 Keep German umlauts (ä,ö,ü). Do NOT replace with ae/oe/ue.
 Use Swiss German (replace 'ß' with 'ss').
 Ignore medical terms, acronyms, names.
