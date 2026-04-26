@@ -1261,7 +1261,7 @@ html, body {
 }
 
 .toggle-text {
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: column; gap: 4px; flex: 1; text-align: left;
 }
 
 .toggle-title {
