@@ -20,8 +20,8 @@ const BOT_NAME = '🤖 Rechtschreib-Assistent';
 const BOT_COLOR = '#10b981'; // Emerald green
 
 // System prompt for Gemini — optimized for token efficiency & dyslexia corrections
-const SYSTEM_PROMPT = `Fix dyslexia typos (transpositions, omissions, duplicates, b/d/p/q/ei/ie swaps).
-Output ONLY corrected word. No punctuation, quotes, or explanation.
+const SYSTEM_PROMPT = `Fix dyslexia typos (transpositions, omissions, duplicates, b/d/p/q/ei/ie swaps) for the Target word using Context.
+Output ONLY corrected Target word. No punctuation, quotes, or explanation.
 If correct, output as is.
 Keep original case.
 Keep German umlauts (ä,ö,ü). Do NOT replace with ae/oe/ue.
@@ -110,6 +110,12 @@ export class SpellCheckerBot {
     const absoluteStart = parentStart + wordStartInParent;
     const absoluteEnd = absoluteStart + cleanWord.length;
 
+    // Get context (up to 10 words before and after)
+    const contextBeforeRaw = doc.textBetween(Math.max(0, absoluteStart - 200), absoluteStart, ' ', '\ufffc');
+    const contextAfterRaw = doc.textBetween(absoluteEnd, Math.min(doc.content.size, absoluteEnd + 200), ' ', '\ufffc');
+    const contextBefore = contextBeforeRaw.trim().split(/\s+/).slice(-10).join(' ');
+    const contextAfter = contextAfterRaw.trim().split(/\s+/).slice(0, 10).join(' ');
+
     // Skip if we recently corrected this exact word at this position
     const posKey = `${absoluteStart}:${cleanWord}`;
     if (this.recentlyCorrected.has(posKey)) return;
@@ -117,7 +123,7 @@ export class SpellCheckerBot {
     // Debounce: wait a bit to let rapid typing settle
     clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
-      this._correctWord(cleanWord, absoluteStart, absoluteEnd, posKey);
+      this._correctWord(cleanWord, absoluteStart, absoluteEnd, posKey, contextBefore, contextAfter);
     }, DEBOUNCE_MS);
   }
 
@@ -148,11 +154,11 @@ export class SpellCheckerBot {
   /**
    * Send a word to Gemini for correction and apply the result
    */
-  async _correctWord(word, startPos, endPos, posKey) {
+  async _correctWord(word, startPos, endPos, posKey, contextBefore, contextAfter) {
     if (this.isDestroyed) return;
 
     try {
-      const corrected = await this._callGemini(word);
+      const corrected = await this._callGemini(word, contextBefore, contextAfter);
       if (this.isDestroyed) return;
 
       // Clean the response (Gemini might add quotes or whitespace)
@@ -199,7 +205,9 @@ export class SpellCheckerBot {
   /**
    * Call Gemini 3.1 Flash Lite API for word correction
    */
-  async _callGemini(word) {
+  async _callGemini(word, contextBefore, contextAfter) {
+    const promptText = `Target: ${word}\nContext before: ${contextBefore}\nContext after: ${contextAfter}`;
+
     const response = await fetch(GEMINI_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -208,7 +216,7 @@ export class SpellCheckerBot {
           parts: [{ text: SYSTEM_PROMPT }]
         },
         contents: [{
-          parts: [{ text: word }]
+          parts: [{ text: promptText }]
         }],
         generationConfig: {
           temperature: 0,
