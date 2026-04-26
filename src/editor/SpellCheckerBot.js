@@ -19,22 +19,14 @@ const DEBOUNCE_MS = 500;
 const BOT_NAME = '🤖 Rechtschreib-Assistent';
 const BOT_COLOR = '#10b981'; // Emerald green
 
-// System prompt for Gemini — optimized for dyslexia-specific corrections
-const SYSTEM_PROMPT = `Du bist ein Rechtschreibassistent, spezialisiert auf Legasthenie-typische Fehler.
-Häufige Fehlermuster die du korrigieren sollst:
-- Buchstabenvertauschungen (z.B. "Pateint" → "Patient", "Brto" → "Brot")
-- Buchstabenauslassungen (z.B. "Patint" → "Patient")
-- Buchstabenverdopplungen (z.B. "Pattient" → "Patient")
-- Buchstabenverwechslungen (b/d, p/q, ei/ie, z.B. "Artzt" → "Arzt")
-
-Regeln:
-- Gib NUR das korrigierte Wort zurück, nichts anderes
-- Wenn das Wort korrekt ist, gib es exakt unverändert zurück
-- Verwende Schweizer Hochdeutsch: KEIN ß, immer ss (z.B. "Strasse" nicht "Straße")
-- Behalte die originale Gross-/Kleinschreibung bei
-- Ändere KEINE Fachbegriffe, Abkürzungen, Eigennamen oder medizinische Termini
-- Das Wort kann Deutsch oder Englisch sein
-- Gib KEIN Satzzeichen, Anführungszeichen oder zusätzlichen Text zurück`;
+// System prompt for Gemini — optimized for token efficiency & dyslexia corrections
+const SYSTEM_PROMPT = `Fix dyslexia typos (transpositions, omissions, duplicates, b/d/p/q/ei/ie swaps).
+Output ONLY corrected word. No punctuation, quotes, or explanation.
+If correct, output as is.
+Keep original case.
+Use Swiss German (replace 'ß' with 'ss').
+Ignore medical terms, acronyms, names.
+Lang: DE/EN.`;
 
 export class SpellCheckerBot {
   constructor(editor, provider) {
