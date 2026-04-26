@@ -39,3 +39,9 @@ Based on **Tiptap**, extended with medically relevant functions:
 
 - **WikiBot (`wiki-registration-bot.js`)**: An autonomous Node.js service that validates email-based registration tokens, creates accounts, and initializes the employee directory in Firestore.
 - **Firestore Rules**: Granular access control ensuring that only verified `@insel.ch` users have write access.
+
+## 6. Repository & Maintenance
+
+### **Branching Strategy**
+- **`main`**: The primary and default branch on GitHub. Contains the current production-ready code, including architectural fixes and the latest Tiptap integration parity.
+- **`master`**: Retired. This branch has been removed from the primary `origin` repository. A legacy version remains only on older forks for historical reference.
