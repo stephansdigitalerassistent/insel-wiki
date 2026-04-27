@@ -395,7 +395,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
       isMarkdownDirty = true;
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(() => {
-        if (saveCallback && currentPageId && provider) {
+        if (saveCallback && currentPageId && provider && provider.awareness) {
           // Check if no one else is looking at the page (size <= 1 means only me)
           if (provider.awareness.getStates().size <= 1) {
             console.log('[Insel-Wiki] Page idle for 2 minutes & no one else looking. Auto-saving Markdown...');
@@ -415,7 +415,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
   if (provider) {
     // If someone leaves, and we are the last one, start the 2 minute timer
     provider.awareness.on('change', () => {
-      if (provider.awareness.getStates().size <= 1 && editor) {
+      if (provider && provider.awareness && provider.awareness.getStates().size <= 1 && editor) {
         // Trigger a fake update to reset the timer
         editor.view.dispatch(editor.state.tr);
       }
@@ -728,7 +728,7 @@ export function destroyEditor() {
   clearTimeout(autoSaveTimer);
 
   // Auto-save when leaving the page if we are the last person and have unsaved changes
-  if (isMarkdownDirty && provider && provider.awareness.getStates().size <= 1 && saveCallback && currentPageId && editor) {
+  if (isMarkdownDirty && provider && provider.awareness && provider.awareness.getStates().size <= 1 && saveCallback && currentPageId && editor) {
     console.log('[Insel-Wiki] Auto-saving Markdown on page leave (last person).');
     const html = editor.getHTML();
     let markdown = getTurndown().turndown(html);

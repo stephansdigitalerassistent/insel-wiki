@@ -142,7 +142,7 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await ensureSidebarClosed(page);
     const editor = page.locator('.tiptap');
     await editor.focus();
-    await page.keyboard.type(`[ ] ${taskText}`);
+    await page.keyboard.type(`- [ ] ${taskText}`);
     await page.keyboard.press('Enter');
     await page.keyboard.press('Control+S');
     await page.waitForTimeout(6000); // give yjs and firestore time to sync
