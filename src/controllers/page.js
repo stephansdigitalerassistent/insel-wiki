@@ -156,10 +156,12 @@ export async function loadPage(pageId) {
   // Show loading state immediately to improve perceived speed
   currentPageId = pageId;
   setActivePage(pageId);
-  pageTitleInput.value = ''; // Clear title during load
   editorContainer.classList.remove('hidden');
   emptyState.classList.add('hidden');
+  // destroyEditor's last-person auto-save reads pageTitleInput.value for the
+  // outgoing page's title, so it must run BEFORE the title is cleared.
   destroyEditor();
+  pageTitleInput.value = ''; // Clear title during load
   editorEl.innerHTML = ''; // Clear editor immediately
   
   // Clean up any old static preview
