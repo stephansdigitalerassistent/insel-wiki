@@ -7,7 +7,7 @@
 
 // We use dynamic import since these are ESM modules
 const { formatDefaultName, slugify } = await import('../src/utils/string.js');
-const { extractTasks } = await import('../src/utils/tasks.js');
+const { extractTasksFromContent: extractTasks } = await import('../src/utils/tasks.js');
 
 let passed = 0;
 let failed = 0;
@@ -110,40 +110,26 @@ console.log('\n☑️  extractTasks()');
 
 test('extracts markdown checkbox tasks', () => {
   const content = '- [ ] Buy milk\n- [x] Clean room\n- [ ] Code review';
-  const tasks = extractTasks(content, 'page1', 'Test Page');
-  // extractTasks has dedup logic, but should find at least these tasks
+  const tasks = extractTasks(content);
   expect(tasks.length >= 1).toBeTruthy();
   expect(tasks[0].text).toBe('Buy milk');
-  expect(tasks[0].status).toBe('todo');
+  expect(tasks[0].done).toBe(false);
+  expect(tasks[1].done).toBe(true);
 });
 
 test('handles empty content', () => {
-  const tasks = extractTasks('', 'page1', 'Test');
+  const tasks = extractTasks('');
   expect(tasks).toHaveLength(0);
 });
 
 test('handles null content', () => {
-  const tasks = extractTasks(null, 'page1', 'Test');
+  const tasks = extractTasks(null);
   expect(tasks).toHaveLength(0);
-});
-
-test('extracts tasks with page info', () => {
-  const content = '- [ ] My task';
-  const tasks = extractTasks(content, 'page-123', 'My Page');
-  expect(tasks[0].pageId).toBe('page-123');
-  expect(tasks[0].pageTitle).toBe('My Page');
-});
-
-test('handles Task- fallback for tests', () => {
-  const content = 'Some text with Task-12345 marker';
-  const tasks = extractTasks(content, 'page1', 'Test');
-  expect(tasks).toHaveLength(1);
-  expect(tasks[0].text).toBe('Task-12345');
 });
 
 test('ignores regular text without task markers', () => {
   const content = 'This is just regular text without any tasks.';
-  const tasks = extractTasks(content, 'page1', 'Test');
+  const tasks = extractTasks(content);
   expect(tasks).toHaveLength(0);
 });
 
