@@ -313,7 +313,7 @@ export async function loadPage(pageId) {
 
   historySnapshotInterval = setInterval(() => snapshotCurrentPage(), SNAPSHOT_INTERVAL_MS);
 
-  const handleUnload = () => { snapshotCurrentPage(); leavePage(); };
+  const handleUnload = () => { debouncedUpdateTitle.flush(); snapshotCurrentPage(); leavePage(); };
   window.removeEventListener('beforeunload', handleUnload);
   window.addEventListener('beforeunload', handleUnload);
 
