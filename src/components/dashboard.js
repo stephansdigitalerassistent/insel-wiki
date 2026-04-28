@@ -1,6 +1,7 @@
 import { extractTasksFromContent } from '../utils/tasks.js';
 import { subscribeToPages } from '../firebase/firestore.js';
-import { onAuthChange } from '../firebase/auth.js';
+import { onAuthChange, canEdit } from '../firebase/auth.js';
+import { toggleTask } from '../utils/yjs-sync.js';
 
 let unsubscribe = null;
 
@@ -46,9 +47,9 @@ export function renderDashboard(pages, navigateTo) {
       <div class="dashboard-content">
         ${allTasks.length > 0 
           ? allTasks.map(task => `
-              <div class="task-card ${task.done ? 'completed' : ''}" data-page-id="${task.pageId}">
-                <div class="task-status-icon">
-                  ${task.done ? '✅' : '⏳'}
+              <div class="task-card ${task.done ? 'completed' : ''}" data-page-id="${task.pageId}" data-task-index="${task.index}">
+                <div class="task-status-icon clickable-status">
+                  ${task.done ? '✅' : '⬜'}
                 </div>
                 <div class="task-body">
                   <div class="task-text">${task.text}</div>
@@ -88,10 +89,26 @@ export function renderDashboard(pages, navigateTo) {
     });
   }
 
-  // Navigate to page on task click
+  // Task interaction
   overlay.querySelectorAll('.task-card').forEach(card => {
+    const statusIcon = card.querySelector('.clickable-status');
+    const pageId = card.dataset.pageId;
+    const taskIndex = parseInt(card.dataset.taskIndex, 10);
+
+    if (statusIcon && canEdit()) {
+      statusIcon.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        statusIcon.innerHTML = '⏳'; // Loading indicator
+        try {
+          await toggleTask(pageId, taskIndex);
+        } catch (err) {
+          console.error('[Insel-Wiki] Error toggling task:', err);
+          statusIcon.innerHTML = card.classList.contains('completed') ? '✅' : '⬜';
+        }
+      });
+    }
+
     card.addEventListener('click', () => {
-      const pageId = card.dataset.pageId;
       overlay.classList.add('hidden');
       if (navigateTo) navigateTo(pageId);
     });
