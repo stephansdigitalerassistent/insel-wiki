@@ -1,8 +1,13 @@
 import { extractTasksFromContent } from '../utils/tasks.js';
 import { subscribeToPages } from '../firebase/firestore.js';
-import { onAuthChange } from '../firebase/auth.js';
+import { onAuthChange, canEdit, getCurrentUser } from '../firebase/auth.js';
+import { toggleTask } from '../utils/yjs-sync.js';
 
 let unsubscribe = null;
+let lastPages = [];
+let lastNavigateTo = null;
+let currentFilter = 'all'; // 'all' or 'my'
+let currentStatus = 'all'; // 'all', 'open', 'done'
 
 export function initDashboard(appEl, navigateTo) {
   console.log('[Insel-Wiki] Dashboard initialized');
@@ -18,6 +23,9 @@ export function initDashboard(appEl, navigateTo) {
 }
 
 export function renderDashboard(pages, navigateTo) {
+  lastPages = pages || lastPages;
+  lastNavigateTo = navigateTo || lastNavigateTo;
+
   let overlay = document.getElementById('dashboard-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -26,10 +34,27 @@ export function renderDashboard(pages, navigateTo) {
     document.body.appendChild(overlay);
   }
 
-  const allTasks = pages.flatMap(page => {
+  const allTasks = lastPages.flatMap(page => {
     const tasks = extractTasksFromContent(page.content || '');
     return tasks.map(t => ({ ...t, pageTitle: page.title, pageId: page.id }));
   });
+
+  const user = getCurrentUser();
+  const myName = user ? user.displayName : null;
+
+  let filteredTasks = allTasks;
+
+  // Apply Filter: My Tasks
+  if (currentFilter === 'my' && myName) {
+    filteredTasks = filteredTasks.filter(t => t.text.includes(`@${myName}`));
+  }
+
+  // Apply Filter: Status
+  if (currentStatus === 'open') {
+    filteredTasks = filteredTasks.filter(t => !t.done);
+  } else if (currentStatus === 'done') {
+    filteredTasks = filteredTasks.filter(t => t.done);
+  }
 
   overlay.innerHTML = `
     <div class="dashboard-card">
@@ -42,13 +67,28 @@ export function renderDashboard(pages, navigateTo) {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
+
+      <div class="dashboard-filters">
+        <div class="filter-group">
+          <button class="filter-btn ${currentFilter === 'all' ? 'active' : ''}" data-filter="all">Alle</button>
+          <button class="filter-btn ${currentFilter === 'my' ? 'active' : ''}" data-filter="my">Meine Aufgaben</button>
+        </div>
+        <div class="filter-group" style="margin-left: auto;">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Status:</span>
+          <select id="status-filter-select" class="filter-select">
+            <option value="all" ${currentStatus === 'all' ? 'selected' : ''}>Alle</option>
+            <option value="open" ${currentStatus === 'open' ? 'selected' : ''}>Offen</option>
+            <option value="done" ${currentStatus === 'done' ? 'selected' : ''}>Erledigt</option>
+          </select>
+        </div>
+      </div>
       
       <div class="dashboard-content">
-        ${allTasks.length > 0 
-          ? allTasks.map(task => `
-              <div class="task-card ${task.done ? 'completed' : ''}" data-page-id="${task.pageId}">
-                <div class="task-status-icon">
-                  ${task.done ? '✅' : '⏳'}
+        ${filteredTasks.length > 0 
+          ? filteredTasks.map(task => `
+              <div class="task-card ${task.done ? 'completed' : ''}" data-page-id="${task.pageId}" data-task-index="${task.index}">
+                <div class="task-status-icon clickable-status">
+                  ${task.done ? '✅' : '⬜'}
                 </div>
                 <div class="task-body">
                   <div class="task-text">${task.text}</div>
@@ -61,7 +101,7 @@ export function renderDashboard(pages, navigateTo) {
             `).join('')
           : `
             <div class="empty-hint">
-              <p>Keine Aufgaben in diesem Wiki gefunden.</p>
+              <p>Keine Aufgaben gefunden.</p>
             </div>
           `
         }
@@ -88,10 +128,42 @@ export function renderDashboard(pages, navigateTo) {
     });
   }
 
-  // Navigate to page on task click
+  // Filter Events
+  overlay.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentFilter = btn.dataset.filter;
+      renderDashboard();
+    });
+  });
+
+  const statusSelect = document.getElementById('status-filter-select');
+  if (statusSelect) {
+    statusSelect.addEventListener('change', (e) => {
+      currentStatus = e.target.value;
+      renderDashboard();
+    });
+  }
+
+  // Task interaction
   overlay.querySelectorAll('.task-card').forEach(card => {
+    const statusIcon = card.querySelector('.clickable-status');
+    const pageId = card.dataset.pageId;
+    const taskIndex = parseInt(card.dataset.taskIndex, 10);
+
+    if (statusIcon && canEdit()) {
+      statusIcon.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        statusIcon.innerHTML = '⏳'; // Loading indicator
+        try {
+          await toggleTask(pageId, taskIndex);
+        } catch (err) {
+          console.error('[Insel-Wiki] Error toggling task:', err);
+          statusIcon.innerHTML = card.classList.contains('completed') ? '✅' : '⬜';
+        }
+      });
+    }
+
     card.addEventListener('click', () => {
-      const pageId = card.dataset.pageId;
       overlay.classList.add('hidden');
       if (navigateTo) navigateTo(pageId);
     });

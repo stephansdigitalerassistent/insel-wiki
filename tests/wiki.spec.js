@@ -152,7 +152,7 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.waitForTimeout(500);
     await page.click('#open-dashboard-btn');
     await expect(page.locator('.dashboard-overlay')).toBeVisible();
-    
+
     // Wait for the task to appear, retrying if necessary
     await expect(async () => {
       // Re-open dashboard if it closed or tasks are still rendering

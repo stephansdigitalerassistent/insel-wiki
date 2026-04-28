@@ -12,15 +12,17 @@ export function extractTasksFromContent(content) {
   if (taskCache.has(cacheKey)) return taskCache.get(cacheKey);
 
   const tasks = [];
-  // Globaler Regex für GFM Task Listen
-  const taskRegex = /^- \[( |x|X)\] (.*)$/gm;
+  // Globaler Regex für GFM Task Listen, jetzt auch mit Einrückung
+  const taskRegex = /^(\s*)- \[( |x|X)\] (.*)$/gm;
 
   let match;
+  let index = 0;
   while ((match = taskRegex.exec(content)) !== null) {
     tasks.push({
-      done: match[1].toLowerCase() === 'x',
-      text: match[2].trim(),
-      raw: match[0]
+      done: match[2].toLowerCase() === 'x',
+      text: match[3].trim(),
+      raw: match[0],
+      index: index++
     });
   }
 

@@ -111,10 +111,23 @@ console.log('\n☑️  extractTasks()');
 test('extracts markdown checkbox tasks', () => {
   const content = '- [ ] Buy milk\n- [x] Clean room\n- [ ] Code review';
   const tasks = extractTasks(content);
-  expect(tasks.length >= 1).toBeTruthy();
+  expect(tasks.length).toBe(3);
   expect(tasks[0].text).toBe('Buy milk');
   expect(tasks[0].done).toBe(false);
+  expect(tasks[0].index).toBe(0);
   expect(tasks[1].done).toBe(true);
+  expect(tasks[1].index).toBe(1);
+});
+
+test('handles indented tasks', () => {
+  const content = '- [ ] Parent\n  - [x] Child\n    - [ ] Grandchild';
+  const tasks = extractTasks(content);
+  expect(tasks.length).toBe(3);
+  expect(tasks[1].text).toBe('Child');
+  expect(tasks[1].done).toBe(true);
+  expect(tasks[1].index).toBe(1);
+  expect(tasks[2].text).toBe('Grandchild');
+  expect(tasks[2].index).toBe(2);
 });
 
 test('handles empty content', () => {
