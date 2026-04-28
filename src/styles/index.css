@@ -28,6 +28,7 @@
   /* Brand Colors (WCAG AA Compliant > 4.5:1 on dark bg) */
   --insel-blue: #5ba6f5;
   --insel-green: #3db88c;
+  --healthcare-blue: #00549F;
   
   /* Accent — Warm Teal (harmonises with Burnham green) */
   --accent: var(--insel-green);
@@ -1189,7 +1190,50 @@ html, body {
 }
 
 .dashboard-filters {
-  padding: 16px 32px; display: flex; gap: 8px; border-bottom: 1px solid var(--border);
+  padding: 16px 32px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border);
+}
+
+.filter-group {
+  display: flex; align-items: center; gap: 8px;
+}
+
+.filter-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filter-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.filter-btn.active {
+  background: var(--healthcare-blue);
+  color: white;
+  border-color: var(--healthcare-blue);
+  box-shadow: 0 2px 8px rgba(0, 84, 159, 0.3);
+}
+
+.filter-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.filter-select:focus {
+  border-color: var(--healthcare-blue);
 }
 
 .dashboard-content {
