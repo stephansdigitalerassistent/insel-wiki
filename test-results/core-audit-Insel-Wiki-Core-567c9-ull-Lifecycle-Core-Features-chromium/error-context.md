@@ -1,0 +1,512 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img [ref=e6]
+          - generic [ref=e9]: Insel-Wiki
+        - generic [ref=e10]:
+          - button "Tastenkombinationen" [ref=e11] [cursor=pointer]:
+            - img [ref=e12]
+          - button "Neue Seite" [ref=e14] [cursor=pointer]:
+            - img [ref=e15]
+      - textbox "Suchen…" [ref=e17]
+      - navigation:
+        - generic [ref=e18]: Noch keine Seiten
+      - generic [ref=e19]:
+        - generic [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e24]: Papierkorb
+          - img [ref=e25]
+        - generic [ref=e27]:
+          - generic [ref=e28]:
+            - generic [ref=e29]: E2E-Top-1777478601545
+            - generic [ref=e30]:
+              - button "Wiederherstellen" [ref=e31] [cursor=pointer]:
+                - img [ref=e32]
+              - button "Endgültig löschen" [ref=e35] [cursor=pointer]:
+                - img [ref=e36]
+          - generic [ref=e39]:
+            - generic [ref=e40]: TEST-Robust-1777478601639
+            - generic [ref=e41]:
+              - button "Wiederherstellen" [ref=e42] [cursor=pointer]:
+                - img [ref=e43]
+              - button "Endgültig löschen" [ref=e46] [cursor=pointer]:
+                - img [ref=e47]
+          - generic [ref=e50]:
+            - generic [ref=e51]: TEST-Robust-1777478539729
+            - generic [ref=e52]:
+              - button "Wiederherstellen" [ref=e53] [cursor=pointer]:
+                - img [ref=e54]
+              - button "Endgültig löschen" [ref=e57] [cursor=pointer]:
+                - img [ref=e58]
+          - generic [ref=e61]:
+            - generic [ref=e62]: E2E-Top-1777478506960
+            - generic [ref=e63]:
+              - button "Wiederherstellen" [ref=e64] [cursor=pointer]:
+                - img [ref=e65]
+              - button "Endgültig löschen" [ref=e68] [cursor=pointer]:
+                - img [ref=e69]
+          - generic [ref=e72]:
+            - generic [ref=e73]: E2E-Top-1777478479431
+            - generic [ref=e74]:
+              - button "Wiederherstellen" [ref=e75] [cursor=pointer]:
+                - img [ref=e76]
+              - button "Endgültig löschen" [ref=e79] [cursor=pointer]:
+                - img [ref=e80]
+          - generic [ref=e83]:
+            - generic [ref=e84]: TEST-Robust-1777478479996
+            - generic [ref=e85]:
+              - button "Wiederherstellen" [ref=e86] [cursor=pointer]:
+                - img [ref=e87]
+              - button "Endgültig löschen" [ref=e90] [cursor=pointer]:
+                - img [ref=e91]
+          - generic [ref=e94]:
+            - generic [ref=e95]: TEST-Robust-1777478288505
+            - generic [ref=e96]:
+              - button "Wiederherstellen" [ref=e97] [cursor=pointer]:
+                - img [ref=e98]
+              - button "Endgültig löschen" [ref=e101] [cursor=pointer]:
+                - img [ref=e102]
+          - generic [ref=e105]:
+            - generic [ref=e106]: E2E-Top-1777478257873
+            - generic [ref=e107]:
+              - button "Wiederherstellen" [ref=e108] [cursor=pointer]:
+                - img [ref=e109]
+              - button "Endgültig löschen" [ref=e112] [cursor=pointer]:
+                - img [ref=e113]
+          - generic [ref=e116]:
+            - generic [ref=e117]: E2E-Top-1777478229839
+            - generic [ref=e118]:
+              - button "Wiederherstellen" [ref=e119] [cursor=pointer]:
+                - img [ref=e120]
+              - button "Endgültig löschen" [ref=e123] [cursor=pointer]:
+                - img [ref=e124]
+          - generic [ref=e127]:
+            - generic [ref=e128]: TEST-Robust-1777478230368
+            - generic [ref=e129]:
+              - button "Wiederherstellen" [ref=e130] [cursor=pointer]:
+                - img [ref=e131]
+              - button "Endgültig löschen" [ref=e134] [cursor=pointer]:
+                - img [ref=e135]
+          - generic [ref=e138]:
+            - generic [ref=e139]: TEST-Robust-1777478118094
+            - generic [ref=e140]:
+              - button "Wiederherstellen" [ref=e141] [cursor=pointer]:
+                - img [ref=e142]
+              - button "Endgültig löschen" [ref=e145] [cursor=pointer]:
+                - img [ref=e146]
+          - generic [ref=e149]:
+            - generic [ref=e150]: E2E-Top-1777478087325
+            - generic [ref=e151]:
+              - button "Wiederherstellen" [ref=e152] [cursor=pointer]:
+                - img [ref=e153]
+              - button "Endgültig löschen" [ref=e156] [cursor=pointer]:
+                - img [ref=e157]
+          - generic [ref=e160]:
+            - generic [ref=e161]: E2E-Top-1777478059709
+            - generic [ref=e162]:
+              - button "Wiederherstellen" [ref=e163] [cursor=pointer]:
+                - img [ref=e164]
+              - button "Endgültig löschen" [ref=e167] [cursor=pointer]:
+                - img [ref=e168]
+          - generic [ref=e171]:
+            - generic [ref=e172]: TEST-Robust-1777478060215
+            - generic [ref=e173]:
+              - button "Wiederherstellen" [ref=e174] [cursor=pointer]:
+                - img [ref=e175]
+              - button "Endgültig löschen" [ref=e178] [cursor=pointer]:
+                - img [ref=e179]
+          - generic [ref=e182]:
+            - generic [ref=e183]: TEST-Robust-1777477898989
+            - generic [ref=e184]:
+              - button "Wiederherstellen" [ref=e185] [cursor=pointer]:
+                - img [ref=e186]
+              - button "Endgültig löschen" [ref=e189] [cursor=pointer]:
+                - img [ref=e190]
+          - generic [ref=e193]:
+            - generic [ref=e194]: E2E-Top-1777477867208
+            - generic [ref=e195]:
+              - button "Wiederherstellen" [ref=e196] [cursor=pointer]:
+                - img [ref=e197]
+              - button "Endgültig löschen" [ref=e200] [cursor=pointer]:
+                - img [ref=e201]
+          - generic [ref=e204]:
+            - generic [ref=e205]: E2E-Top-1777477839982
+            - generic [ref=e206]:
+              - button "Wiederherstellen" [ref=e207] [cursor=pointer]:
+                - img [ref=e208]
+              - button "Endgültig löschen" [ref=e211] [cursor=pointer]:
+                - img [ref=e212]
+          - generic [ref=e215]:
+            - generic [ref=e216]: TEST-Robust-1777477841244
+            - generic [ref=e217]:
+              - button "Wiederherstellen" [ref=e218] [cursor=pointer]:
+                - img [ref=e219]
+              - button "Endgültig löschen" [ref=e222] [cursor=pointer]:
+                - img [ref=e223]
+          - generic [ref=e226]:
+            - generic [ref=e227]: TEST-Robust-1777477724422
+            - generic [ref=e228]:
+              - button "Wiederherstellen" [ref=e229] [cursor=pointer]:
+                - img [ref=e230]
+              - button "Endgültig löschen" [ref=e233] [cursor=pointer]:
+                - img [ref=e234]
+          - generic [ref=e237]:
+            - generic [ref=e238]: E2E-Top-1777477693926
+            - generic [ref=e239]:
+              - button "Wiederherstellen" [ref=e240] [cursor=pointer]:
+                - img [ref=e241]
+              - button "Endgültig löschen" [ref=e244] [cursor=pointer]:
+                - img [ref=e245]
+          - generic [ref=e248]:
+            - generic [ref=e249]: E2E-Top-1777477665450
+            - generic [ref=e250]:
+              - button "Wiederherstellen" [ref=e251] [cursor=pointer]:
+                - img [ref=e252]
+              - button "Endgültig löschen" [ref=e255] [cursor=pointer]:
+                - img [ref=e256]
+          - generic [ref=e259]:
+            - generic [ref=e260]: TEST-Robust-1777477666689
+            - generic [ref=e261]:
+              - button "Wiederherstellen" [ref=e262] [cursor=pointer]:
+                - img [ref=e263]
+              - button "Endgültig löschen" [ref=e266] [cursor=pointer]:
+                - img [ref=e267]
+          - generic [ref=e270]:
+            - generic [ref=e271]: TEST-Robust-1777477589811
+            - generic [ref=e272]:
+              - button "Wiederherstellen" [ref=e273] [cursor=pointer]:
+                - img [ref=e274]
+              - button "Endgültig löschen" [ref=e277] [cursor=pointer]:
+                - img [ref=e278]
+          - generic [ref=e281]:
+            - generic [ref=e282]: E2E-Top-1777477558584
+            - generic [ref=e283]:
+              - button "Wiederherstellen" [ref=e284] [cursor=pointer]:
+                - img [ref=e285]
+              - button "Endgültig löschen" [ref=e288] [cursor=pointer]:
+                - img [ref=e289]
+          - generic [ref=e292]:
+            - generic [ref=e293]: E2E-Top-1777477531509
+            - generic [ref=e294]:
+              - button "Wiederherstellen" [ref=e295] [cursor=pointer]:
+                - img [ref=e296]
+              - button "Endgültig löschen" [ref=e299] [cursor=pointer]:
+                - img [ref=e300]
+          - generic [ref=e303]:
+            - generic [ref=e304]: TEST-Robust-1777477530690
+            - generic [ref=e305]:
+              - button "Wiederherstellen" [ref=e306] [cursor=pointer]:
+                - img [ref=e307]
+              - button "Endgültig löschen" [ref=e310] [cursor=pointer]:
+                - img [ref=e311]
+          - generic [ref=e314]:
+            - generic [ref=e315]: E2E-Top-1777402912925
+            - generic [ref=e316]:
+              - button "Wiederherstellen" [ref=e317] [cursor=pointer]:
+                - img [ref=e318]
+              - button "Endgültig löschen" [ref=e321] [cursor=pointer]:
+                - img [ref=e322]
+          - generic [ref=e325]:
+            - generic [ref=e326]: E2E-Top-1777402912808
+            - generic [ref=e327]:
+              - button "Wiederherstellen" [ref=e328] [cursor=pointer]:
+                - img [ref=e329]
+              - button "Endgültig löschen" [ref=e332] [cursor=pointer]:
+                - img [ref=e333]
+          - generic [ref=e336]:
+            - generic [ref=e337]: E2E-Top-1777402841438
+            - generic [ref=e338]:
+              - button "Wiederherstellen" [ref=e339] [cursor=pointer]:
+                - img [ref=e340]
+              - button "Endgültig löschen" [ref=e343] [cursor=pointer]:
+                - img [ref=e344]
+          - generic [ref=e347]:
+            - generic [ref=e348]: E2E-Top-1777402841224
+            - generic [ref=e349]:
+              - button "Wiederherstellen" [ref=e350] [cursor=pointer]:
+                - img [ref=e351]
+              - button "Endgültig löschen" [ref=e354] [cursor=pointer]:
+                - img [ref=e355]
+          - generic [ref=e358]:
+            - generic [ref=e359]: TEST-Robust-1777398503450
+            - generic [ref=e360]:
+              - button "Wiederherstellen" [ref=e361] [cursor=pointer]:
+                - img [ref=e362]
+              - button "Endgültig löschen" [ref=e365] [cursor=pointer]:
+                - img [ref=e366]
+          - generic [ref=e369]:
+            - generic [ref=e370]: TEST-Robust-1777398495091
+            - generic [ref=e371]:
+              - button "Wiederherstellen" [ref=e372] [cursor=pointer]:
+                - img [ref=e373]
+              - button "Endgültig löschen" [ref=e376] [cursor=pointer]:
+                - img [ref=e377]
+          - generic [ref=e380]:
+            - generic [ref=e381]: TEST-Robust-1777398416645
+            - generic [ref=e382]:
+              - button "Wiederherstellen" [ref=e383] [cursor=pointer]:
+                - img [ref=e384]
+              - button "Endgültig löschen" [ref=e387] [cursor=pointer]:
+                - img [ref=e388]
+          - generic [ref=e391]:
+            - generic [ref=e392]: TEST-Robust-1777398408358
+            - generic [ref=e393]:
+              - button "Wiederherstellen" [ref=e394] [cursor=pointer]:
+                - img [ref=e395]
+              - button "Endgültig löschen" [ref=e398] [cursor=pointer]:
+                - img [ref=e399]
+          - generic [ref=e402]:
+            - generic [ref=e403]: TEST-Robust-1777397236644
+            - generic [ref=e404]:
+              - button "Wiederherstellen" [ref=e405] [cursor=pointer]:
+                - img [ref=e406]
+              - button "Endgültig löschen" [ref=e409] [cursor=pointer]:
+                - img [ref=e410]
+          - generic [ref=e413]:
+            - generic [ref=e414]: TEST-Robust-1777396476897
+            - generic [ref=e415]:
+              - button "Wiederherstellen" [ref=e416] [cursor=pointer]:
+                - img [ref=e417]
+              - button "Endgültig löschen" [ref=e420] [cursor=pointer]:
+                - img [ref=e421]
+          - generic [ref=e424]:
+            - generic [ref=e425]: TEST-TaskPage-1777274137318
+            - generic [ref=e426]:
+              - button "Wiederherstellen" [ref=e427] [cursor=pointer]:
+                - img [ref=e428]
+              - button "Endgültig löschen" [ref=e431] [cursor=pointer]:
+                - img [ref=e432]
+          - generic [ref=e435]:
+            - generic [ref=e436]: TEST-Robust-1777272688774
+            - generic [ref=e437]:
+              - button "Wiederherstellen" [ref=e438] [cursor=pointer]:
+                - img [ref=e439]
+              - button "Endgültig löschen" [ref=e442] [cursor=pointer]:
+                - img [ref=e443]
+          - generic [ref=e446]:
+            - generic [ref=e447]: TEST-Robust-1777272626276
+            - generic [ref=e448]:
+              - button "Wiederherstellen" [ref=e449] [cursor=pointer]:
+                - img [ref=e450]
+              - button "Endgültig löschen" [ref=e453] [cursor=pointer]:
+                - img [ref=e454]
+          - generic [ref=e457]:
+            - generic [ref=e458]: TEST-Robust-1777271908655
+            - generic [ref=e459]:
+              - button "Wiederherstellen" [ref=e460] [cursor=pointer]:
+                - img [ref=e461]
+              - button "Endgültig löschen" [ref=e464] [cursor=pointer]:
+                - img [ref=e465]
+          - generic [ref=e468]:
+            - generic [ref=e469]: TEST-Robust-1777271899675
+            - generic [ref=e470]:
+              - button "Wiederherstellen" [ref=e471] [cursor=pointer]:
+                - img [ref=e472]
+              - button "Endgültig löschen" [ref=e475] [cursor=pointer]:
+                - img [ref=e476]
+          - generic [ref=e479]:
+            - generic [ref=e480]: TEST-Robust-1777271611565
+            - generic [ref=e481]:
+              - button "Wiederherstellen" [ref=e482] [cursor=pointer]:
+                - img [ref=e483]
+              - button "Endgültig löschen" [ref=e486] [cursor=pointer]:
+                - img [ref=e487]
+          - generic [ref=e490]:
+            - generic [ref=e491]: TEST-Robust-1777271602045
+            - generic [ref=e492]:
+              - button "Wiederherstellen" [ref=e493] [cursor=pointer]:
+                - img [ref=e494]
+              - button "Endgültig löschen" [ref=e497] [cursor=pointer]:
+                - img [ref=e498]
+          - generic [ref=e501]:
+            - generic [ref=e502]: TEST-Robust-1777271080343
+            - generic [ref=e503]:
+              - button "Wiederherstellen" [ref=e504] [cursor=pointer]:
+                - img [ref=e505]
+              - button "Endgültig löschen" [ref=e508] [cursor=pointer]:
+                - img [ref=e509]
+          - generic [ref=e512]:
+            - generic [ref=e513]: TEST-Robust-1777271070981
+            - generic [ref=e514]:
+              - button "Wiederherstellen" [ref=e515] [cursor=pointer]:
+                - img [ref=e516]
+              - button "Endgültig löschen" [ref=e519] [cursor=pointer]:
+                - img [ref=e520]
+          - generic [ref=e523]:
+            - generic [ref=e524]: Password ändern
+            - generic [ref=e525]:
+              - button "Wiederherstellen" [ref=e526] [cursor=pointer]:
+                - img [ref=e527]
+              - button "Endgültig löschen" [ref=e530] [cursor=pointer]:
+                - img [ref=e531]
+          - generic [ref=e534]:
+            - generic [ref=e535]: TEST-TaskPage-1777223891080
+            - generic [ref=e536]:
+              - button "Wiederherstellen" [ref=e537] [cursor=pointer]:
+                - img [ref=e538]
+              - button "Endgültig löschen" [ref=e541] [cursor=pointer]:
+                - img [ref=e542]
+          - generic [ref=e545]:
+            - generic [ref=e546]: TEST-Robust-1777223895388
+            - generic [ref=e547]:
+              - button "Wiederherstellen" [ref=e548] [cursor=pointer]:
+                - img [ref=e549]
+              - button "Endgültig löschen" [ref=e552] [cursor=pointer]:
+                - img [ref=e553]
+          - generic [ref=e556]:
+            - generic [ref=e557]: TEST-Robust-1777223886931
+            - generic [ref=e558]:
+              - button "Wiederherstellen" [ref=e559] [cursor=pointer]:
+                - img [ref=e560]
+              - button "Endgültig löschen" [ref=e563] [cursor=pointer]:
+                - img [ref=e564]
+          - generic [ref=e567]:
+            - generic [ref=e568]: TEST-Trash-1777223750489
+            - generic [ref=e569]:
+              - button "Wiederherstellen" [ref=e570] [cursor=pointer]:
+                - img [ref=e571]
+              - button "Endgültig löschen" [ref=e574] [cursor=pointer]:
+                - img [ref=e575]
+          - generic [ref=e578]:
+            - generic [ref=e579]: TEST-TaskPage-1777223741917
+            - generic [ref=e580]:
+              - button "Wiederherstellen" [ref=e581] [cursor=pointer]:
+                - img [ref=e582]
+              - button "Endgültig löschen" [ref=e585] [cursor=pointer]:
+                - img [ref=e586]
+          - generic [ref=e589]:
+            - generic [ref=e590]: TEST-Robust-1777223746134
+            - generic [ref=e591]:
+              - button "Wiederherstellen" [ref=e592] [cursor=pointer]:
+                - img [ref=e593]
+              - button "Endgültig löschen" [ref=e596] [cursor=pointer]:
+                - img [ref=e597]
+          - generic [ref=e600]:
+            - generic [ref=e601]: TEST-Trash-1777223738075
+            - generic [ref=e602]:
+              - button "Wiederherstellen" [ref=e603] [cursor=pointer]:
+                - img [ref=e604]
+              - button "Endgültig löschen" [ref=e607] [cursor=pointer]:
+                - img [ref=e608]
+          - generic [ref=e611]:
+            - generic [ref=e612]: TEST-Robust-1777223737750
+            - generic [ref=e613]:
+              - button "Wiederherstellen" [ref=e614] [cursor=pointer]:
+                - img [ref=e615]
+              - button "Endgültig löschen" [ref=e618] [cursor=pointer]:
+                - img [ref=e619]
+          - generic [ref=e622]:
+            - generic [ref=e623]: TEST-Trash-1777223645466
+            - generic [ref=e624]:
+              - button "Wiederherstellen" [ref=e625] [cursor=pointer]:
+                - img [ref=e626]
+              - button "Endgültig löschen" [ref=e629] [cursor=pointer]:
+                - img [ref=e630]
+          - generic [ref=e633]:
+            - generic [ref=e634]: TEST-Robust-1777223641339
+            - generic [ref=e635]:
+              - button "Wiederherstellen" [ref=e636] [cursor=pointer]:
+                - img [ref=e637]
+              - button "Endgültig löschen" [ref=e640] [cursor=pointer]:
+                - img [ref=e641]
+          - generic [ref=e644]:
+            - generic [ref=e645]: TEST-Robust-1777223633069
+            - generic [ref=e646]:
+              - button "Wiederherstellen" [ref=e647] [cursor=pointer]:
+                - img [ref=e648]
+              - button "Endgültig löschen" [ref=e651] [cursor=pointer]:
+                - img [ref=e652]
+          - generic [ref=e655]:
+            - generic [ref=e656]: TEST-Trash-1777223633116
+            - generic [ref=e657]:
+              - button "Wiederherstellen" [ref=e658] [cursor=pointer]:
+                - img [ref=e659]
+              - button "Endgültig löschen" [ref=e662] [cursor=pointer]:
+                - img [ref=e663]
+          - generic [ref=e666]:
+            - generic [ref=e667]: TEST-Trash-1777223324460
+            - generic [ref=e668]:
+              - button "Wiederherstellen" [ref=e669] [cursor=pointer]:
+                - img [ref=e670]
+              - button "Endgültig löschen" [ref=e673] [cursor=pointer]:
+                - img [ref=e674]
+          - generic [ref=e677]:
+            - generic [ref=e678]: TEST-Robust-1777223320056
+            - generic [ref=e679]:
+              - button "Wiederherstellen" [ref=e680] [cursor=pointer]:
+                - img [ref=e681]
+              - button "Endgültig löschen" [ref=e684] [cursor=pointer]:
+                - img [ref=e685]
+          - generic [ref=e688]:
+            - generic [ref=e689]: TEST-Trash-1777223312303
+            - generic [ref=e690]:
+              - button "Wiederherstellen" [ref=e691] [cursor=pointer]:
+                - img [ref=e692]
+              - button "Endgültig löschen" [ref=e695] [cursor=pointer]:
+                - img [ref=e696]
+          - generic [ref=e699]:
+            - generic [ref=e700]: TEST-Robust-1777223312349
+            - generic [ref=e701]:
+              - button "Wiederherstellen" [ref=e702] [cursor=pointer]:
+                - img [ref=e703]
+              - button "Endgültig löschen" [ref=e706] [cursor=pointer]:
+                - img [ref=e707]
+          - generic [ref=e710]:
+            - generic [ref=e711]: Neue Seite
+            - generic [ref=e712]:
+              - button "Wiederherstellen" [ref=e713] [cursor=pointer]:
+                - img [ref=e714]
+              - button "Endgültig löschen" [ref=e717] [cursor=pointer]:
+                - img [ref=e718]
+          - generic [ref=e721]:
+            - generic [ref=e722]: Neue SeiteImplementierung der Passwort-Änderungsfunktion in Profil und mit registration, analog zur aktuellen implementation.
+            - generic [ref=e723]:
+              - button "Wiederherstellen" [ref=e724] [cursor=pointer]:
+                - img [ref=e725]
+              - button "Endgültig löschen" [ref=e728] [cursor=pointer]:
+                - img [ref=e729]
+      - generic [ref=e732]:
+        - generic "Profil bearbeiten" [ref=e733] [cursor=pointer]:
+          - generic [ref=e734]: U
+          - generic [ref=e735]: User-64
+        - button "📋" [ref=e736] [cursor=pointer]
+        - button "Abmelden" [ref=e737] [cursor=pointer]:
+          - img [ref=e738]
+    - main [ref=e741]:
+      - generic [ref=e743]:
+        - button "Verlauf" [ref=e744] [cursor=pointer]:
+          - img [ref=e745]
+        - button "Seite löschen" [ref=e748] [cursor=pointer]:
+          - img [ref=e749]
+        - button "Seite drucken" [ref=e751] [cursor=pointer]:
+          - img [ref=e752]
+        - button "Internen Link kopieren" [ref=e756] [cursor=pointer]:
+          - img [ref=e757]
+        - button "Neue Seite…" [ref=e760] [cursor=pointer]:
+          - img [ref=e761]
+      - generic [ref=e762]:
+        - img [ref=e763]
+        - heading "Willkommen im Insel-Wiki 🏝️" [level=2] [ref=e766]
+        - paragraph [ref=e767]:
+          - text: Dies ist ein privates Projekt von
+          - strong [ref=e768]: Stephan
+          - text: ", da er ohne ein Wiki einfach nicht arbeiten kann. Es dient dem Wissensaustausch und der kollaborativen Dokumentation."
+        - generic [ref=e769]:
+          - strong [ref=e770]: ⚠️ Wichtiger Sicherheitshinweis
+          - generic [ref=e771]:
+            - text: Dieses Wiki ist
+            - strong [ref=e772]: nicht
+            - text: für geschützte Daten klassifiziert. Bitte speichere hier daher
+            - strong [ref=e773]: keine Informationen mit der Klassifizierung INTERN oder höher
+            - text: .
+        - button "+ Neue Seite erstellen" [ref=e774] [cursor=pointer]
+  - generic [ref=e775]:
+    - generic [ref=e776]: ✓
+    - generic [ref=e777]: Seite in den Papierkorb verschoben.
+    - button "Schliessen" [ref=e778] [cursor=pointer]: ×
+```

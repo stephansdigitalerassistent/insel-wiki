@@ -170,59 +170,11 @@ export async function loadPage(pageId) {
 
   // --- Variant 1: Optimistic UI Local Caching ---
   let page = null;
-  const cachedPageJson = localStorage.getItem(`cache_page_${pageId}`);
-  if (cachedPageJson) {
-    try {
-      page = JSON.parse(cachedPageJson);
-      console.log(`[Insel-Wiki] Instant load from cache for ${pageId}`);
-      pageTitleInput.value = page.title || '';
-      document.title = `Insel-Wiki - ${page.title || 'Ohne Titel'}`;
-      
-      // CREATE INSTANT READ-ONLY PREVIEW
-      staticPreview = document.createElement('div');
-      staticPreview.id = 'static-editor-preview';
-      staticPreview.className = 'editor'; // Matches CSS wrapper
-      
-      let html = marked.parse(page.content || '');
-      
-      // IMPROVED TASK LIST RENDERING (Matches Tiptap 1:1)
-      
-      // 1. First, catch cases where marked didn't convert [ ] or [x] to inputs yet
-      html = html.replace(/<li>\s*\[ \]\s*/gi, '<li><input type="checkbox"> ');
-      html = html.replace(/<li>\s*\[x\]\s*/gi, '<li><input type="checkbox" checked> ');
+  // Disabled stale cache to ensure fresh todo visibility and UI state
 
-      // 2. Mark the UL as a task list if it contains checkboxes
-      html = html.replace(/<ul>(\s*<li[^>]*><input[^>]*type="checkbox"[^>]*>[\s\S]*?)<\/ul>/gi, '<ul data-type="taskList">$1</ul>');
-      
-      // 3. Transform inputs into the Tiptap-compatible label/span structure
-      html = html.replace(/<li><input([^>]*)type="checkbox"([^>]*)>(.*?)<\/li>/gi, (match, p1, p2, text) => {
-        const isChecked = p1.includes('checked') || p2.includes('checked');
-        const checkedAttr = isChecked ? 'checked="checked"' : '';
-        return `<li data-type="taskItem" data-checked="${isChecked}">
-          <label>
-            <input type="checkbox" ${checkedAttr} disabled style="accent-color: var(--accent); width: 1.1rem; height: 1.1rem; margin: 0; cursor: default;">
-            <span></span>
-          </label>
-          <div>${text.trim()}</div>
-        </li>`;
-      });
-
-      // Wrap in tiptap class to match CSS descendant selectors exactly
-      // Do NOT include ProseMirror class, as its injected white-space: pre-wrap renders marked's interstitial newlines as empty lines
-      staticPreview.innerHTML = `<div class="tiptap" translate="no">${html}</div>`;
-      
-      editorContainer.insertBefore(staticPreview, editorEl);
-      editorEl.style.display = 'none'; // Hide real editor until ready
-      
-      if (loadingOverlay) loadingOverlay.classList.add('hidden');
-    } catch (e) {
-      console.warn('Failed to parse page cache', e);
-    }
-  } else {
-    // No cache, show loading overlay
-    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
-    editorEl.style.display = 'block';
-  }
+  // No cache, show loading overlay immediately
+  if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+  editorEl.style.display = 'block';
 
   // Fetch fresh page data
   const fetchPromise = getPage(pageId).then(freshPage => {

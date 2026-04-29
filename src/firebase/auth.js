@@ -6,12 +6,12 @@
 import { auth, db } from './config.js';
 import {
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { createAuthUser, changeUserPassword } from '../services/auth-service.js';
 
 // Wiki admin email — receiving end for access requests
 const WIKI_ADMIN_EMAIL = 'stephansdigitalassistent@gmail.com';
@@ -82,7 +82,7 @@ export async function register(email, password) {
   }
   
   // 1. Create in Firebase Auth
-  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  const userCredential = await createAuthUser(email, password);
   const user = userCredential.user;
   
   // 2. Create in Firestore with isActive: false
@@ -99,6 +99,13 @@ export async function register(email, password) {
   await signOut(auth);
   
   return user;
+}
+
+/**
+ * Changes the current user's password
+ */
+export async function changePassword(oldPassword, newPassword) {
+    return changeUserPassword(oldPassword, newPassword);
 }
 
 /**

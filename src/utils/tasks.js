@@ -1,19 +1,16 @@
-const taskCache = new Map();
-
 /**
  * Extrahiert alle Todos aus einem gegebenen Markdown-Text.
  * Erkennt Formate wie '- [ ] Aufgabe' oder '- [x] Erledigt'.
  */
 export function extractTasksFromContent(content) {
-  if (!content) return [];
-
-  // Quick cache check (using content hash or string length + start)
-  const cacheKey = content.length + content.substring(0, 50);
-  if (taskCache.has(cacheKey)) return taskCache.get(cacheKey);
+  if (!content || typeof content !== 'string') return [];
 
   const tasks = [];
-  // Globaler Regex für GFM Task Listen, jetzt auch mit Einrückung
-  const taskRegex = /^(\s*)- \[( |x|X)\] (.*)$/gm;
+  // Robust regex: 
+  // - Supports both '-' and '*' (optional for compatibility)
+  // - Handles indentation using [ \t] to avoid capturing newlines
+  // - Captures indentation, checked status, and text
+  const taskRegex = /^([ \t]*)(?:[-*]\s+)?\[( |x|X)\]\s*(.*)$/gm;
 
   let match;
   let index = 0;
@@ -22,13 +19,10 @@ export function extractTasksFromContent(content) {
       done: match[2].toLowerCase() === 'x',
       text: match[3].trim(),
       raw: match[0],
-      index: index++
+      index: index++,
+      indent: match[1].length
     });
   }
-
-  // Simple cache management
-  if (taskCache.size > 500) taskCache.clear();
-  taskCache.set(cacheKey, tasks);
 
   return tasks;
 }

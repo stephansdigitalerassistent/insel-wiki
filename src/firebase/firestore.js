@@ -63,6 +63,7 @@ export async function getPage(pageId) {
  * Update page content and title
  */
 export async function savePage(pageId, content, title, savedBy = '', savedByName = '', savedByPhoto = '') {
+  console.log('[Firestore] savePage called for', pageId, 'with content length:', content?.length, 'content starts with:', content?.substring(0, 50));
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
   try {
     await updateDoc(pageRef, {

@@ -1,15 +1,16 @@
 // Auth UI Controller — login, registration, and auth overlay management
-import { login, register, logout, getCurrentUser, onAuthChange, canEdit, getAccessRequestLink, updateUserProfile, isSpellCheckEnabled, setSpellCheckEnabled } from '../firebase/auth.js';
+import { login, register, logout, getCurrentUser, onAuthChange, canEdit, getAccessRequestLink, updateUserProfile, isSpellCheckEnabled, setSpellCheckEnabled, changePassword } from '../firebase/auth.js';
 import { formatDefaultName } from '../utils/string.js';
 import { showToast } from '../components/toast.js';
 import { uploadAvatar } from '../firebase/storage.js';
+import { validatePassword } from '../services/password-validator.js';
 
 // --- DOM Elements ---
 let authOverlay, loginForm, loginEmailInput, loginPasswordInput, loginError, loginBtn;
 let registerForm, registerEmailInput, registerPasswordInput, registerBtn, registerError;
 let showRegisterBtn, showLoginBtn;
 let profileModal, profileNameInput, profileAvatarFile, avatarPreviewContainer, avatarPreviewImg;
-let profileSaveBtn, profileCancelBtn, profileSpellcheck;
+let profileSaveBtn, profileCancelBtn, profileSpellcheck, profileOldPassword, profileNewPassword;
 let userInfoEl, requestAccessLink;
 
 let selectedAvatarFile = null;
@@ -45,6 +46,8 @@ export function initAuthUI(callbacks = {}) {
   profileSaveBtn = document.getElementById('profile-save-btn');
   profileCancelBtn = document.getElementById('profile-cancel-btn');
   profileSpellcheck = document.getElementById('profile-spellcheck');
+  profileOldPassword = document.getElementById('profile-old-password');
+  profileNewPassword = document.getElementById('profile-new-password');
 
   // Setup mailto link
   if (requestAccessLink) {
@@ -231,6 +234,8 @@ function openProfileModal() {
   if (profileSpellcheck) {
     profileSpellcheck.checked = isSpellCheckEnabled();
   }
+  if (profileOldPassword) profileOldPassword.value = '';
+  if (profileNewPassword) profileNewPassword.value = '';
   profileModal.classList.remove('hidden');
 }
 
@@ -257,6 +262,26 @@ async function handleProfileSave() {
     profileSaveBtn.textContent = 'Profil wird aktualisiert...';
     const spellCheck = profileSpellcheck ? profileSpellcheck.checked : undefined;
     const updatedUser = await updateUserProfile(newName, newAvatarUrl, spellCheck);
+    
+    // Handle password change if requested
+    const oldPwd = profileOldPassword ? profileOldPassword.value : '';
+    const newPwd = profileNewPassword ? profileNewPassword.value : '';
+
+    if (oldPwd || newPwd) {
+      if (!oldPwd || !newPwd) {
+        throw new Error('Für eine Passwortänderung müssen beide Passwortfelder ausgefüllt sein.');
+      }
+      
+      const validation = validatePassword(newPwd);
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+
+      profileSaveBtn.textContent = 'Passwort wird geändert...';
+      await changePassword(oldPwd, newPwd);
+      showToast('Passwort erfolgreich geändert!', 'success');
+    }
+
     closeProfileModal();
     showToast('Profil aktualisiert!', 'success');
     

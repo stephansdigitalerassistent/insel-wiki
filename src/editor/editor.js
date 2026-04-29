@@ -61,7 +61,7 @@ function getTurndown() {
     // Support for Task Lists (Checkboxes)
     turndownInstance.addRule('taskItems', {
       filter: function (node) {
-        return node.nodeName === 'LI' && node.getAttribute('data-type') === 'taskItem';
+        return node.nodeName === 'LI' && (node.getAttribute('data-type') === 'taskItem' || node.hasAttribute('data-checked'));
       },
       replacement: function (content, node) {
         const checked = node.getAttribute('data-checked') === 'true';

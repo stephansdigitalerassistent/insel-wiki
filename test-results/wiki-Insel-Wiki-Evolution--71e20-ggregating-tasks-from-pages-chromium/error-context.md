@@ -1,0 +1,73 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e6]
+        - generic [ref=e9]: Insel-Wiki
+      - generic [ref=e10]:
+        - button "Tastenkombinationen" [ref=e11] [cursor=pointer]:
+          - img [ref=e12]
+        - button "Neue Seite" [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+    - textbox "Suchen…" [ref=e17]
+    - navigation [ref=e18]:
+      - generic [ref=e19]: Noch keine Seiten
+    - generic [ref=e21] [cursor=pointer]:
+      - img [ref=e22]
+      - generic [ref=e25]: Papierkorb
+      - img [ref=e26]
+    - generic [ref=e28]:
+      - generic "Profil bearbeiten" [ref=e29] [cursor=pointer]:
+        - generic [ref=e30]: U
+        - generic [ref=e31]: User-64
+      - button "📋" [ref=e32] [cursor=pointer]
+      - button "Abmelden" [ref=e33] [cursor=pointer]:
+        - img [ref=e34]
+  - main [ref=e37]:
+    - generic [ref=e39]:
+      - generic "User-64" [ref=e41]: US User-64
+      - button "Verlauf" [ref=e42] [cursor=pointer]:
+        - img [ref=e43]
+      - button "Seite löschen" [active] [ref=e46] [cursor=pointer]:
+        - img [ref=e47]
+      - button "Seite drucken" [ref=e49] [cursor=pointer]:
+        - img [ref=e50]
+      - button "Internen Link kopieren" [ref=e54] [cursor=pointer]:
+        - img [ref=e55]
+      - button "Neue Seite…" [ref=e58] [cursor=pointer]:
+        - img [ref=e59]
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - button "B" [ref=e62] [cursor=pointer]:
+          - generic [ref=e63]: B
+        - button "I" [ref=e64] [cursor=pointer]:
+          - generic [ref=e65]: I
+        - button "S̶" [ref=e66] [cursor=pointer]
+        - button "<>" [ref=e67] [cursor=pointer]
+        - button "H1" [ref=e69] [cursor=pointer]
+        - button "H2" [ref=e70] [cursor=pointer]
+        - button "H3" [ref=e71] [cursor=pointer]
+        - button "•" [ref=e73] [cursor=pointer]
+        - button "1." [ref=e74] [cursor=pointer]
+        - button "☑" [ref=e75] [cursor=pointer]
+        - button "❝" [ref=e77] [cursor=pointer]
+        - button "▤" [ref=e78] [cursor=pointer]
+        - button "—" [ref=e79] [cursor=pointer]
+        - button "🔗" [ref=e81] [cursor=pointer]
+        - button "🖼" [ref=e82] [cursor=pointer]
+        - button "💬" [ref=e83] [cursor=pointer]
+      - generic [ref=e84]:
+        - textbox "Seitentitel…" [ref=e85]: TEST-TaskPage-1777478600136
+        - generic [ref=e86]: Gespeichert
+      - list [ref=e89]:
+        - listitem [ref=e90]:
+          - checkbox "Task item checkbox for empty task item" [ref=e92]
+          - paragraph [ref=e94]: Task-1777478600136
+        - listitem [ref=e95]:
+          - checkbox "Task item checkbox for empty task item" [ref=e97]
+          - generic:
+            - paragraph
+```
