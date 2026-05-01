@@ -1,6 +1,53 @@
 // Sidebar component — hierarchical page tree with real-time updates
-import { subscribeToPages, createPage, getDeletedPages, restorePage, permanentlyDeletePage, updatePageHierarchy } from '../firebase/firestore.js';
+import { subscribeToPages, createPage, getDeletedPages, restorePage, permanentlyDeletePage, updatePageHierarchy, deletePage } from '../firebase/firestore.js';
 import { canEdit, onAuthChange } from '../firebase/auth.js';
+
+// --- Per-page sort preferences (stored locally per browser/user) ---
+const SORT_MODES = ['manual', 'name', 'created', 'changed'];
+const SORT_LABELS = {
+  manual: 'Manuell',
+  name: 'Name',
+  created: 'Erstellt',
+  changed: 'Geändert',
+};
+const SORT_KEY = (parentId) => `insel-wiki-sort-${parentId || 'root'}`;
+
+function getSortMode(parentId) {
+  try {
+    const v = localStorage.getItem(SORT_KEY(parentId));
+    return SORT_MODES.includes(v) ? v : 'manual';
+  } catch {
+    return 'manual';
+  }
+}
+
+function setSortMode(parentId, mode) {
+  if (!SORT_MODES.includes(mode)) return;
+  try { localStorage.setItem(SORT_KEY(parentId), mode); } catch {}
+}
+
+function tsMs(ts) {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (ts.seconds != null) return ts.seconds * 1000 + (ts.nanoseconds || 0) / 1e6;
+  if (ts instanceof Date) return ts.getTime();
+  return 0;
+}
+
+function applySort(pages, mode) {
+  const arr = [...pages];
+  switch (mode) {
+    case 'name':
+      return arr.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de', { sensitivity: 'base' }));
+    case 'created':
+      return arr.sort((a, b) => tsMs(b.createdAt) - tsMs(a.createdAt));
+    case 'changed':
+      return arr.sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt));
+    case 'manual':
+    default:
+      return arr.sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+}
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -20,7 +67,115 @@ let trashExpanded = false;
 let trashContainer = null;
 let lastTreeFingerprint = null;
 let draggedPageId = null;
+let activeMenu = null;
 const expandedFolders = new Set();
+
+// --- Options popover menu (singleton) ---
+
+function dismissOnClick(e) {
+  if (activeMenu && !activeMenu.contains(e.target)) closeMenu();
+}
+
+function dismissOnKey(e) {
+  if (e.key === 'Escape') closeMenu();
+}
+
+function closeMenu() {
+  if (activeMenu) {
+    activeMenu.remove();
+    activeMenu = null;
+  }
+  document.removeEventListener('mousedown', dismissOnClick, true);
+  document.removeEventListener('keydown', dismissOnKey);
+}
+
+function openOptionsMenu(anchorEl, { parentId, page }) {
+  closeMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'sidebar-options-menu';
+
+  // --- Standard actions (only for a specific page, not root) ---
+  if (page && canEdit()) {
+    const newChild = document.createElement('button');
+    newChild.className = 'sidebar-options-item';
+    newChild.textContent = 'Neue Unterseite';
+    newChild.addEventListener('click', async () => {
+      closeMenu();
+      const title = prompt('Titel der neuen Unterseite:');
+      if (!title || !title.trim()) return;
+      try {
+        const id = await createPage(title.trim(), page.id);
+        expandedFolders.add(page.id);
+        if (onNavigateCallback) onNavigateCallback(id);
+      } catch (err) {
+        console.error('Create child error:', err);
+      }
+    });
+    menu.appendChild(newChild);
+
+    const del = document.createElement('button');
+    del.className = 'sidebar-options-item sidebar-options-danger';
+    del.textContent = 'Löschen';
+    del.addEventListener('click', async () => {
+      closeMenu();
+      if (!confirm(`„${page.title || 'Ohne Titel'}" in den Papierkorb verschieben?`)) return;
+      try {
+        await deletePage(page.id);
+      } catch (err) {
+        console.error('Delete error:', err);
+      }
+    });
+    menu.appendChild(del);
+
+    const sep = document.createElement('div');
+    sep.className = 'sidebar-options-sep';
+    menu.appendChild(sep);
+  }
+
+  // --- Sort section ---
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-options-heading';
+  heading.textContent = parentId ? 'Unterseiten sortieren' : 'Hauptseiten sortieren';
+  menu.appendChild(heading);
+
+  const current = getSortMode(parentId);
+  for (const mode of SORT_MODES) {
+    const item = document.createElement('button');
+    item.className = `sidebar-options-item sidebar-options-radio${mode === current ? ' selected' : ''}`;
+    item.innerHTML = `<span class="sidebar-options-check">${mode === current ? '✓' : ''}</span><span>${SORT_LABELS[mode]}</span>`;
+    item.addEventListener('click', () => {
+      setSortMode(parentId, mode);
+      closeMenu();
+      const treeContainer = document.getElementById('page-tree');
+      if (treeContainer) renderTree(treeContainer);
+    });
+    menu.appendChild(item);
+  }
+
+  document.body.appendChild(menu);
+
+  // Position relative to the anchor button.
+  const rect = anchorEl.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = `${rect.bottom + 4}px`;
+  menu.style.left = `${rect.left}px`;
+  // Clamp horizontally on screen.
+  requestAnimationFrame(() => {
+    const m = menu.getBoundingClientRect();
+    if (m.right > window.innerWidth - 8) {
+      menu.style.left = `${Math.max(8, window.innerWidth - m.width - 8)}px`;
+    }
+  });
+
+  activeMenu = menu;
+  // Defer listener attachment so the click that opened the menu doesn't
+  // immediately dismiss it.
+  setTimeout(() => {
+    document.addEventListener('mousedown', dismissOnClick, true);
+    document.addEventListener('keydown', dismissOnKey);
+  }, 0);
+}
 
 /**
  * Helper to get all parent IDs of a page
@@ -115,6 +270,15 @@ export function initSidebar(treeContainer, onNavigate) {
     });
   }
 
+  // Root-level options menu (sort + future global actions)
+  const sortRootBtn = document.getElementById('sort-root-btn');
+  if (sortRootBtn) {
+    sortRootBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openOptionsMenu(sortRootBtn, { parentId: null, page: null });
+    });
+  }
+
   // Create trash section
   const sidebar = treeContainer.parentElement;
   if (sidebar) {
@@ -195,21 +359,21 @@ function renderTree(container) {
     : allPages;
 
   // Build tree from flat list
-  const rootPages = searchFilter
+  let rootPages = searchFilter
     ? filteredPages
     : filteredPages.filter((p) => !p.parentId);
 
-  // Pin special pages to the top
+  // Pin special pages to the top, then apply user-selected sort to the rest.
   if (!searchFilter) {
     const pinnedIds = ['mtxtAoHvUQINUWJiIsK0', 'I1V7J26YHEYaL6o6NzNn', '02LIwOpQSGFzYfRfgOwf'];
-    rootPages.sort((a, b) => {
-      const aPinned = pinnedIds.indexOf(a.id);
-      const bPinned = pinnedIds.indexOf(b.id);
-      if (aPinned !== -1 && bPinned !== -1) return aPinned - bPinned;
-      if (aPinned !== -1) return -1;
-      if (bPinned !== -1) return 1;
-      return (a.order || 0) - (b.order || 0); // fallback to normal order
-    });
+    const pinned = pinnedIds
+      .map((id) => rootPages.find((p) => p.id === id))
+      .filter(Boolean);
+    const rest = applySort(
+      rootPages.filter((p) => !pinnedIds.includes(p.id)),
+      getSortMode(null)
+    );
+    rootPages = [...pinned, ...rest];
   }
 
   // Build the new tree off-DOM, then swap in one atomic mutation. Avoids the
@@ -286,6 +450,18 @@ function createTreeItem(page, allFilteredPages) {
   name.className = 'page-name';
   name.textContent = page.title || 'Ohne Titel';
   row.appendChild(name);
+
+  // Per-page options menu (⋮)
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'more-btn';
+  moreBtn.title = 'Optionen';
+  moreBtn.setAttribute('aria-label', 'Optionen');
+  moreBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>`;
+  moreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openOptionsMenu(moreBtn, { parentId: page.id, page });
+  });
+  row.appendChild(moreBtn);
 
   // Search result snippet
   if (searchFilter && page.content && page.content.toLowerCase().includes(searchFilter)) {
@@ -429,7 +605,7 @@ function createTreeItem(page, allFilteredPages) {
     const isExpanded = expandedFolders.has(page.id);
     const childContainer = document.createElement('div');
     childContainer.className = `tree-children ${isExpanded ? '' : 'collapsed'}`;
-    children.sort((a, b) => (a.order || 0) - (b.order || 0)).forEach((child) => {
+    applySort(children, getSortMode(page.id)).forEach((child) => {
       childContainer.appendChild(createTreeItem(child, allFilteredPages));
     });
     item.appendChild(childContainer);
