@@ -8,7 +8,8 @@ import { validatePassword } from '../services/password-validator.js';
 // --- DOM Elements ---
 let authOverlay, loginForm, loginEmailInput, loginPasswordInput, loginError, loginBtn;
 let registerForm, registerEmailInput, registerPasswordInput, registerBtn, registerError;
-let showRegisterBtn, showLoginBtn;
+let forgotForm, forgotEmailInput, forgotBtn, forgotError;
+let showRegisterBtn, showLoginBtn, showForgotBtn, showLoginFromForgotBtn;
 let profileModal, profileNameInput, profileAvatarFile, avatarPreviewContainer, avatarPreviewImg;
 let profileSaveBtn, profileCancelBtn, profileSpellcheck, profileOldPassword, profileNewPassword;
 let userInfoEl, requestAccessLink;
@@ -36,6 +37,12 @@ export function initAuthUI(callbacks = {}) {
   registerError = document.getElementById('register-error');
   showRegisterBtn = document.getElementById('show-register-btn');
   showLoginBtn = document.getElementById('show-login-btn');
+  showForgotBtn = document.getElementById('show-forgot-btn');
+  showLoginFromForgotBtn = document.getElementById('show-login-from-forgot-btn');
+  forgotForm = document.getElementById('forgot-form');
+  forgotEmailInput = document.getElementById('forgot-email');
+  forgotBtn = document.getElementById('forgot-btn');
+  forgotError = document.getElementById('forgot-error');
   requestAccessLink = document.getElementById('request-access-link');
   userInfoEl = document.getElementById('user-info');
   profileModal = document.getElementById('profile-modal');
@@ -72,6 +79,25 @@ export function initAuthUI(callbacks = {}) {
   }
   if (registerForm) {
     registerForm.addEventListener('submit', handleRegister);
+  }
+
+  // Forgot password
+  if (showForgotBtn) {
+    showForgotBtn.addEventListener('click', () => {
+      loginForm.classList.add('hidden');
+      forgotForm.classList.remove('hidden');
+      forgotEmailInput.value = loginEmailInput.value || '';
+      forgotError.classList.add('hidden');
+    });
+  }
+  if (showLoginFromForgotBtn) {
+    showLoginFromForgotBtn.addEventListener('click', () => {
+      forgotForm.classList.add('hidden');
+      loginForm.classList.remove('hidden');
+    });
+  }
+  if (forgotForm) {
+    forgotForm.addEventListener('submit', handleForgotPassword);
   }
 
   // Logout
@@ -209,6 +235,39 @@ async function handleRegister(e) {
 
   registerBtn.disabled = false;
   registerBtn.textContent = 'Registrieren';
+}
+
+// --- Forgot password (mailto activation, mirrors registration) ---
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  forgotError.classList.add('hidden');
+  forgotBtn.disabled = true;
+  forgotBtn.textContent = 'Wird vorbereitet…';
+
+  const email = forgotEmailInput.value.trim().toLowerCase();
+
+  if (!email.endsWith('@insel.ch')) {
+    forgotError.textContent = 'Nur @insel.ch E-Mail-Adressen sind zugelassen.';
+    forgotError.classList.remove('hidden');
+    forgotBtn.disabled = false;
+    forgotBtn.textContent = 'Zurücksetzen anfordern';
+    return;
+  }
+
+  const subject = encodeURIComponent(`Wiki Password Reset: ${email}`);
+  const mailtoUrl = `mailto:stephansdigitalassistent@gmail.com?subject=${subject}`;
+  window.location.href = mailtoUrl;
+
+  showToast('Bitte senden Sie die leere E-Mail von Ihrer @insel.ch Adresse ab, um das Zurücksetzen anzufordern.', 'info', 10000);
+
+  setTimeout(() => {
+    forgotForm.classList.add('hidden');
+    loginForm.classList.remove('hidden');
+    forgotEmailInput.value = '';
+  }, 1500);
+
+  forgotBtn.disabled = false;
+  forgotBtn.textContent = 'Zurücksetzen anfordern';
 }
 
 async function handleLogout() {
