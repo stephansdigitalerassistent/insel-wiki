@@ -51,9 +51,9 @@ export class FirestoreYjsProvider {
     this.compactionThreshold = 50;
     this.pendingWrites = 0;
     this._statusListeners = new Set();
-    // Yjs writes are coalesced over a 2s window to cut Firestore write
+    // Yjs writes are coalesced over a 1s window to cut Firestore write
     // volume. Buffered updates are merged into a single addDoc per flush.
-    this._writeDebounceMs = 2000;
+    this._writeDebounceMs = 1000;
     this._pendingUpdates = [];
     this._writeTimer = null;
   }
