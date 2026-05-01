@@ -92,7 +92,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
   currentPageId = pageId;
   saveCallback = (id, md) => {
     isMarkdownDirty = false;
-    onSave(id, md);
+    return onSave(id, md);
   };
   isMarkdownDirty = false;
 
@@ -396,9 +396,10 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(() => {
         if (saveCallback && currentPageId && provider && provider.awareness) {
-          // Check if no one else is looking at the page (size <= 1 means only me)
+          // Solo-only: in collab, Yjs handles continuous sync — autosaving
+          // markdown here would race with other writers' newer content.
           if (provider.awareness.getStates().size <= 1) {
-            console.log('[Insel-Wiki] Page idle for 2 minutes & no one else looking. Auto-saving Markdown...');
+            console.log('[Insel-Wiki] Idle 15s & solo. Auto-saving Markdown...');
             const html = ed.getHTML();
             let markdown = getTurndown().turndown(html);
             if (markdown.length > 100000) {
@@ -408,7 +409,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
             saveCallback(currentPageId, markdown);
           }
         }
-      }, 120000); // 2 minutes
+      }, 15000); // 15 seconds — narrows the window where the markdown column lags Yjs.
     }
   });
 
@@ -723,17 +724,38 @@ export function setEditable(editable) {
   }
 }
 
+/**
+ * Save the current markdown to Firestore if the editor is dirty and we are
+ * the only one viewing the page. Safe to call from beforeunload /
+ * visibilitychange / pagehide handlers — fire-and-forget; Firestore queues
+ * the write in its IndexedDB cache. Returns the underlying save promise so
+ * in-app callers can await it.
+ */
+export function flushSave() {
+  if (!isMarkdownDirty || !saveCallback || !currentPageId || !editor) return Promise.resolve();
+  if (provider && provider.awareness && provider.awareness.getStates().size > 1) {
+    // In collab Yjs handles sync; flushing markdown here could race.
+    return Promise.resolve();
+  }
+  clearTimeout(autoSaveTimer);
+  const html = editor.getHTML();
+  let markdown = getTurndown().turndown(html);
+  if (markdown.length > 100000) markdown = markdown.substring(0, 100000);
+  return Promise.resolve(saveCallback(currentPageId, markdown));
+}
+
 export function destroyEditor() {
   clearTimeout(saveTimeout);
   clearTimeout(autoSaveTimer);
 
   // Auto-save when leaving the page if we are the last person and have unsaved changes
+  let pendingSave = Promise.resolve();
   if (isMarkdownDirty && provider && provider.awareness && provider.awareness.getStates().size <= 1 && saveCallback && currentPageId && editor) {
     console.log('[Insel-Wiki] Auto-saving Markdown on page leave (last person).');
     const html = editor.getHTML();
     let markdown = getTurndown().turndown(html);
     if (markdown.length > 100000) markdown = markdown.substring(0, 100000);
-    saveCallback(currentPageId, markdown);
+    pendingSave = Promise.resolve(saveCallback(currentPageId, markdown));
   }
 
   isMarkdownDirty = false;
@@ -755,6 +777,7 @@ export function destroyEditor() {
     ydoc = null;
   }
   currentPageId = null;
+  return pendingSave;
 }
 
 export function getProvider() {

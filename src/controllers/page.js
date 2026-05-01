@@ -1,6 +1,6 @@
 // Page Controller — loading, saving, snapshots, link healing, and page actions
 import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
-import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor } from '../editor/editor.js';
+import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, flushSave } from '../editor/editor.js';
 import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from '../firebase/presence.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
@@ -123,6 +123,23 @@ export function initPageController(opts) {
         handleSave(currentPageId, markdown);
       }
     }
+  });
+
+  // Flush pending writes whenever the tab is being closed or backgrounded.
+  // Firestore's IndexedDB persistence queues these writes if the network is
+  // unavailable, and replays them on next load.
+  window.addEventListener('beforeunload', () => {
+    if (!currentPageId) return;
+    debouncedUpdateTitle.flush();
+    flushSave();
+    snapshotCurrentPage();
+    leavePage();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden' || !currentPageId) return;
+    debouncedUpdateTitle.flush();
+    flushSave();
+    snapshotCurrentPage();
   });
 }
 
@@ -267,9 +284,9 @@ export async function loadPage(pageId) {
 
   historySnapshotInterval = setInterval(() => snapshotCurrentPage(), SNAPSHOT_INTERVAL_MS);
 
-  const handleUnload = () => { debouncedUpdateTitle.flush(); snapshotCurrentPage(); leavePage(); };
-  window.removeEventListener('beforeunload', handleUnload);
-  window.addEventListener('beforeunload', handleUnload);
+  // Unload/visibilitychange handlers are registered once at controller init
+  // (see initPageController). They read module-level state, so a single
+  // registration covers every navigation.
 
   // --- Non-blocking parallel work (doesn't delay page render) ---
   // Subscribe to page updates
