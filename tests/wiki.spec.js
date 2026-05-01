@@ -77,6 +77,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
   let createdPageIds = [];
 
   test.beforeEach(async ({ page }) => {
+    page.on('console', msg => {
+      console.log(`Browser console [${msg.type()}]: ${msg.text()}`);
+    });
     await login(page);
     createdPageIds = []; // Reset for each test
   });
@@ -144,7 +147,7 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await editor.focus();
     await page.keyboard.type(`[ ] ${taskText}`);
     await page.keyboard.press('Enter');
-    await page.keyboard.press('Control+S');
+    await page.keyboard.press('Control+s');
     await page.waitForTimeout(6000); // give yjs and firestore time to sync
 
     // 2. Open Dashboard

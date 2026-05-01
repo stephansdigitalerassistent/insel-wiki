@@ -168,7 +168,7 @@ test.describe('Insel-Wiki Core Audit', () => {
     await editor.focus();
     await page.keyboard.type('Rich Text Audit Content.');
     await page.keyboard.press('Enter');
-    await page.keyboard.press('Control+S');
+    await page.keyboard.press('Control+s');
     await expect(page.locator('#save-status')).toHaveText(/Gespeichert/, { timeout: 15000 });
 
     // --- 3. Create Child Page ---
@@ -183,7 +183,7 @@ test.describe('Insel-Wiki Core Audit', () => {
     await page.keyboard.press('Control+Shift+9');
     await page.keyboard.type(taskText);
     await page.keyboard.press('Enter');
-    await page.keyboard.press('Control+S');
+    await page.keyboard.press('Control+s');
     await expect(page.locator('#save-status')).toHaveText(/Gespeichert/, { timeout: 15000 });
     
     // Wait for Yjs/Firebase sync

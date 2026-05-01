@@ -1,6 +1,6 @@
 // Firebase configuration for Insel-Wiki
 import { initializeApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
@@ -18,8 +18,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Modern persistence API — supports multi-tab out of the box
+// In Playwright tests, IndexedDB caching with Service Workers blocked can cause BloomFilter errors 
+// and auth token sync issues (resulting in permission-denied). Use memory cache for tests.
+const isTestEnv = typeof navigator !== 'undefined' && navigator.webdriver;
+
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  localCache: isTestEnv ? memoryLocalCache() : persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
 export const auth = getAuth(app);

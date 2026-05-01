@@ -54,50 +54,55 @@ function getTreeFingerprint(pages) {
 export function initSidebar(treeContainer, onNavigate) {
   onNavigateCallback = onNavigate;
 
-  // Listen to real-time page updates
-  unsubscribe = subscribeToPages((pages) => {
-    allPages = pages;
-    
-    let shouldRender = false;
+  onAuthChange((user) => {
+    if (unsubscribe) unsubscribe();
+    if (user) {
+      // Listen to real-time page updates
+      unsubscribe = subscribeToPages((pages) => {
+        allPages = pages;
+        
+        let shouldRender = false;
 
-    // Refresh active page state (ensures path is expanded when data loads)
-    if (activePageId) {
-      const oldExpandedCount = expandedFolders.size;
-      
-      // 1. Auto-expand parents
-      const parents = getParentPath(activePageId);
-      parents.forEach(id => expandedFolders.add(id));
+        // Refresh active page state (ensures path is expanded when data loads)
+        if (activePageId) {
+          const oldExpandedCount = expandedFolders.size;
+          
+          // 1. Auto-expand parents
+          const parents = getParentPath(activePageId);
+          parents.forEach(id => expandedFolders.add(id));
 
-      // 2. Auto-expand active page itself if it has children
-      const hasChildren = allPages.some(p => p.parentId === activePageId);
-      if (hasChildren) {
-        const page = allPages.find(p => p.id === activePageId);
-        if (page) {
-          const siblings = allPages.filter(p => p.parentId === page.parentId && p.id !== activePageId);
-          siblings.forEach(s => expandedFolders.delete(s.id));
-          expandedFolders.add(activePageId);
+          // 2. Auto-expand active page itself if it has children
+          const hasChildren = allPages.some(p => p.parentId === activePageId);
+          if (hasChildren) {
+            const page = allPages.find(p => p.id === activePageId);
+            if (page) {
+              const siblings = allPages.filter(p => p.parentId === page.parentId && p.id !== activePageId);
+              siblings.forEach(s => expandedFolders.delete(s.id));
+              expandedFolders.add(activePageId);
+            }
+          }
+          
+          if (expandedFolders.size !== oldExpandedCount) {
+            shouldRender = true;
+          }
         }
-      }
-      
-      if (expandedFolders.size !== oldExpandedCount) {
-        shouldRender = true;
-      }
-    }
 
-    // Only re-render tree if structure or titles changed (ignore updatedAt/content changes)
-    const fingerprint = getTreeFingerprint(pages);
-    if (fingerprint !== lastTreeFingerprint) {
-      lastTreeFingerprint = fingerprint;
-      shouldRender = true;
-    }
+        // Only re-render tree if structure or titles changed (ignore updatedAt/content changes)
+        const fingerprint = getTreeFingerprint(pages);
+        if (fingerprint !== lastTreeFingerprint) {
+          lastTreeFingerprint = fingerprint;
+          shouldRender = true;
+        }
 
-    if (shouldRender) {
-      renderTree(treeContainer);
-    }
+        if (shouldRender) {
+          renderTree(treeContainer);
+        }
 
-    // Refresh trash if it's open
-    if (trashExpanded && trashContainer) {
-      renderTrash(trashContainer);
+        // Refresh trash if it's open
+        if (trashExpanded && trashContainer) {
+          renderTrash(trashContainer);
+        }
+      });
     }
   });
 
