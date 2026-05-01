@@ -7,7 +7,7 @@ const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 // Characters that signal "the previous word is finished"
-const WORD_SEPARATORS = new Set([' ', '.', ',', '!', '?', ':', ';', '\n', ')', ']', '}', '–', '—', '"', '»']);
+const WORD_SEPARATORS = new Set([' ', '.', ',', '!', '?', ':', ';', '\n', ')', ']', '}', '–', '—', '"', '»', '(', '[', '{', '«', '<', '>']);
 
 // Minimum word length to consider for correction
 const MIN_WORD_LENGTH = 3;
@@ -66,13 +66,34 @@ export class SpellCheckerBot {
 
     if (cursorPos < 2) return;
 
-    const charBefore = this.editor.state.doc.textBetween(cursorPos - 1, cursorPos);
+    let charBefore = this.editor.state.doc.textBetween(cursorPos - 1, cursorPos);
+    let separatorPos = cursorPos - 1;
+
+    // Check if the user pressed Enter (split block) or Shift-Enter (hard break)
+    // When crossing a block boundary or node, textBetween returns an empty string
+    const $pos = this.editor.state.doc.resolve(cursorPos);
+    if (charBefore === '') {
+      if ($pos.parentOffset === 0 || $pos.nodeBefore?.type.name === 'hardBreak' || $pos.nodeBefore?.type.name === 'hard_break') {
+        charBefore = '\n';
+        
+        // Find the actual end of the text block before this position
+        let searchPos = cursorPos - 1;
+        while (searchPos > 0) {
+          const $search = this.editor.state.doc.resolve(searchPos);
+          if ($search.parent.isTextblock) {
+            separatorPos = searchPos;
+            break;
+          }
+          searchPos--;
+        }
+      }
+    }
 
     // Only proceed if a word separator was just typed
     if (!WORD_SEPARATORS.has(charBefore)) return;
 
     // Extract and queue the word before the separator
-    this._extractAndQueueWord(cursorPos - 1);
+    this._extractAndQueueWord(separatorPos);
   }
 
   /**
@@ -98,8 +119,11 @@ export class SpellCheckerBot {
 
     const rawWord = wordMatch[1];
 
-    // Clean the word: strip trailing punctuation
-    const cleanWord = rawWord.replace(/[.,!?:;)"'»\]}/]+$/, '');
+    const leadingPunctuationMatch = rawWord.match(/^[.,!?:;("'<\[{\-»«]+/);
+    const leadingPunctuationLen = leadingPunctuationMatch ? leadingPunctuationMatch[0].length : 0;
+
+    // Clean the word: strip leading and trailing punctuation
+    const cleanWord = rawWord.replace(/^[.,!?:;("'<\[{\-»«]+|[.,!?:;)"'>\]}\-»«]+$/g, '');
 
     if (!this._shouldCheck(cleanWord)) return;
 
@@ -107,7 +131,7 @@ export class SpellCheckerBot {
     const parentStart = $pos.start(); // absolute start of the parent node's content
     const wordEndInParent = $pos.parentOffset; // where the separator is
     const wordStartInParent = wordEndInParent - rawWord.length;
-    const absoluteStart = parentStart + wordStartInParent;
+    const absoluteStart = parentStart + wordStartInParent + leadingPunctuationLen;
     const absoluteEnd = absoluteStart + cleanWord.length;
 
     // Get context (up to 10 words before and after)
