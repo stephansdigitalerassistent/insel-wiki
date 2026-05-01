@@ -178,18 +178,21 @@ export function initPageController(opts) {
   // Flush pending writes whenever the tab is being closed or backgrounded.
   // Firestore's IndexedDB persistence queues these writes if the network is
   // unavailable, and replays them on next load.
-  window.addEventListener('beforeunload', () => {
-    if (!currentPageId) return;
+  const flushAll = () => {
     debouncedUpdateTitle.flush();
+    const provider = getProvider();
+    if (provider) provider.flushPending();
     flushSave();
     snapshotCurrentPage();
+  };
+  window.addEventListener('beforeunload', () => {
+    if (!currentPageId) return;
+    flushAll();
     leavePage();
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'hidden' || !currentPageId) return;
-    debouncedUpdateTitle.flush();
-    flushSave();
-    snapshotCurrentPage();
+    flushAll();
   });
 }
 

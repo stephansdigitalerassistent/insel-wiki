@@ -51,6 +51,11 @@ export class FirestoreYjsProvider {
     this.compactionThreshold = 50;
     this.pendingWrites = 0;
     this._statusListeners = new Set();
+    // Yjs writes are coalesced over a 2s window to cut Firestore write
+    // volume. Buffered updates are merged into a single addDoc per flush.
+    this._writeDebounceMs = 2000;
+    this._pendingUpdates = [];
+    this._writeTimer = null;
   }
 
   get hasUnsavedChanges() {
@@ -66,6 +71,27 @@ export class FirestoreYjsProvider {
     for (const cb of this._statusListeners) {
       try { cb(this.hasUnsavedChanges); } catch {}
     }
+  }
+
+  /**
+   * Merge and write any buffered Yjs updates immediately. Returns the write
+   * promise; safe to fire-and-forget from unload handlers (Firestore queues
+   * the write in its IndexedDB cache).
+   */
+  flushPending() {
+    clearTimeout(this._writeTimer);
+    this._writeTimer = null;
+    if (this._pendingUpdates.length === 0) return Promise.resolve();
+    const merged = Y.mergeUpdates(this._pendingUpdates);
+    this._pendingUpdates = [];
+    return addDoc(this.updatesRef, {
+      update: Bytes.fromUint8Array(merged),
+      timestamp: serverTimestamp(),
+      clientId: this.clientId
+    }).catch(() => {}).finally(() => {
+      this.pendingWrites--;
+      this._emitStatus();
+    });
   }
 
   setLoadCallback(callback) {
@@ -140,19 +166,19 @@ export class FirestoreYjsProvider {
       this.onLoadComplete(this.hasYjsState || !pendingUpdates.empty);
     }
 
-    // 3. Sync New Document Updates (Live)
+    // 3. Sync New Document Updates (Live, debounced 2s)
     this.ydoc.on('update', (update, origin) => {
       if (origin !== this) {
-        this.pendingWrites++;
-        this._emitStatus();
-        addDoc(this.updatesRef, {
-          update: Bytes.fromUint8Array(update),
-          timestamp: serverTimestamp(),
-          clientId: this.clientId
-        }).catch(() => {}).finally(() => {
-          this.pendingWrites--;
+        const wasEmpty = this._pendingUpdates.length === 0;
+        this._pendingUpdates.push(update);
+        if (wasEmpty) {
+          // Mark as dirty for the duration of the buffer + write so the
+          // save indicator stays on "Speichern…" while changes are pending.
+          this.pendingWrites++;
           this._emitStatus();
-        });
+        }
+        clearTimeout(this._writeTimer);
+        this._writeTimer = setTimeout(() => this.flushPending(), this._writeDebounceMs);
 
         // Check if we should trigger background compaction
         this.localUpdateCount++;
@@ -224,6 +250,9 @@ export class FirestoreYjsProvider {
   }
 
   destroy() {
+    // Flush buffered updates before tearing down so we don't lose the last
+    // 0–2s of typing on navigation or tab close.
+    if (this._pendingUpdates.length) this.flushPending();
     if (this.unsubUpdates) this.unsubUpdates();
     if (this.unsubAwareness) this.unsubAwareness();
     window.removeEventListener('beforeunload', this.handleUnload);
