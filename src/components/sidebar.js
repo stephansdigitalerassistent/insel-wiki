@@ -1,6 +1,6 @@
 // Sidebar component — hierarchical page tree with real-time updates
 import { subscribeToPages, createPage, getDeletedPages, restorePage, permanentlyDeletePage, updatePageHierarchy } from '../firebase/firestore.js';
-import { canEdit } from '../firebase/auth.js';
+import { canEdit, onAuthChange } from '../firebase/auth.js';
 
 function escapeHtml(str) {
   if (!str) return '';
