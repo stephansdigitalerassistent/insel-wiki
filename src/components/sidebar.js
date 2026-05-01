@@ -212,20 +212,20 @@ function renderTree(container) {
     });
   }
 
-  container.innerHTML = '';
-
+  // Build the new tree off-DOM, then swap in one atomic mutation. Avoids the
+  // visible empty-state flash that caused sidebar flicker on every render.
+  const frag = document.createDocumentFragment();
   if (rootPages.length === 0) {
-    container.innerHTML = `
-      <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-        ${searchFilter ? 'Keine Ergebnisse' : 'Noch keine Seiten'}
-      </div>
-    `;
-    return;
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;';
+    empty.textContent = searchFilter ? 'Keine Ergebnisse' : 'Noch keine Seiten';
+    frag.appendChild(empty);
+  } else {
+    rootPages.forEach((page) => {
+      frag.appendChild(createTreeItem(page, filteredPages));
+    });
   }
-
-  rootPages.forEach((page) => {
-    container.appendChild(createTreeItem(page, filteredPages));
-  });
+  container.replaceChildren(frag);
 }
 
 /**
@@ -491,10 +491,12 @@ async function renderTrash(container) {
 
   try {
     const deletedPages = await getDeletedPages();
-    list.innerHTML = '';
 
     if (deletedPages.length === 0) {
-      list.innerHTML = '<div class="trash-empty">Papierkorb ist leer</div>';
+      const empty = document.createElement('div');
+      empty.className = 'trash-empty';
+      empty.textContent = 'Papierkorb ist leer';
+      list.replaceChildren(empty);
       return;
     }
 
@@ -502,6 +504,7 @@ async function renderTrash(container) {
     const deletedIds = new Set(deletedPages.map(p => p.id));
     const topLevel = deletedPages.filter(p => !p.parentId || !deletedIds.has(p.parentId));
 
+    const frag = document.createDocumentFragment();
     topLevel.forEach((page) => {
       const item = document.createElement('div');
       item.className = 'trash-item';
@@ -549,10 +552,14 @@ async function renderTrash(container) {
         item.appendChild(actions);
       }
 
-      list.appendChild(item);
+      frag.appendChild(item);
     });
+    list.replaceChildren(frag);
   } catch (err) {
     console.error('Error loading trash:', err);
-    list.innerHTML = '<div class="trash-empty">Fehler beim Laden</div>';
+    const errMsg = document.createElement('div');
+    errMsg.className = 'trash-empty';
+    errMsg.textContent = 'Fehler beim Laden';
+    list.replaceChildren(errMsg);
   }
 }
