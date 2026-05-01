@@ -52,11 +52,61 @@ function debounce(fn, ms) {
   return debounced;
 }
 
-const debouncedUpdateTitle = debounce((id, title) => {
-  if (id && canEdit()) {
-    updatePageTitle(id, title);
+const debouncedUpdateTitle = debounce(async (id, title) => {
+  if (!id || !canEdit()) return;
+  pendingTitleSaves++;
+  recomputeSaveStatus();
+  try {
+    await updatePageTitle(id, title);
+    saveErrored = false;
+  } catch (err) {
+    console.error('Title save error:', err);
+    saveErrored = true;
+  } finally {
+    pendingTitleSaves--;
+    recomputeSaveStatus();
   }
 }, 800);
+
+// --- Save status aggregator ---
+// The visible "Gespeichert / Speichern…" indicator reflects the union of
+// three concurrent write streams: live Yjs updates (every keystroke during
+// editing), debounced markdown saves, and debounced title saves. We coalesce
+// rapid bursts so the label doesn't flicker on every keystroke.
+let pendingMarkdownSaves = 0;
+let pendingTitleSaves = 0;
+let saveErrored = false;
+let savedSettleTimer = null;
+let yjsStatusUnsub = null;
+
+function anySavePending() {
+  if (pendingMarkdownSaves > 0 || pendingTitleSaves > 0) return true;
+  const provider = getProvider();
+  if (provider && provider.hasUnsavedChanges) return true;
+  return false;
+}
+
+function recomputeSaveStatus() {
+  if (saveErrored) {
+    clearTimeout(savedSettleTimer);
+    savedSettleTimer = null;
+    setSaveStatus('error');
+    return;
+  }
+  if (anySavePending()) {
+    clearTimeout(savedSettleTimer);
+    savedSettleTimer = null;
+    setSaveStatus('saving');
+    return;
+  }
+  // All clear — wait briefly so a fresh keystroke doesn't make the label
+  // bounce from "Speichern…" → "Gespeichert" → "Speichern…" mid-typing.
+  if (savedSettleTimer) return;
+  savedSettleTimer = setTimeout(() => {
+    savedSettleTimer = null;
+    if (!anySavePending() && !saveErrored) setSaveStatus('saved');
+  }, 500);
+}
 
 // --- DOM References (set during init) ---
 let editorContainer, editorEl, pageTitleInput, saveStatus, breadcrumbEl;
@@ -237,7 +287,13 @@ export async function loadPage(pageId) {
     localStorage.setItem('recent_pages', JSON.stringify(recent));
   } catch (e) {}
 
-  updateSaveStatus('saved');
+  // Reset aggregate save state for the new page; show "Gespeichert" on entry.
+  pendingMarkdownSaves = 0;
+  pendingTitleSaves = 0;
+  saveErrored = false;
+  clearTimeout(savedSettleTimer);
+  savedSettleTimer = null;
+  setSaveStatus('saved');
 
   const user = getCurrentUser();
   const userName = user?.displayName || formatDefaultName(user?.email);
@@ -257,6 +313,12 @@ export async function loadPage(pageId) {
     if (sp) sp.remove();
     editorEl.style.display = 'block';
   });
+
+  // Subscribe to Yjs pending-write status so the indicator reflects in-flight
+  // collaborative updates, not just explicit saves.
+  if (yjsStatusUnsub) yjsStatusUnsub();
+  const newProvider = getProvider();
+  yjsStatusUnsub = newProvider ? newProvider.onStatusChange(recomputeSaveStatus) : null;
 
   // --- Variant 4: Defer Heavy Tasks (Link Healing) ---
   setTimeout(() => {
@@ -385,20 +447,24 @@ async function handleSave(pageId, markdown) {
     return;
   }
 
-  updateSaveStatus('saving');
+  pendingMarkdownSaves++;
   isSnapshotDirty = true;
+  recomputeSaveStatus();
   try {
     const user = getCurrentUser();
     const userName = user?.displayName || formatDefaultName(user?.email);
     await savePage(pageId, markdown, pageTitleInput.value, user?.email || '', userName, user?.photoURL || null);
-    updateSaveStatus('saved');
+    saveErrored = false;
   } catch (err) {
     console.error('Save error:', err);
-    updateSaveStatus('error');
+    saveErrored = true;
+  } finally {
+    pendingMarkdownSaves--;
+    recomputeSaveStatus();
   }
 }
 
-function updateSaveStatus(status) {
+function setSaveStatus(status) {
   if (!saveStatus) return;
   saveStatus.classList.remove('saving', 'error');
   switch (status) {

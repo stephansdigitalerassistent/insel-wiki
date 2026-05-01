@@ -50,10 +50,22 @@ export class FirestoreYjsProvider {
     this.localUpdateCount = 0;
     this.compactionThreshold = 50;
     this.pendingWrites = 0;
+    this._statusListeners = new Set();
   }
 
   get hasUnsavedChanges() {
     return this.pendingWrites > 0;
+  }
+
+  onStatusChange(cb) {
+    this._statusListeners.add(cb);
+    return () => this._statusListeners.delete(cb);
+  }
+
+  _emitStatus() {
+    for (const cb of this._statusListeners) {
+      try { cb(this.hasUnsavedChanges); } catch {}
+    }
   }
 
   setLoadCallback(callback) {
@@ -132,12 +144,14 @@ export class FirestoreYjsProvider {
     this.ydoc.on('update', (update, origin) => {
       if (origin !== this) {
         this.pendingWrites++;
+        this._emitStatus();
         addDoc(this.updatesRef, {
           update: Bytes.fromUint8Array(update),
           timestamp: serverTimestamp(),
           clientId: this.clientId
         }).catch(() => {}).finally(() => {
           this.pendingWrites--;
+          this._emitStatus();
         });
 
         // Check if we should trigger background compaction
