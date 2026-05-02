@@ -197,6 +197,14 @@ function parkActive() {
   clearTimeout(entry.autoSaveTimer);
   entry.autoSaveTimer = null;
 
+  // Detach Firestore watchers + drop awareness doc. The ydoc and the IDB
+  // persistence stay alive, so reactivation is still instant; we just stop
+  // showing this user as "viewing" the parked page and stop paying for
+  // snapshot bandwidth on hidden editors.
+  if (entry.provider && typeof entry.provider.suspend === 'function') {
+    try { entry.provider.suspend(); } catch (e) {}
+  }
+
   if (window.editor === entry.editor) window.editor = null;
   currentPageId = null;
 }
@@ -212,6 +220,13 @@ function activateEntry(entry, onSave) {
   bumpLRU(entry.pageId);
   currentPageId = entry.pageId;
   window.editor = entry.editor;
+
+  // Re-attach Firestore listeners and republish awareness. Catchup is async
+  // but doesn't gate the UI — the editor is already showing IDB-hydrated
+  // content; remote updates merge in via CRDT as they arrive.
+  if (entry.provider && typeof entry.provider.resume === 'function') {
+    try { entry.provider.resume(); } catch (e) {}
+  }
 
   // Restore scroll & selection on next frame so layout has settled.
   requestAnimationFrame(() => {

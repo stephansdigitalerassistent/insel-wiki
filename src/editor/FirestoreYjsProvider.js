@@ -55,6 +55,10 @@ export class FirestoreYjsProvider {
     // origin are local replays; we must not echo them back to Firestore or
     // every IDB rehydrate would create duplicate writes.
     this.persistence = null;
+    // suspended means: Firestore listeners are detached and our awareness doc
+    // has been removed, but ydoc and the local persistence stay alive. Used by
+    // the editor cache to park inactive pages without holding open watchers.
+    this._suspended = false;
     // Yjs writes are coalesced over a 1s window to cut Firestore write
     // volume. Buffered updates are merged into a single addDoc per flush.
     this._writeDebounceMs = 1000;
@@ -198,20 +202,6 @@ export class FirestoreYjsProvider {
       }
     });
 
-    const loadTime = new Date(); // Only listen for new updates to prevent re-applying old ones
-    const qUpdates = query(this.updatesRef, where('timestamp', '>=', loadTime), orderBy('timestamp', 'asc'));
-    this.unsubUpdates = onSnapshot(qUpdates, (snapshot) => {
-      snapshot.docChanges().forEach(change => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          if (data.clientId !== this.clientId && data.update) {
-            const updateArr = data.update.toUint8Array();
-            Y.applyUpdate(this.ydoc, updateArr, this);
-          }
-        }
-      });
-    });
-
     // 4. Sync Awareness (Cursors & Selections)
     // Clean up stale awareness docs in the background
     getDocs(this.awarenessRef).then(existing => {
@@ -220,6 +210,7 @@ export class FirestoreYjsProvider {
 
     this.awareness.on('update', ({ added, updated, removed }, origin) => {
       if (origin === 'local') {
+        if (this._suspended) return; // parked — don't write awareness for hidden editors
         clearTimeout(this.awarenessTimeout);
         this.awarenessTimeout = setTimeout(() => {
           const state = encodeAwarenessUpdate(this.awareness, [this.clientId]);
@@ -232,14 +223,31 @@ export class FirestoreYjsProvider {
       }
     });
 
-    // Immediately publish our awareness so other clients see us
-    const initialState = encodeAwarenessUpdate(this.awareness, [this.clientId]);
-    const myDocRef = doc(this.awarenessRef, this.clientId.toString());
-    setDoc(myDocRef, {
-      state: Bytes.fromUint8Array(initialState),
-      updatedAt: serverTimestamp()
-    }).catch(() => {});
+    this._attachUpdatesListener(new Date());
+    this._publishOwnAwareness();
+    this._attachAwarenessListener();
 
+    // Cleanup when browser tab closes
+    this.handleUnload = () => this.destroy();
+    window.addEventListener('beforeunload', this.handleUnload);
+  }
+
+  _attachUpdatesListener(fromTime) {
+    const qUpdates = query(this.updatesRef, where('timestamp', '>=', fromTime), orderBy('timestamp', 'asc'));
+    this.unsubUpdates = onSnapshot(qUpdates, (snapshot) => {
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          if (data.clientId !== this.clientId && data.update) {
+            const updateArr = data.update.toUint8Array();
+            Y.applyUpdate(this.ydoc, updateArr, this);
+          }
+        }
+      });
+    });
+  }
+
+  _attachAwarenessListener() {
     this.unsubAwareness = onSnapshot(this.awarenessRef, (snapshot) => {
       snapshot.docChanges().forEach(change => {
         const data = change.doc.data();
@@ -253,10 +261,71 @@ export class FirestoreYjsProvider {
         }
       });
     });
+  }
 
-    // Cleanup when browser tab closes
-    this.handleUnload = () => this.destroy();
-    window.addEventListener('beforeunload', this.handleUnload);
+  _publishOwnAwareness() {
+    const state = encodeAwarenessUpdate(this.awareness, [this.clientId]);
+    const myDocRef = doc(this.awarenessRef, this.clientId.toString());
+    return setDoc(myDocRef, {
+      state: Bytes.fromUint8Array(state),
+      updatedAt: serverTimestamp()
+    }).catch(() => {});
+  }
+
+  /**
+   * Detach Firestore listeners and remove our awareness doc, but keep ydoc
+   * and persistence alive. Used by the editor cache when parking a page so
+   * collaborators don't see this user "viewing" pages they've navigated away
+   * from, and so we don't pay for live snapshots on hidden editors.
+   */
+  suspend() {
+    if (this._suspended) return;
+    this._suspended = true;
+
+    // Flush any pending Yjs updates so we don't lose typing on park.
+    if (this._pendingUpdates.length) this.flushPending();
+
+    if (this.unsubUpdates) { this.unsubUpdates(); this.unsubUpdates = null; }
+    if (this.unsubAwareness) { this.unsubAwareness(); this.unsubAwareness = null; }
+    clearTimeout(this.awarenessTimeout);
+    this.awarenessTimeout = null;
+
+    // Remove our awareness doc so collaborators stop seeing us on the parked page.
+    try {
+      const docRef = doc(this.awarenessRef, this.clientId.toString());
+      deleteDoc(docRef).catch(() => {});
+    } catch (e) {}
+  }
+
+  /**
+   * Re-attach Firestore listeners and republish awareness after suspend().
+   * Catches up on Yjs state via a state-doc + pending-updates re-fetch; CRDT
+   * applies are idempotent, so any updates we already had are no-ops.
+   */
+  async resume() {
+    if (!this._suspended) return;
+    this._suspended = false;
+
+    try {
+      const stateSnap = await getDocs(query(collection(db, 'pages', this.pageId, 'yjs_state'), limit(1)));
+      if (!stateSnap.empty && stateSnap.docs[0].data().state) {
+        const stateArr = stateSnap.docs[0].data().state.toUint8Array();
+        Y.applyUpdate(this.ydoc, stateArr, this);
+      }
+      const pending = await getDocs(query(this.updatesRef, orderBy('timestamp', 'asc')));
+      pending.forEach(change => {
+        const data = change.data();
+        if (data.update && data.clientId !== this.clientId) {
+          Y.applyUpdate(this.ydoc, data.update.toUint8Array(), this);
+        }
+      });
+    } catch (err) {
+      console.warn('[FirestoreYjs] resume catchup error:', err);
+    }
+
+    this._attachUpdatesListener(new Date());
+    this._publishOwnAwareness();
+    this._attachAwarenessListener();
   }
 
   destroy() {
