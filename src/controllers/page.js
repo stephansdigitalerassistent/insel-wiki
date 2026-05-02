@@ -228,23 +228,29 @@ export async function loadPage(pageId) {
   setActivePage(pageId);
   editorContainer.classList.remove('hidden');
   emptyState.classList.add('hidden');
-  // destroyEditor's last-person auto-save reads pageTitleInput.value for the
-  // outgoing page's title, so it must run BEFORE the title is cleared.
-  destroyEditor();
   pageTitleInput.value = ''; // Clear title during load
-  editorEl.innerHTML = ''; // Clear editor immediately
-  
+
   // Clean up any old static preview
   let staticPreview = document.getElementById('static-editor-preview');
   if (staticPreview) staticPreview.remove();
 
-  // --- Variant 1: Optimistic UI Local Caching ---
+  // Optimistic UI: read page metadata from localStorage so the title appears
+  // instantly. Yjs is the source of truth for content (hydrated from
+  // IndexedDB by the editor itself), so the cached markdown content is only a
+  // fallback for first-time loads on a new device.
   let page = null;
-  // Disabled stale cache to ensure fresh todo visibility and UI state
+  try {
+    const cachedJson = localStorage.getItem(`cache_page_${pageId}`);
+    if (cachedJson) {
+      page = JSON.parse(cachedJson);
+      pageTitleInput.value = page.title || '';
+      document.title = `Insel-Wiki - ${page.title || 'Ohne Titel'}`;
+      currentPageData = page;
+      updateBreadcrumb(pageId);
+    }
+  } catch (e) {}
 
-  // No cache, show loading overlay immediately
-  if (loadingOverlay) loadingOverlay.classList.remove('hidden');
-  editorEl.style.display = 'block';
+  if (!page && loadingOverlay) loadingOverlay.classList.remove('hidden');
 
   // Fetch fresh page data
   const fetchPromise = getPage(pageId).then(freshPage => {

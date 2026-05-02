@@ -1,6 +1,35 @@
 // Sidebar component — hierarchical page tree with real-time updates
-import { subscribeToPages, createPage, getDeletedPages, restorePage, permanentlyDeletePage, updatePageHierarchy, deletePage } from '../firebase/firestore.js';
+import { subscribeToPages, createPage, getDeletedPages, restorePage, permanentlyDeletePage, updatePageHierarchy, deletePage, getPage } from '../firebase/firestore.js';
 import { canEdit, onAuthChange } from '../firebase/auth.js';
+
+// --- Hover prefetch ---
+// Warm the localStorage page cache on hover so the click feels instant.
+// Firestore's client cache also benefits, making the eventual getPage in
+// loadPage cheap. TTL'd to avoid hammering reads on tree-scrubbing.
+const _prefetchedAt = new Map();
+const _prefetchInFlight = new Set();
+const PREFETCH_TTL_MS = 60_000;
+const PREFETCH_HOVER_DELAY_MS = 150;
+let _hoverPrefetchTimer = null;
+
+async function prefetchPage(pageId) {
+  if (!pageId) return;
+  if (_prefetchInFlight.has(pageId)) return;
+  const last = _prefetchedAt.get(pageId);
+  if (last && (Date.now() - last) < PREFETCH_TTL_MS) return;
+  _prefetchInFlight.add(pageId);
+  try {
+    const fresh = await getPage(pageId);
+    if (fresh) {
+      try { localStorage.setItem(`cache_page_${pageId}`, JSON.stringify(fresh)); } catch {}
+      _prefetchedAt.set(pageId, Date.now());
+    }
+  } catch (e) {
+    // Swallow — prefetch is best-effort
+  } finally {
+    _prefetchInFlight.delete(pageId);
+  }
+}
 
 // --- Per-page sort preferences (stored locally per browser/user) ---
 const SORT_MODES = ['manual', 'name', 'created', 'changed'];
@@ -489,6 +518,16 @@ function createTreeItem(page, allFilteredPages) {
   } else {
     item.appendChild(row);
   }
+
+  row.addEventListener('mouseenter', () => {
+    clearTimeout(_hoverPrefetchTimer);
+    _hoverPrefetchTimer = setTimeout(() => prefetchPage(page.id), PREFETCH_HOVER_DELAY_MS);
+  });
+  row.addEventListener('mouseleave', () => {
+    clearTimeout(_hoverPrefetchTimer);
+  });
+  // Also prefetch on touchstart so taps on mobile benefit before the click resolves.
+  row.addEventListener('touchstart', () => prefetchPage(page.id), { passive: true });
 
   row.addEventListener('click', () => {
     // If clicking the active page, toggle its expansion

@@ -1,4 +1,11 @@
-// Tiptap WYSIWYG Editor with Yjs collaboration
+// Tiptap WYSIWYG Editor with Yjs collaboration + IndexedDB persistence + LRU page cache.
+//
+// Why an LRU cache? When the user clicks between pages we want navigation to feel
+// like switching browser tabs: the editor for a previously visited page is kept
+// alive (DOM + Tiptap + Yjs) and re-shown on revisit, so cursor and scroll
+// position survive without round-tripping Firestore. y-indexeddb hydrates fresh
+// editors locally so even cache-miss pages paint before the network responds.
+
 import { Editor } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import tippy from 'tippy.js';
@@ -21,17 +28,13 @@ import { Mention } from '@tiptap/extension-mention';
 import { mergeAttributes } from '@tiptap/core';
 import suggestion from './suggestions.js';
 import * as Y from 'yjs';
+import { IndexeddbPersistence } from 'y-indexeddb';
 import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
 
-// For Markdown conversion
 import TurndownService from 'turndown';
 import { marked } from 'marked';
 
-// Configure marked for GFM and task lists
-marked.setOptions({
-  gfm: true,
-  breaks: true,
-});
+marked.setOptions({ gfm: true, breaks: true });
 
 import { promptModal, linkModal } from '../components/modal.js';
 import { getAllPages } from '../components/sidebar.js';
@@ -40,25 +43,20 @@ import { uploadImageFile } from '../firebase/storage.js';
 import { isSpellCheckEnabled } from '../firebase/auth.js';
 import { SpellCheckerBot } from './SpellCheckerBot.js';
 
-let editor = null;
-let ydoc = null;
-let provider = null;
+// --- LRU cache of page editors ---
+const cache = new Map();         // pageId -> CacheEntry
+const cacheOrder = [];           // pageIds, most-recently-used last
+const MAX_CACHED_EDITORS = 3;
 let currentPageId = null;
-let saveCallback = null;
-let saveTimeout = null;
-let autoSaveTimer = null;
-let turndownInstance = null;
-let spellCheckerBot = null;
-let isMarkdownDirty = false;
+let formatToolbarRef = null;     // single toolbar shared across pages
 
+let turndownInstance = null;
 function getTurndown() {
   if (!turndownInstance) {
     turndownInstance = new TurndownService({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
     });
-
-    // Support for Task Lists (Checkboxes)
     turndownInstance.addRule('taskItems', {
       filter: function (node) {
         return node.nodeName === 'LI' && (node.getAttribute('data-type') === 'taskItem' || node.hasAttribute('data-checked'));
@@ -68,8 +66,6 @@ function getTurndown() {
         return (checked ? '- [x] ' : '- [ ] ') + content.trim() + '\n';
       }
     });
-
-    // Support for DateNode (serializes exactly to ISO format)
     turndownInstance.addRule('dateNode', {
       filter: function (node) {
         return node.nodeName === 'SPAN' && node.getAttribute('data-type') === 'date';
@@ -82,64 +78,259 @@ function getTurndown() {
   return turndownInstance;
 }
 
-/**
- * Initialize the editor for a given page
- */
-export function createEditor(element, pageId, user, onSave, initialContent, onReady) {
-  // Clean up previous editor
-  destroyEditor();
+// Bubble-menu DOM elements (`#link-bubble-menu`, `#format-bubble-menu`) are
+// shared across editors. The blur-prevention and click handlers must therefore
+// route to the *currently active* editor — otherwise a click would also fire
+// against parked editors and mark their content dirty.
+let _bubbleMenuGlobalListenersInstalled = false;
+function ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl) {
+  if (_bubbleMenuGlobalListenersInstalled) return;
+  _bubbleMenuGlobalListenersInstalled = true;
+  const preventBlur = (e) => { if (e.target.closest('button')) e.preventDefault(); };
+  if (linkMenuEl) {
+    linkMenuEl.style.display = 'flex';
+    linkMenuEl.addEventListener('mousedown', preventBlur);
+    linkMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
+  }
+  if (formatMenuEl) {
+    formatMenuEl.style.display = 'flex';
+    formatMenuEl.addEventListener('mousedown', preventBlur);
+    formatMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
+  }
+}
 
-  currentPageId = pageId;
-  saveCallback = (id, md) => {
-    isMarkdownDirty = false;
+// --- Cache helpers ---
+
+function _active() { return currentPageId ? cache.get(currentPageId) : null; }
+
+function bumpLRU(pageId) {
+  const i = cacheOrder.indexOf(pageId);
+  if (i >= 0) cacheOrder.splice(i, 1);
+  cacheOrder.push(pageId);
+}
+
+function evictIfNeeded() {
+  while (cacheOrder.length > MAX_CACHED_EDITORS) {
+    let evictId = null;
+    for (let i = 0; i < cacheOrder.length; i++) {
+      if (cacheOrder[i] !== currentPageId) {
+        evictId = cacheOrder.splice(i, 1)[0];
+        break;
+      }
+    }
+    if (!evictId) break;
+    const entry = cache.get(evictId);
+    if (entry) destroyEntry(entry);
+    cache.delete(evictId);
+  }
+}
+
+function destroyEntry(entry) {
+  if (!entry) return;
+  clearTimeout(entry.autoSaveTimer);
+  if (entry.spellCheckerBot) { try { entry.spellCheckerBot.destroy(); } catch (e) {} entry.spellCheckerBot = null; }
+  if (entry.formatTippy) { try { entry.formatTippy.destroy(); } catch (e) {} entry.formatTippy = null; }
+  if (entry.linkTippy) { try { entry.linkTippy.destroy(); } catch (e) {} entry.linkTippy = null; }
+  if (entry.detachSelectionListener) { try { entry.detachSelectionListener(); } catch (e) {} }
+  if (entry.editor && !entry.editor.isDestroyed) { try { entry.editor.destroy(); } catch (e) {} }
+  if (entry.provider) { try { entry.provider.destroy(); } catch (e) {} }
+  if (entry.persistence) { try { entry.persistence.destroy(); } catch (e) {} }
+  if (entry.ydoc) { try { entry.ydoc.destroy(); } catch (e) {} }
+  if (entry.container && entry.container.parentElement) {
+    entry.container.parentElement.removeChild(entry.container);
+  }
+}
+
+function flushDirtyMarkdown(entry) {
+  if (!entry || !entry.isMarkdownDirty || !entry.saveCallback) return;
+  if (!entry.editor || entry.editor.isDestroyed) return;
+  // In a collaborative session Yjs is the source of truth — flushing markdown
+  // here would race with newer remote writes.
+  if (entry.provider?.awareness?.getStates().size > 1) return;
+  try {
+    const html = entry.editor.getHTML();
+    let md = getTurndown().turndown(html);
+    if (md.length > 100000) md = md.substring(0, 100000);
+    entry.saveCallback(entry.pageId, md);
+    entry.isMarkdownDirty = false;
+  } catch (e) {}
+}
+
+function persistSelection(entry) {
+  if (!entry?.editor || entry.editor.isDestroyed) return;
+  try {
+    entry.selection = {
+      anchor: entry.editor.state.selection.anchor,
+      head: entry.editor.state.selection.head,
+    };
+    localStorage.setItem(`insel-wiki-cursor-${entry.pageId}`, JSON.stringify(entry.selection));
+  } catch (e) {}
+}
+
+function restoreSelection(entry) {
+  if (!entry?.editor || entry.editor.isDestroyed || !entry.selection) return;
+  try {
+    const docSize = entry.editor.state.doc.content.size;
+    const anchor = Math.min(Math.max(0, entry.selection.anchor || 0), docSize);
+    const head = Math.min(Math.max(0, (entry.selection.head ?? entry.selection.anchor) || 0), docSize);
+    entry.editor.commands.setTextSelection({ from: anchor, to: head });
+    entry.editor.commands.focus();
+  } catch (e) {}
+}
+
+function parkActive() {
+  const entry = _active();
+  if (!entry) return;
+
+  const scrollEl = entry.container.parentElement;
+  entry.scrollTop = scrollEl ? scrollEl.scrollTop : 0;
+
+  persistSelection(entry);
+
+  entry.container.style.display = 'none';
+  if (entry.formatTippy) entry.formatTippy.hide();
+  if (entry.linkTippy) entry.linkTippy.hide();
+
+  // Preserve "last-person leaves" auto-save behavior: if we're solo and dirty,
+  // flush before going inactive so the markdown column doesn't lag Yjs.
+  flushDirtyMarkdown(entry);
+  clearTimeout(entry.autoSaveTimer);
+  entry.autoSaveTimer = null;
+
+  if (window.editor === entry.editor) window.editor = null;
+  currentPageId = null;
+}
+
+function activateEntry(entry, onSave) {
+  // Page controller passes a fresh save closure each navigation — refresh it.
+  entry.saveCallback = (id, md) => {
+    entry.isMarkdownDirty = false;
     return onSave(id, md);
   };
-  isMarkdownDirty = false;
 
-  // Create Yjs document
-  ydoc = new Y.Doc();
+  entry.container.style.display = 'block';
+  bumpLRU(entry.pageId);
+  currentPageId = entry.pageId;
+  window.editor = entry.editor;
 
-  // Create Custom Firestore Provider for robust serverless sync
-  provider = new FirestoreYjsProvider(pageId, ydoc, user);
-  provider.setLoadCallback((hasYjsState) => {
-    // If the provider finishes loading and we still have no content, 
-    // or if the Yjs doc is effectively empty, apply the initialContent (Markdown).
+  // Restore scroll & selection on next frame so layout has settled.
+  requestAnimationFrame(() => {
+    const scrollEl = entry.container.parentElement;
+    if (scrollEl && entry.scrollTop) scrollEl.scrollTop = entry.scrollTop;
+    restoreSelection(entry);
+  });
+
+  if (formatToolbarRef && entry.editor) updateToolbarState(formatToolbarRef, entry.editor);
+}
+
+// --- Public API ---
+
+/**
+ * Activate (or create) the editor for a given page. Idempotent: if the page is
+ * already cached, this re-shows the existing editor instead of rebuilding it.
+ */
+export function createEditor(parentEl, pageId, user, onSave, initialContent, onReady) {
+  if (currentPageId === pageId && cache.has(pageId)) {
+    if (onReady) onReady();
+    return cache.get(pageId).editor;
+  }
+
+  if (currentPageId) parkActive();
+
+  if (cache.has(pageId)) {
+    activateEntry(cache.get(pageId), onSave);
+    if (onReady) requestAnimationFrame(onReady);
+    return cache.get(pageId).editor;
+  }
+
+  return _createNewEditor(parentEl, pageId, user, onSave, initialContent, onReady);
+}
+
+function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onReady) {
+  const pane = document.createElement('div');
+  pane.className = 'editor-pane';
+  pane.dataset.pid = pageId;
+  parentEl.appendChild(pane);
+
+  const ydoc = new Y.Doc();
+
+  // Local Yjs persistence — hydrates the doc instantly from past sessions so
+  // the first paint doesn't wait on Firestore.
+  let persistence = null;
+  try {
+    persistence = new IndexeddbPersistence(`insel-wiki-page-${pageId}`, ydoc);
+  } catch (e) {
+    console.warn('[Insel-Wiki] IndexedDB persistence unavailable:', e);
+  }
+
+  const provider = new FirestoreYjsProvider(pageId, ydoc, user);
+  if (persistence) provider.setLocalPersistence(persistence);
+
+  const entry = {
+    pageId,
+    editor: null,
+    ydoc,
+    provider,
+    persistence,
+    container: pane,
+    scrollTop: 0,
+    selection: null,
+    isMarkdownDirty: false,
+    autoSaveTimer: null,
+    saveCallback: null,
+    spellCheckerBot: null,
+    formatTippy: null,
+    linkTippy: null,
+    detachSelectionListener: null,
+  };
+
+  // Restore selection from a prior browser session (cold reloads benefit too).
+  try {
+    const saved = localStorage.getItem(`insel-wiki-cursor-${pageId}`);
+    if (saved) entry.selection = JSON.parse(saved);
+  } catch (e) {}
+
+  entry.saveCallback = (id, md) => {
+    entry.isMarkdownDirty = false;
+    return onSave(id, md);
+  };
+
+  let onReadyFired = false;
+  const fireReady = () => {
+    if (onReadyFired) return;
+    onReadyFired = true;
+    if (onReady) onReady();
+    restoreSelection(entry);
+  };
+
+  provider.setLoadCallback(() => {
     if (initialContent) {
-      // Allow Yjs binary state to "settle" first
+      // Allow Yjs binary state to settle before deciding to apply markdown fallback.
       setTimeout(() => {
-        if (editor && editor.isEmpty) {
+        if (entry.editor && entry.editor.isEmpty && currentPageId === pageId) {
           console.log(`[Insel-Wiki] Applying fallback content for ${pageId}`);
-          setContent(initialContent);
+          setContentInternal(entry.editor, initialContent);
         }
-        // Hide loading overlay AFTER content is set
-        if (onReady) onReady();
-      }, 50); // Faster perceived load, avoiding flash
+        fireReady();
+      }, 50);
     } else {
-      if (onReady) onReady();
+      fireReady();
     }
   });
 
+  // If IDB has prior state, surface it the moment hydrate completes — no waiting on Firestore.
+  if (persistence) {
+    persistence.whenSynced.then(() => {
+      if (entry.editor && !entry.editor.isDestroyed && !entry.editor.isEmpty && currentPageId === pageId) {
+        fireReady();
+      }
+    }).catch(() => {});
+  }
+
   const linkMenuEl = document.getElementById('link-bubble-menu');
   const formatMenuEl = document.getElementById('format-bubble-menu');
-  
-  // Prevent focus loss when clicking/touching inside the bubble menus
-  const preventBlur = (e) => {
-    // Only prevent blur for buttons, not for the URL link itself
-    if (e.target.closest('button')) {
-      e.preventDefault();
-    }
-  };
-
-  if (linkMenuEl) {
-      linkMenuEl.style.display = 'flex';
-      linkMenuEl.addEventListener('mousedown', preventBlur);
-      linkMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
-  }
-  if (formatMenuEl) {
-      formatMenuEl.style.display = 'flex';
-      formatMenuEl.addEventListener('mousedown', preventBlur);
-      formatMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
-  }
+  // Bubble menus are shared DOM. Wire global listeners exactly once.
+  ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl);
 
   const extensions = [
     StarterKit.configure({
@@ -159,48 +350,27 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
         return ['span', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes), `@${node.attrs.label ?? node.attrs.id}`];
       },
     }).configure({
-      HTMLAttributes: {
-        class: 'mention',
-      },
+      HTMLAttributes: { class: 'mention' },
       suggestion,
     }),
-    Placeholder.configure({
-      placeholder: 'Beginne hier zu schreiben…',
-    }),
-    Image.configure({
-      inline: true,
-    }),
+    Placeholder.configure({ placeholder: 'Beginne hier zu schreiben…' }),
+    Image.configure({ inline: true }),
     Link.configure({
       autolink: true,
       openOnClick: false,
-      HTMLAttributes: {
-        class: 'editable-link',
-      },
-    }).extend({
-      inclusive: false,
-    }),
+      HTMLAttributes: { class: 'editable-link' },
+    }).extend({ inclusive: false }),
     TaskList,
-    TaskItem.configure({
-      nested: true,
-    }),
-    Table.configure({
-      resizable: true,
-    }),
+    TaskItem.configure({ nested: true }),
+    Table.configure({ resizable: true }),
     TableRow,
     TableCell,
     TableHeader,
-    CharacterCount.configure({
-      limit: 100000,
-    }),
-    Collaboration.configure({
-      document: ydoc,
-    }),
+    CharacterCount.configure({ limit: 100000 }),
+    Collaboration.configure({ document: ydoc }),
     CollaborationCursor.configure({
       provider,
-      user: {
-        name: user.name,
-        color: user.color,
-      },
+      user: { name: user.name, color: user.color },
       render(cursorUser) {
         const cursor = document.createElement('span');
         cursor.classList.add('collaboration-cursor__caret');
@@ -216,39 +386,32 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
     }),
   ];
 
-  editor = new Editor({
-    element,
+  const editor = new Editor({
+    element: pane,
     extensions,
     autofocus: 'end',
-    onCreate: ({ editor }) => {
-       window.editor = editor;
+    onCreate: ({ editor: ed }) => {
+      window.editor = ed;
     },
     onDestroy: () => {
-       window.editor = null;
+      if (window.editor === entry.editor) window.editor = null;
     },
     editorProps: {
-      attributes: {
-        class: 'tiptap',
-      },
+      attributes: { class: 'tiptap' },
       handleDOMEvents: {
         click: (view, event) => {
           const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
           if (pos === undefined) return false;
-          
           const { schema } = view.state;
           const marks = view.state.doc.resolve(pos).marks();
           const linkMark = marks.find(mark => mark.type === schema.marks.link);
           const href = linkMark?.attrs?.href;
-
           if (href && (event.ctrlKey || event.metaKey)) {
             console.log('[Insel-Wiki] Link Ctrl+clicked:', href);
-            // Internal links: use navigateTo
             if (href.startsWith('#')) {
               const parts = href.replace('#/', '').replace('#', '').split('/');
-              const targetPageId = parts[0];
-              navigateTo(targetPageId);
+              navigateTo(parts[0]);
             } else {
-              // External links: open in new tab
               window.open(href, '_blank');
             }
             return true;
@@ -258,42 +421,20 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
         keydown: (view, event) => {
           const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
           const isMod = ctrlKey || metaKey;
-
-          // Robust handling for Ctrl+Alt shortcuts (fixes Edge/Windows/AltGr issues)
           if (isMod && altKey && !shiftKey) {
-            if (code === 'Digit1') {
-              editor.chain().focus().toggleHeading({ level: 1 }).run();
-              return true;
-            }
-            if (code === 'Digit2') {
-              editor.chain().focus().toggleHeading({ level: 2 }).run();
-              return true;
-            }
-            if (code === 'Digit3') {
-              editor.chain().focus().toggleHeading({ level: 3 }).run();
-              return true;
-            }
-            if (code === 'KeyC') {
-              editor.chain().focus().toggleCodeBlock().run();
-              return true;
-            }
+            if (code === 'Digit1') { editor.chain().focus().toggleHeading({ level: 1 }).run(); return true; }
+            if (code === 'Digit2') { editor.chain().focus().toggleHeading({ level: 2 }).run(); return true; }
+            if (code === 'Digit3') { editor.chain().focus().toggleHeading({ level: 3 }).run(); return true; }
+            if (code === 'KeyC')   { editor.chain().focus().toggleCodeBlock().run(); return true; }
           }
-
-          // Ctrl+K for Link
           if (isMod && key === 'k') {
             event.preventDefault();
             (async () => {
               const { href } = editor.getAttributes('link');
-              
-              // Select the whole link if we are currently inside one
-              if (editor.isActive('link')) {
-                editor.chain().focus().extendMarkRange('link').run();
-              }
-              
+              if (editor.isActive('link')) editor.chain().focus().extendMarkRange('link').run();
               const { state } = editor;
               const { from, to } = state.selection;
               const selectedText = state.doc.textBetween(from, to, ' ');
-              
               const result = await linkModal(href || '', selectedText || '');
               if (result) {
                 editor.chain().focus()
@@ -308,23 +449,19 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
             })();
             return true;
           }
-
-          // Ctrl+S for Save
           if (isMod && key === 's') {
             event.preventDefault();
-            if (saveCallback && currentPageId) {
-              const markdown = getMarkdown();
-              saveCallback(currentPageId, markdown);
+            if (entry.saveCallback) {
+              const html = editor.getHTML();
+              const markdown = getTurndown().turndown(html);
+              entry.saveCallback(entry.pageId, markdown);
             }
             return true;
           }
-
-          // Ctrl+Enter for Horizontal Rule
           if (isMod && key === 'Enter') {
             editor.chain().focus().setHorizontalRule().run();
             return true;
           }
-
           return false;
         },
         dblclick: (view, event) => {
@@ -357,9 +494,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
             if (!file) return;
             try {
               const url = await uploadImageFile(file, user?.uid || 'guest');
-              if (editor && url) {
-                editor.chain().focus().setImage({ src: url }).run();
-              }
+              if (editor && url) editor.chain().focus().setImage({ src: url }).run();
             } catch (err) {
               console.error('Image upload failed', err);
               alert('Fehler beim Hochladen des Bildes: ' + err.message);
@@ -377,9 +512,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
             files.forEach(async file => {
               try {
                 const url = await uploadImageFile(file, user?.uid || 'guest');
-                if (editor && url) {
-                  editor.chain().focus().setImage({ src: url }).run();
-                }
+                if (editor && url) editor.chain().focus().setImage({ src: url }).run();
               } catch (err) {
                 console.error('Image upload failed', err);
                 alert('Fehler beim Hochladen des Bildes: ' + err.message);
@@ -392,13 +525,11 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
       }
     },
     onUpdate: ({ editor: ed }) => {
-      isMarkdownDirty = true;
-      clearTimeout(autoSaveTimer);
-      autoSaveTimer = setTimeout(() => {
-        if (saveCallback && currentPageId && provider && provider.awareness) {
-          // Solo-only: in collab, Yjs handles continuous sync — autosaving
-          // markdown here would race with other writers' newer content.
-          if (provider.awareness.getStates().size <= 1) {
+      entry.isMarkdownDirty = true;
+      clearTimeout(entry.autoSaveTimer);
+      entry.autoSaveTimer = setTimeout(() => {
+        if (entry.saveCallback && entry.provider && entry.provider.awareness) {
+          if (entry.provider.awareness.getStates().size <= 1) {
             console.log('[Insel-Wiki] Idle 15s & solo. Auto-saving Markdown...');
             const html = ed.getHTML();
             let markdown = getTurndown().turndown(html);
@@ -406,22 +537,24 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
               markdown = markdown.substring(0, 100000);
               console.warn('[Insel-Wiki] Saved content exceeded 100,000 characters and was truncated.');
             }
-            saveCallback(currentPageId, markdown);
+            entry.saveCallback(entry.pageId, markdown);
           }
         }
-      }, 15000); // 15 seconds — narrows the window where the markdown column lags Yjs.
+      }, 15000);
     }
   });
 
-  if (provider) {
-    // If someone leaves, and we are the last one, start the 2 minute timer
-    provider.awareness.on('change', () => {
-      if (provider && provider.awareness && provider.awareness.getStates().size <= 1 && editor) {
-        // Trigger a fake update to reset the timer
-        editor.view.dispatch(editor.state.tr);
-      }
-    });
-  }
+  entry.editor = editor;
+
+  provider.awareness.on('change', () => {
+    // Don't poke parked editors — a no-op dispatch still flips isMarkdownDirty
+    // via onUpdate, which would queue a phantom autosave.
+    if (currentPageId !== pageId) return;
+    if (provider.awareness.getStates().size <= 1 && editor && !editor.isDestroyed) {
+      // Trigger a fake update to reset the autosave timer when going solo.
+      editor.view.dispatch(editor.state.tr);
+    }
+  });
 
   function getSelectionBoundingRect() {
     const { view, state } = editor;
@@ -438,7 +571,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
   let linkTippy = null;
 
   if (formatMenuEl) {
-    formatTippy = tippy(element, {
+    formatTippy = tippy(pane, {
       content: formatMenuEl,
       interactive: true,
       trigger: 'manual',
@@ -447,12 +580,12 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
       zIndex: 1000,
       getReferenceClientRect: getSelectionBoundingRect
     });
-    
-    // Use pointerdown for instant reaction on mobile and to prevent blur
+
     const handleFormatClick = async (e) => {
       const btn = e.target.closest('.format-bubble-action');
       if (!btn) return;
-      
+      // Shared bubble menu — only the active editor should react.
+      if (currentPageId !== pageId) return;
       e.preventDefault(); e.stopPropagation();
       const action = btn.dataset.action;
       const chain = editor.chain().focus();
@@ -464,9 +597,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
         case 'bulletList': chain.toggleBulletList().run(); break;
         case 'date': chain.insertContent({ type: 'dateNode' }).run(); break;
         case 'link': {
-          if (editor.isActive('link')) {
-            editor.chain().focus().extendMarkRange('link').run();
-          }
+          if (editor.isActive('link')) editor.chain().focus().extendMarkRange('link').run();
           const { from, to } = editor.state.selection;
           const selectedText = editor.state.doc.textBetween(from, to, ' ');
           const result = await linkModal('', selectedText);
@@ -483,7 +614,6 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
           break;
         }
       }
-      // Delay hide to allow visual feedback
       setTimeout(() => { if (formatTippy) formatTippy.hide(); }, 100);
     };
 
@@ -491,7 +621,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
   }
 
   if (linkMenuEl) {
-    linkTippy = tippy(element, {
+    linkTippy = tippy(pane, {
       content: linkMenuEl,
       interactive: true,
       trigger: 'manual',
@@ -504,20 +634,16 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
         const urlEl = instance.popper.querySelector('#bubble-link-url');
         if (urlEl && attrs.href) {
           urlEl.href = attrs.href;
-          
           let displayText = attrs.href;
           let isInternal = false;
           if (attrs.href.startsWith('#/')) {
             isInternal = true;
             const parts = attrs.href.split('/');
-            const pageId = parts[1];
+            const pid = parts[1];
             const allPages = getAllPages();
-            const page = allPages.find(p => p.id === pageId);
-            if (page) {
-              displayText = `📄 ${page.title}`;
-            }
+            const page = allPages.find(p => p.id === pid);
+            if (page) displayText = `📄 ${page.title}`;
           }
-          
           urlEl.textContent = displayText;
           if (isInternal) {
             urlEl.removeAttribute('target');
@@ -534,25 +660,16 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
       const editBtn = e.target.closest('#bubble-link-edit');
       const unlinkBtn = e.target.closest('#bubble-link-unlink');
       const urlLink = e.target.closest('#bubble-link-url');
-
-      if (editBtn || unlinkBtn || urlLink) {
-        e.stopPropagation();
-      }
-
+      // Shared bubble menu — only the active editor should react.
+      if (currentPageId !== pageId) return;
+      if (editBtn || unlinkBtn || urlLink) e.stopPropagation();
       if (editBtn) {
         e.preventDefault();
-        
-        // 1. Get the current attributes
         const { href } = editor.getAttributes('link');
-        
-        // 2. Select the whole link mark range so we can read its text correctly
         editor.chain().focus().extendMarkRange('link').run();
-        
-        // 3. Read text from the NEW selection (which is the whole link)
         const { state } = editor;
         const { from, to } = state.selection;
         const selectedText = state.doc.textBetween(from, to, ' ');
-        
         const result = await linkModal(href || '', selectedText);
         if (result) {
           editor.chain().focus()
@@ -578,28 +695,22 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
             navigateTo(parts[0]);
             if (linkTippy) linkTippy.hide();
           }
-          // External links follow default behavior since we removed e.preventDefault()
         }
       }
     };
 
-    // Use click instead of pointerdown for links to ensure standard behavior works
     linkMenuEl.addEventListener('click', handleLinkClick);
   }
 
   function updateBubbleMenus() {
     if (!editor || editor.isDestroyed) return;
+    if (currentPageId !== pageId) return; // parked editor — bubbles must stay hidden
     const { state, view } = editor;
     const { selection } = state;
-    
-    // More relaxed focus check for mobile: either editor has focus OR a bubble is open
-    const isFocused = view.hasFocus() || 
+    const isFocused = view.hasFocus() ||
                      (document.activeElement && (formatMenuEl?.contains(document.activeElement) || linkMenuEl?.contains(document.activeElement)));
-    
     const isLink = editor.isActive('link');
-
     if (formatTippy) {
-      // Show format menu if focused and something is selected
       if (isFocused && !selection.empty && !isLink) {
         formatTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
         formatTippy.show();
@@ -607,10 +718,7 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
         formatTippy.hide();
       }
     }
-
     if (linkTippy) {
-      // For links, we show it even if focus is temporarily lost (mobile keyboard shifts)
-      // as long as the cursor is actually inside a link mark.
       if (isLink) {
         linkTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
         linkTippy.show();
@@ -623,56 +731,70 @@ export function createEditor(element, pageId, user, onSave, initialContent, onRe
   editor.on('selectionUpdate', updateBubbleMenus);
   editor.on('transaction', updateBubbleMenus);
   editor.on('focus', updateBubbleMenus);
-  
-  // CRITICAL: Global selectionchange listener for mobile Chrome
+
+  // Toolbar state must follow whichever editor is currently active.
+  const toolbarBindUpdate = () => {
+    if (formatToolbarRef && currentPageId === pageId) updateToolbarState(formatToolbarRef, editor);
+  };
+  editor.on('selectionUpdate', toolbarBindUpdate);
+  editor.on('transaction', toolbarBindUpdate);
+
   const onSelectionChange = () => updateBubbleMenus();
   document.addEventListener('selectionchange', onSelectionChange);
-  
+  entry.detachSelectionListener = () => document.removeEventListener('selectionchange', onSelectionChange);
+
   editor.on('blur', () => {
     setTimeout(() => {
-      if (!element.contains(document.activeElement) &&
+      if (!pane.contains(document.activeElement) &&
           (!formatMenuEl || !formatMenuEl.contains(document.activeElement)) &&
           (!linkMenuEl || !linkMenuEl.contains(document.activeElement))) {
         if (formatTippy) formatTippy.hide();
         if (linkTippy) linkTippy.hide();
       }
-    }, 250); // Increased timeout for mobile
+    }, 250);
   });
 
-  // Cleanup selection listener when editor is destroyed
   editor.on('destroy', () => {
     document.removeEventListener('selectionchange', onSelectionChange);
   });
 
+  entry.formatTippy = formatTippy;
+  entry.linkTippy = linkTippy;
+
   provider.init();
 
-  // Initialize spell checker bot if enabled for this user
   if (isSpellCheckEnabled()) {
-    spellCheckerBot = new SpellCheckerBot(editor, provider);
-    spellCheckerBot.start();
+    entry.spellCheckerBot = new SpellCheckerBot(editor, provider);
+    entry.spellCheckerBot.start();
   }
+
+  cache.set(pageId, entry);
+  bumpLRU(pageId);
+  currentPageId = pageId;
+  window.editor = editor;
+  evictIfNeeded();
+
+  if (formatToolbarRef) updateToolbarState(formatToolbarRef, editor);
 
   return editor;
 }
 
-export function setContent(markdown) {
+// --- setContent / getMarkdown / etc. ---
+
+function setContentInternal(editor, markdown) {
   if (!editor) return;
 
-  // Only skip marked if it clearly looks like a full HTML document (e.g. starts with <p> or <div>)
-  // Otherwise, marked handles HTML inside markdown just fine.
   let html = (markdown?.trim().startsWith('<') && markdown?.trim().endsWith('>'))
     ? markdown
     : marked.parse(markdown || '');
 
   if (typeof html === 'string') {
-    // Post-process HTML for Tiptap TaskList
     html = html.replace(/<ul>\s*(<li[^>]*><input[^>]*type="checkbox"[^>]*>[\s\S]*?)<\/ul>/gi, '<ul data-type="taskList">$1</ul>');
     html = html.replace(/<li><input([^>]*)type="checkbox"([^>]*)>(.*?)<\/li>/gi, (match, p1, p2, text) => {
       const isChecked = p1.includes('checked') || p2.includes('checked');
       return `<li data-type="taskItem" data-checked="${isChecked}">${text}</li>`;
     });
 
-    // Safely post-process HTML for DateNode using DOM traversal
     if (typeof window !== 'undefined' && window.DOMParser) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
@@ -681,9 +803,7 @@ export function setContent(markdown) {
       let n;
       while ((n = walker.nextNode())) {
         if (n.parentNode && (n.parentNode.tagName === 'CODE' || n.parentNode.tagName === 'PRE' || n.parentNode.tagName === 'A')) continue;
-        if (/\b\d{4}-\d{2}-\d{2}\b/.test(n.nodeValue)) {
-          nodesToReplace.push(n);
-        }
+        if (/\b\d{4}-\d{2}-\d{2}\b/.test(n.nodeValue)) nodesToReplace.push(n);
       }
       nodesToReplace.forEach(textNode => {
         const frag = document.createDocumentFragment();
@@ -707,86 +827,64 @@ export function setContent(markdown) {
 
   editor.commands.setContent(html, true);
 }
+
+export function setContent(markdown) {
+  const e = _active()?.editor;
+  if (e) setContentInternal(e, markdown);
+}
+
 export function getMarkdown() {
-  if (!editor) return '';
-  const html = editor.getHTML();
-  return getTurndown().turndown(html);
+  const e = _active()?.editor;
+  if (!e) return '';
+  return getTurndown().turndown(e.getHTML());
 }
 
 export function getHTML() {
-  if (!editor) return '';
-  return editor.getHTML();
+  const e = _active()?.editor;
+  if (!e) return '';
+  return e.getHTML();
 }
 
 export function setEditable(editable) {
-  if (editor) {
-    editor.setEditable(editable);
-  }
+  const e = _active()?.editor;
+  if (e) e.setEditable(editable);
 }
 
 /**
- * Save the current markdown to Firestore if the editor is dirty and we are
- * the only one viewing the page. Safe to call from beforeunload /
- * visibilitychange / pagehide handlers — fire-and-forget; Firestore queues
- * the write in its IndexedDB cache. Returns the underlying save promise so
- * in-app callers can await it.
+ * Save the active page's markdown if dirty and we are solo. Safe to call from
+ * unload handlers — fire-and-forget; Firestore queues writes via its IDB cache.
  */
 export function flushSave() {
-  if (!isMarkdownDirty || !saveCallback || !currentPageId || !editor) return Promise.resolve();
-  if (provider && provider.awareness && provider.awareness.getStates().size > 1) {
-    // In collab Yjs handles sync; flushing markdown here could race.
-    return Promise.resolve();
-  }
-  clearTimeout(autoSaveTimer);
-  const html = editor.getHTML();
+  const entry = _active();
+  if (!entry || !entry.isMarkdownDirty || !entry.saveCallback || !entry.editor) return Promise.resolve();
+  if (entry.provider?.awareness?.getStates().size > 1) return Promise.resolve();
+  clearTimeout(entry.autoSaveTimer);
+  const html = entry.editor.getHTML();
   let markdown = getTurndown().turndown(html);
   if (markdown.length > 100000) markdown = markdown.substring(0, 100000);
-  return Promise.resolve(saveCallback(currentPageId, markdown));
+  return Promise.resolve(entry.saveCallback(entry.pageId, markdown));
 }
 
+/**
+ * Park the active editor (used by showEmptyState). The cache stays alive so a
+ * subsequent navigation back is still instant.
+ */
 export function destroyEditor() {
-  clearTimeout(saveTimeout);
-  clearTimeout(autoSaveTimer);
-
-  // Auto-save when leaving the page if we are the last person and have unsaved changes
-  let pendingSave = Promise.resolve();
-  if (isMarkdownDirty && provider && provider.awareness && provider.awareness.getStates().size <= 1 && saveCallback && currentPageId && editor) {
-    console.log('[Insel-Wiki] Auto-saving Markdown on page leave (last person).');
-    const html = editor.getHTML();
-    let markdown = getTurndown().turndown(html);
-    if (markdown.length > 100000) markdown = markdown.substring(0, 100000);
-    pendingSave = Promise.resolve(saveCallback(currentPageId, markdown));
-  }
-
-  isMarkdownDirty = false;
-
-  if (spellCheckerBot) {
-    spellCheckerBot.destroy();
-    spellCheckerBot = null;
-  }
-  if (editor) {
-    editor.destroy();
-    editor = null;
-  }
-  if (provider) {
-    provider.destroy();
-    provider = null;
-  }
-  if (ydoc) {
-    ydoc.destroy();
-    ydoc = null;
-  }
-  currentPageId = null;
-  return pendingSave;
+  if (currentPageId) parkActive();
 }
 
-export function getProvider() {
-  return provider;
+/** Hard-clear all cached editors (e.g. on logout). */
+export function destroyAllEditors() {
+  if (currentPageId) parkActive();
+  for (const entry of cache.values()) destroyEntry(entry);
+  cache.clear();
+  cacheOrder.length = 0;
 }
 
-export function getEditor() {
-  return editor;
-}
+export function getProvider() { return _active()?.provider || null; }
+export function getEditor() { return _active()?.editor || null; }
+
+// --- Format toolbar (single shared instance, retargets per active editor) ---
 
 export function createFormatToolbar(container) {
   const toolbar = document.createElement('div');
@@ -816,7 +914,9 @@ export function createFormatToolbar(container) {
   container.insertBefore(toolbar, container.firstChild);
   toolbar.addEventListener('click', async (e) => {
     const btn = e.target.closest('.format-btn');
-    if (!btn || !editor) return;
+    if (!btn) return;
+    const editor = _active()?.editor;
+    if (!editor) return;
     const action = btn.dataset.action;
     const chain = editor.chain().focus();
     switch (action) {
@@ -835,9 +935,7 @@ export function createFormatToolbar(container) {
       case 'horizontalRule': chain.setHorizontalRule().run(); break;
       case 'date': chain.insertContent({ type: 'dateNode' }).run(); break;
       case 'link': {
-        if (editor.isActive('link')) {
-          editor.chain().focus().extendMarkRange('link').run();
-        }
+        if (editor.isActive('link')) editor.chain().focus().extendMarkRange('link').run();
         const { from, to } = editor.state.selection;
         const selectedText = editor.state.doc.textBetween(from, to, ' ');
         const result = await linkModal('', selectedText);
@@ -866,17 +964,16 @@ export function createFormatToolbar(container) {
         break;
       }
     }
-    updateToolbarState(toolbar);
+    updateToolbarState(toolbar, editor);
   });
-  if (editor) {
-    editor.on('selectionUpdate', () => updateToolbarState(toolbar));
-    editor.on('transaction', () => updateToolbarState(toolbar));
-  }
+  formatToolbarRef = toolbar;
+  const ed = _active()?.editor;
+  if (ed) updateToolbarState(toolbar, ed);
   return toolbar;
 }
 
-function updateToolbarState(toolbar) {
-  if (!editor) return;
+function updateToolbarState(toolbar, editor) {
+  if (!toolbar || !editor) return;
   toolbar.querySelectorAll('.format-btn').forEach((btn) => {
     const action = btn.dataset.action;
     let isActive = false;

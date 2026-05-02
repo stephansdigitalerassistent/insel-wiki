@@ -51,6 +51,10 @@ export class FirestoreYjsProvider {
     this.compactionThreshold = 50;
     this.pendingWrites = 0;
     this._statusListeners = new Set();
+    // Optional local cache (e.g. y-indexeddb). Updates re-applied from this
+    // origin are local replays; we must not echo them back to Firestore or
+    // every IDB rehydrate would create duplicate writes.
+    this.persistence = null;
     // Yjs writes are coalesced over a 1s window to cut Firestore write
     // volume. Buffered updates are merged into a single addDoc per flush.
     this._writeDebounceMs = 1000;
@@ -96,6 +100,10 @@ export class FirestoreYjsProvider {
 
   setLoadCallback(callback) {
     this.onLoadComplete = callback;
+  }
+
+  setLocalPersistence(persistence) {
+    this.persistence = persistence;
   }
 
   getRandomColor() {
@@ -168,23 +176,25 @@ export class FirestoreYjsProvider {
 
     // 3. Sync New Document Updates (Live, debounced 2s)
     this.ydoc.on('update', (update, origin) => {
-      if (origin !== this) {
-        const wasEmpty = this._pendingUpdates.length === 0;
-        this._pendingUpdates.push(update);
-        if (wasEmpty) {
-          // Mark as dirty for the duration of the buffer + write so the
-          // save indicator stays on "Speichern…" while changes are pending.
-          this.pendingWrites++;
-          this._emitStatus();
-        }
-        clearTimeout(this._writeTimer);
-        this._writeTimer = setTimeout(() => this.flushPending(), this._writeDebounceMs);
+      // Skip self-applied (Firestore replay) and y-indexeddb-applied (local cache replay) updates.
+      if (origin === this) return;
+      if (this.persistence && origin === this.persistence) return;
 
-        // Check if we should trigger background compaction
-        this.localUpdateCount++;
-        if (this.localUpdateCount >= this.compactionThreshold) {
-          this.compact();
-        }
+      const wasEmpty = this._pendingUpdates.length === 0;
+      this._pendingUpdates.push(update);
+      if (wasEmpty) {
+        // Mark as dirty for the duration of the buffer + write so the
+        // save indicator stays on "Speichern…" while changes are pending.
+        this.pendingWrites++;
+        this._emitStatus();
+      }
+      clearTimeout(this._writeTimer);
+      this._writeTimer = setTimeout(() => this.flushPending(), this._writeDebounceMs);
+
+      // Check if we should trigger background compaction
+      this.localUpdateCount++;
+      if (this.localUpdateCount >= this.compactionThreshold) {
+        this.compact();
       }
     });
 
