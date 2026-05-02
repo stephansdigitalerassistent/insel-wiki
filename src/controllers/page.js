@@ -1,6 +1,6 @@
 // Page Controller — loading, saving, snapshots, link healing, and page actions
 import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
-import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, flushSave } from '../editor/editor.js';
+import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, flushSave, hasCachedEditor } from '../editor/editor.js';
 import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from '../firebase/presence.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
@@ -250,7 +250,12 @@ export async function loadPage(pageId) {
     }
   } catch (e) {}
 
-  if (!page && loadingOverlay) loadingOverlay.classList.remove('hidden');
+  // Show the skeleton overlay whenever the editor isn't already in our LRU
+  // cache. Cache hits paint with content immediately, but a fresh editor
+  // mounts empty and would briefly flash the Tiptap placeholder text
+  // "Beginne hier zu schreiben…" before IDB / Firestore content arrives.
+  const editorIsCached = hasCachedEditor(pageId);
+  if (!editorIsCached && loadingOverlay) loadingOverlay.classList.remove('hidden');
 
   // Fetch fresh page data
   const fetchPromise = getPage(pageId).then(freshPage => {

@@ -899,6 +899,18 @@ export function destroyAllEditors() {
 export function getProvider() { return _active()?.provider || null; }
 export function getEditor() { return _active()?.editor || null; }
 
+/**
+ * True if there's a live editor for this page in the LRU cache. The page
+ * controller uses this to decide whether to show the loading overlay — cache
+ * hits paint instantly (no need to flash the skeleton), but cache misses must
+ * cover the placeholder text "Beginne hier zu schreiben…" that Tiptap shows
+ * for the empty document during the brief window before IDB or Firestore
+ * content arrives.
+ */
+export function hasCachedEditor(pageId) {
+  return cache.has(pageId);
+}
+
 // --- Format toolbar (single shared instance, retargets per active editor) ---
 
 export function createFormatToolbar(container) {
