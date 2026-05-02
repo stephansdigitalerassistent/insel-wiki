@@ -1023,7 +1023,7 @@ html, body {
 }
 
 .modal-box {
-  width: 100%; max-width: 380px; background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md); box-shadow: var(--glass-shadow); padding: 24px; animation: modalSlideUp var(--transition-fast) forwards;
+  width: 100%; max-width: 380px; max-height: calc(100vh - 32px); overflow-y: auto; overscroll-behavior: contain; background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md); box-shadow: var(--glass-shadow); padding: 24px; animation: modalSlideUp var(--transition-fast) forwards;
 }
 
 .modal-title {
