@@ -104,6 +104,18 @@ test('trims whitespace', () => {
   expect(slugify('  trimmed  ')).toBe('trimmed');
 });
 
+test('ignores dates in YYYY-MM-DD format', () => {
+  expect(slugify('Meeting Notes 2024-05-12')).toBe('meeting-notes');
+});
+
+test('ignores dates in DD.MM.YYYY format', () => {
+  expect(slugify('Protokoll 12.05.2024')).toBe('protokoll');
+});
+
+test('ignores dates in YYYYMMDD format', () => {
+  expect(slugify('Session 20240512 Info')).toBe('session-info');
+});
+
 // ──────────────────────────────────────────────
 console.log('\n☑️  extractTasks()');
 // ──────────────────────────────────────────────
