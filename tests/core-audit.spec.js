@@ -215,7 +215,7 @@ test.describe('Insel-Wiki Core Audit', () => {
     const searchInput = page.locator('#search-input');
     await searchInput.fill('AUDIT-Child');
     await page.waitForTimeout(2000);
-    const searchResult = page.locator('.page-item', { hasText: childTitle }).first();
+    const searchResult = page.locator('.tree-item', { hasText: childTitle }).first();
     await expect(searchResult).toBeVisible({ timeout: 10000 });
     
     // --- 6. Navigation via Search ---
