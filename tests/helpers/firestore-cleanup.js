@@ -22,7 +22,7 @@ const BOT_PASSWORD = 'InselWikiUser2026!';
 // Test-created pages always carry a 13-digit ms-since-1970 suffix from
 // `${prefix}-${Date.now()}` and one of these prefixes. Any matching page is
 // considered fair game to permanently delete.
-export const TEST_TITLE_RE = /^(TEST-(Robust|TaskPage|Trash)|E2E-(Top|Child)|AUDIT-(Top|Child))-\d{13}$/;
+const TEST_TITLE_RE = /^(TEST-(Robust|TaskPage|Trash)|E2E-(Top|Child)|AUDIT-(Top|Child))-\d{13}$/;
 
 const PAGE_SUBCOLLECTIONS = [
   'history',

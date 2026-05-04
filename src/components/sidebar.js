@@ -653,17 +653,7 @@ function createTreeItem(page, allFilteredPages) {
   return item;
 }
 
-/**
- * Destroy sidebar listener
- */
-export function destroySidebar() {
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
-}
 
-// --- Trash Section ---
 
 function renderTrashHeader(container) {
   container.innerHTML = '';

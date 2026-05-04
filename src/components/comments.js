@@ -87,7 +87,7 @@ export function loadCommentsForPage(pageId) {
 /**
  * Open the sidebar and focus on a specific comment thread
  */
-export function openCommentThread(commentId, isNew = false) {
+function openCommentThread(commentId, isNew = false) {
   activeCommentId = commentId;
   commentsSidebar.classList.remove('hidden');
   
@@ -112,7 +112,7 @@ export function openCommentThread(commentId, isNew = false) {
 /**
  * Close comments sidebar
  */
-export function closeComments() {
+function closeComments() {
   if (commentsSidebar) {
     commentsSidebar.classList.add('hidden');
     activeCommentId = null;

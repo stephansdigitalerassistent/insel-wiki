@@ -888,13 +888,7 @@ export function destroyEditor() {
   if (currentPageId) parkActive();
 }
 
-/** Hard-clear all cached editors (e.g. on logout). */
-export function destroyAllEditors() {
-  if (currentPageId) parkActive();
-  for (const entry of cache.values()) destroyEntry(entry);
-  cache.clear();
-  cacheOrder.length = 0;
-}
+
 
 export function getProvider() { return _active()?.provider || null; }
 export function getEditor() { return _active()?.editor || null; }
@@ -1021,3 +1015,4 @@ function updateToolbarState(toolbar, editor) {
     btn.classList.toggle('is-active', isActive);
   });
 }
+

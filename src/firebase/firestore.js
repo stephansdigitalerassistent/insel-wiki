@@ -414,15 +414,7 @@ export function formatTimestamp(ts) {
   });
 }
 
-/**
- * Get all comments for a page
- */
-export async function getComments(pageId) {
-  const commentsRef = collection(db, PAGES_COLLECTION, pageId, 'comments');
-  const q = query(commentsRef, orderBy('createdAt', 'asc'));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-}
+
 
 /**
  * Save a new comment

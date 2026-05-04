@@ -22,7 +22,7 @@ export function initDashboard(appEl, navigateTo) {
   });
 }
 
-export function renderDashboard(pages, navigateTo) {
+function renderDashboard(pages, navigateTo) {
   lastPages = pages || lastPages;
   lastNavigateTo = navigateTo || lastNavigateTo;
 
