@@ -352,7 +352,8 @@ export async function getHistory(pageId) {
 }
 
 /**
- * Subscribe to the full page tree in real time
+ * Subscribe to the full page tree in real time.
+ * Filters out documents marked as deleted.
  */
 export function subscribeToPages(callback) {
   const pagesRef = collection(db, PAGES_COLLECTION);

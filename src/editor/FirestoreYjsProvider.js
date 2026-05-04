@@ -330,7 +330,7 @@ export class FirestoreYjsProvider {
 
   destroy() {
     // Flush buffered updates before tearing down so we don't lose the last
-    // 0–2s of typing on navigation or tab close.
+    // 0–1s of typing on navigation or tab close.
     if (this._pendingUpdates.length) this.flushPending();
     if (this.unsubUpdates) this.unsubUpdates();
     if (this.unsubAwareness) this.unsubAwareness();

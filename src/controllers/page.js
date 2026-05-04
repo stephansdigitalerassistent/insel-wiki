@@ -334,7 +334,7 @@ export async function loadPage(pageId) {
   const newProvider = getProvider();
   yjsStatusUnsub = newProvider ? newProvider.onStatusChange(recomputeSaveStatus) : null;
 
-  // --- Variant 4: Defer Heavy Tasks (Link Healing) ---
+  // --- Defer Heavy Tasks (Link Healing) ---
   setTimeout(() => {
     // Only heal if we fetched fresh data and we are still on this page
     fetchPromise.then(freshPage => {
