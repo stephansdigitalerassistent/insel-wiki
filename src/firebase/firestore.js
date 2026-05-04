@@ -60,15 +60,16 @@ export async function getPage(pageId) {
 }
 
 /**
- * Update page content and title
+ * Update page content. Title is owned by updatePageTitle — saving content
+ * must not touch the title field, otherwise a content flush during
+ * navigation can clobber the old page's title with the new page's.
  */
-export async function savePage(pageId, content, title, savedBy = '', savedByName = '', savedByPhoto = '') {
+export async function savePage(pageId, content, savedBy = '', savedByName = '', savedByPhoto = '') {
   console.log('[Firestore] savePage called for', pageId, 'with content length:', content?.length, 'content starts with:', content?.substring(0, 50));
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
   try {
     await updateDoc(pageRef, {
       content,
-      title,
       updatedAt: serverTimestamp(),
       lastSavedBy: savedBy,
       lastSavedByName: savedByName,

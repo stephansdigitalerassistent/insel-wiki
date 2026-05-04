@@ -343,7 +343,7 @@ export async function loadPage(pageId) {
           if (changed) {
             freshPage.content = healedMarkdown;
             if (canEdit()) {
-              savePage(pageId, healedMarkdown, freshPage.title, 'System (Link-Healer)').catch(console.warn);
+              savePage(pageId, healedMarkdown, 'System (Link-Healer)').catch(console.warn);
             }
           }
        }
@@ -467,7 +467,7 @@ async function handleSave(pageId, markdown) {
   try {
     const user = getCurrentUser();
     const userName = user?.displayName || formatDefaultName(user?.email);
-    await savePage(pageId, markdown, pageTitleInput.value, user?.email || '', userName, user?.photoURL || null);
+    await savePage(pageId, markdown, user?.email || '', userName, user?.photoURL || null);
     saveErrored = false;
   } catch (err) {
     console.error('Save error:', err);
