@@ -69,6 +69,22 @@
         </button>
       </form>
 
+      <!-- Activation Panel (shown after a successful registration) -->
+      <div id="activation-panel" class="auth-form hidden">
+        <h2>Letzter Schritt: Account aktivieren</h2>
+        <p class="auth-hint" style="text-align: center; margin-bottom: 16px;">
+          Senden Sie eine leere E-Mail von Ihrem <strong>@insel.ch</strong> Postfach an die folgende Adresse, um Ihren Account zu aktivieren:
+        </p>
+        <div style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.04); border-radius: 6px; font-family: monospace; font-size: 13px; word-break: break-all;">
+          <div><strong>An:</strong> <span id="activation-recipient"></span></div>
+          <div style="margin-top: 4px;"><strong>Betreff:</strong> <span id="activation-subject"></span></div>
+        </div>
+        <a id="activation-mailto-btn" class="btn btn-primary" href="#" style="display: block; text-align: center; text-decoration: none;">E-Mail-Programm öffnen</a>
+        <button type="button" id="activation-copy-btn" class="btn btn-outline" style="margin-top: 8px;">Details in die Zwischenablage kopieren</button>
+        <div class="auth-divider"><span>oder</span></div>
+        <button type="button" id="activation-back-btn" class="btn btn-outline" style="border: none;">Zurück zur Anmeldung</button>
+      </div>
+
       <!-- Forgot Password Form -->
       <form id="forgot-form" class="auth-form hidden">
         <h2>Passwort zurücksetzen</h2>

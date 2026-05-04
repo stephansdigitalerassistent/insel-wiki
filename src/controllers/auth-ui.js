@@ -10,6 +10,7 @@ let authOverlay, loginForm, loginEmailInput, loginPasswordInput, loginError, log
 let registerForm, registerEmailInput, registerPasswordInput, registerBtn, registerError;
 let forgotForm, forgotEmailInput, forgotBtn, forgotError;
 let showRegisterBtn, showLoginBtn, showForgotBtn, showLoginFromForgotBtn;
+let activationPanel, activationRecipientEl, activationSubjectEl, activationMailtoBtn, activationCopyBtn, activationBackBtn;
 let profileModal, profileNameInput, profileAvatarFile, avatarPreviewContainer, avatarPreviewImg;
 let profileSaveBtn, profileCancelBtn, profileSpellcheck, profileOldPassword, profileNewPassword;
 let userInfoEl, requestAccessLink;
@@ -43,6 +44,12 @@ export function initAuthUI(callbacks = {}) {
   forgotEmailInput = document.getElementById('forgot-email');
   forgotBtn = document.getElementById('forgot-btn');
   forgotError = document.getElementById('forgot-error');
+  activationPanel = document.getElementById('activation-panel');
+  activationRecipientEl = document.getElementById('activation-recipient');
+  activationSubjectEl = document.getElementById('activation-subject');
+  activationMailtoBtn = document.getElementById('activation-mailto-btn');
+  activationCopyBtn = document.getElementById('activation-copy-btn');
+  activationBackBtn = document.getElementById('activation-back-btn');
   requestAccessLink = document.getElementById('request-access-link');
   userInfoEl = document.getElementById('user-info');
   profileModal = document.getElementById('profile-modal');
@@ -98,6 +105,25 @@ export function initAuthUI(callbacks = {}) {
   }
   if (forgotForm) {
     forgotForm.addEventListener('submit', handleForgotPassword);
+  }
+
+  if (activationBackBtn) {
+    activationBackBtn.addEventListener('click', () => {
+      activationPanel.classList.add('hidden');
+      loginForm.classList.remove('hidden');
+    });
+  }
+  if (activationCopyBtn) {
+    activationCopyBtn.addEventListener('click', async () => {
+      const recipient = activationRecipientEl.textContent;
+      const subject = activationSubjectEl.textContent;
+      try {
+        await navigator.clipboard.writeText(`An: ${recipient}\nBetreff: ${subject}`);
+        showToast('In die Zwischenablage kopiert.', 'success', 2000);
+      } catch {
+        showToast('Kopieren nicht möglich — bitte manuell auswählen.', 'warning', 4000);
+      }
+    });
   }
 
   // Logout
@@ -215,23 +241,17 @@ async function handleRegister(e) {
     console.log('[AuthUI] Account already exists, proceeding to activation step.');
   }
 
-  // 2. Build activation mailto link (empty body, specific subject)
-  const subject = encodeURIComponent(`Wiki Activation: ${email}`);
-  const mailtoUrl = `mailto:stephansdigitalassistent@gmail.com?subject=${subject}`;
+  // 2. Show inline activation panel with mailto details
+  const recipient = 'stephansdigitalassistent@gmail.com';
+  const subjectPlain = `Wiki Activation: ${email}`;
+  activationRecipientEl.textContent = recipient;
+  activationSubjectEl.textContent = subjectPlain;
+  activationMailtoBtn.href = `mailto:${recipient}?subject=${encodeURIComponent(subjectPlain)}`;
 
-  // 3. Open the mailto link
-  window.location.href = mailtoUrl;
-
-  // 4. Show confirmation message
-  showToast('Account wurde erstellt! Bitte senden Sie die leere E-Mail von Ihrer @insel.ch Adresse ab, um Ihren Account zu aktivieren.', 'info', 10000);
-
-  // 5. Switch back to login after a moment
-  setTimeout(() => {
-    registerForm.classList.add('hidden');
-    loginForm.classList.remove('hidden');
-    registerEmailInput.value = '';
-    registerPasswordInput.value = '';
-  }, 1500);
+  registerForm.classList.add('hidden');
+  activationPanel.classList.remove('hidden');
+  registerEmailInput.value = '';
+  registerPasswordInput.value = '';
 
   registerBtn.disabled = false;
   registerBtn.textContent = 'Registrieren';
