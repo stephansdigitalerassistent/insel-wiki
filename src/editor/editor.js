@@ -817,7 +817,7 @@ function setContentInternal(editor, markdown) {
       const nodesToReplace = [];
       let n;
       while ((n = walker.nextNode())) {
-        if (n.parentNode && (n.parentNode.tagName === 'CODE' || n.parentNode.tagName === 'PRE' || n.parentNode.tagName === 'A')) continue;
+        if (n.parentNode && n.parentNode.closest('CODE, PRE, A')) continue;
         if (/\b\d{4}-\d{2}-\d{2}\b/.test(n.nodeValue)) nodesToReplace.push(n);
       }
       nodesToReplace.forEach(textNode => {

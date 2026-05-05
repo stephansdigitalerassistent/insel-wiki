@@ -126,8 +126,11 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
           // It exists, delete it
           await ensureSidebarClosed(page);
           if (await page.locator('#delete-page-btn').isVisible()) {
-             page.once('dialog', dialog => dialog.accept());
              await page.click('#delete-page-btn');
+             const confirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+             if (await confirm.isVisible({ timeout: 5000 })) {
+                 await confirm.locator('button', { hasText: 'Löschen' }).click();
+             }
              await page.waitForTimeout(1000);
           }
       }
@@ -141,8 +144,11 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     for (const title of createdTitles) {
        const trashItem = page.locator('.trash-item', { hasText: title });
        if (await trashItem.isVisible()) {
-          page.once('dialog', dialog => dialog.accept());
           await trashItem.locator('.btn-danger').click();
+          const confirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
+          if (await confirm.isVisible({ timeout: 5000 })) {
+              await confirm.locator('button', { hasText: 'Löschen' }).click();
+          }
           await expect(trashItem).not.toBeVisible({timeout: 5000});
        }
     }
@@ -157,7 +163,7 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     
     // Write some rich text
     await expect(page.locator('#editor-loading-overlay')).toBeHidden({ timeout: 15000 });
-    let editor = page.locator('.tiptap');
+    let editor = page.locator('.tiptap:visible');
     await editor.focus();
     await page.keyboard.type('Hello World! This is a rich text test.');
     await page.keyboard.press('Enter');
@@ -173,7 +179,7 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     // Add a Task Item
     await expect(page.locator('#editor-loading-overlay')).toBeHidden({ timeout: 15000 });
     const taskText = `Task-${Date.now()}`;
-    editor = page.locator('.tiptap');
+    editor = page.locator('.tiptap:visible');
     await editor.focus();
     
     await page.keyboard.type(`[ ] ${taskText}`, { delay: 50 });
@@ -233,8 +239,11 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     await page.waitForTimeout(1000);
     
     // Soft Delete
-    page.once('dialog', dialog => dialog.accept());
     await page.click('#delete-page-btn');
+    const deleteConfirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+    if (await deleteConfirm.isVisible({ timeout: 5000 })) {
+        await deleteConfirm.locator('button', { hasText: 'Löschen' }).click();
+    }
     await page.waitForTimeout(2000);
     
     // Permanent Delete
@@ -245,8 +254,11 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     const trashItem = page.locator('.trash-item', { hasText: childTitle });
     await expect(trashItem).toBeVisible({ timeout: 5000 });
     
-    page.once('dialog', dialog => dialog.accept());
     await trashItem.locator('.btn-danger').click();
+    const permConfirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
+    if (await permConfirm.isVisible({ timeout: 5000 })) {
+        await permConfirm.locator('button', { hasText: 'Löschen' }).click();
+    }
     await expect(trashItem).not.toBeVisible({ timeout: 5000 });
   });
 });

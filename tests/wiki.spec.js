@@ -99,8 +99,11 @@ test.describe('Insel-Wiki Evolution Suite', () => {
         await page.goto(`/#/${id}`);
         await ensureSidebarClosed(page);
         await page.waitForSelector('#delete-page-btn');
-        page.once('dialog', dialog => dialog.accept());
         await page.click('#delete-page-btn');
+        const confirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+        if (await confirm.isVisible({ timeout: 5000 })) {
+            await confirm.locator('button', { hasText: 'Löschen' }).click();
+        }
     }
   });
   test('Dashboard: Aggregating tasks from pages', async ({ page }) => {
@@ -143,7 +146,7 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     createdPageIds.push(pageId);
 
     await ensureSidebarClosed(page);
-    const editor = page.locator('.tiptap');
+    const editor = page.locator('.tiptap:visible');
     await editor.focus();
     await page.keyboard.type(`[ ] ${taskText}`);
     await page.keyboard.press('Enter');
@@ -221,8 +224,10 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     
     await ensureSidebarClosed(page);
     await expect(page.locator('#page-title')).toHaveValue(title);
-    page.once('dialog', dialog => dialog.accept());
     await page.click('#delete-page-btn');
+    const confirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+    await expect(confirm).toBeVisible();
+    await confirm.locator('button', { hasText: 'Löschen' }).click();
     await expect(page.locator('#empty-state')).toBeVisible();
   });
 
@@ -262,8 +267,10 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await ensureSidebarClosed(page);
 
     // 2. Soft delete
-    page.once('dialog', dialog => dialog.accept());
     await page.click('#delete-page-btn');
+    const confirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+    await expect(confirm).toBeVisible();
+    await confirm.locator('button', { hasText: 'Löschen' }).click();
     await expect(page.locator('#empty-state')).toBeVisible();
 
     // 3. Open Trash
@@ -274,8 +281,10 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await expect(trashItem).toBeVisible();
 
     // 4. Permanent delete
-    page.once('dialog', dialog => dialog.accept());
     await trashItem.locator('.btn-danger').click();
+    const permConfirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
+    await expect(permConfirm).toBeVisible();
+    await permConfirm.locator('button', { hasText: 'Löschen' }).click();
 
     // 5. Verify gone from trash
     await expect(trashItem).not.toBeVisible();

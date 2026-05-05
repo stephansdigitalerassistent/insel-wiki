@@ -125,8 +125,11 @@ test.describe('Insel-Wiki Core Audit', () => {
         if (await titleInput.isVisible()) {
             await ensureSidebarClosed(page);
             if (await page.locator('#delete-page-btn').isVisible()) {
-               page.once('dialog', dialog => dialog.accept());
                await page.click('#delete-page-btn');
+               const confirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+               if (await confirm.isVisible({ timeout: 5000 })) {
+                   await confirm.locator('button', { hasText: 'Löschen' }).click();
+               }
                await page.waitForTimeout(1000);
             }
         }
@@ -144,8 +147,11 @@ test.describe('Insel-Wiki Core Audit', () => {
       for (const title of createdTitles) {
          const trashItem = page.locator('.trash-item', { hasText: title });
          if (await trashItem.isVisible()) {
-            page.once('dialog', dialog => dialog.accept());
             await trashItem.locator('.btn-danger').click();
+            const confirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
+            if (await confirm.isVisible({ timeout: 5000 })) {
+                await confirm.locator('button', { hasText: 'Löschen' }).click();
+            }
             await expect(trashItem).not.toBeVisible({timeout: 10000});
          }
       }
@@ -164,7 +170,7 @@ test.describe('Insel-Wiki Core Audit', () => {
 
     // --- 2. Rich Text Content ---
     await expect(page.locator('#editor-loading-overlay')).toBeHidden({ timeout: 20000 });
-    const editor = page.locator('.tiptap');
+    const editor = page.locator('.tiptap:visible');
     await editor.focus();
     await page.keyboard.type('Rich Text Audit Content.');
     await page.keyboard.press('Enter');
@@ -224,8 +230,10 @@ test.describe('Insel-Wiki Core Audit', () => {
     await ensureSidebarClosed(page);
 
     // --- 7. Soft Delete ---
-    page.once('dialog', dialog => dialog.accept());
     await page.click('#delete-page-btn');
+    const confirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+    await expect(confirm).toBeVisible();
+    await confirm.locator('button', { hasText: 'Löschen' }).click();
     await expect(page.locator('#empty-state')).toBeVisible({ timeout: 10000 });
 
     // --- 8. Permanent Delete (Verification of Scenario 6) ---
@@ -234,8 +242,10 @@ test.describe('Insel-Wiki Core Audit', () => {
     const trashItem = page.locator('.trash-item', { hasText: childTitle });
     await expect(trashItem).toBeVisible({ timeout: 10000 });
     
-    page.once('dialog', dialog => dialog.accept());
     await trashItem.locator('.btn-danger').click();
+    const permConfirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
+    await expect(permConfirm).toBeVisible();
+    await permConfirm.locator('button', { hasText: 'Löschen' }).click();
     await expect(trashItem).not.toBeVisible({ timeout: 15000 });
   });
 });

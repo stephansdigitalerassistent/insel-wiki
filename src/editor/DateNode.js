@@ -1,4 +1,4 @@
-import { mergeAttributes, Node, nodeInputRule, nodePasteRule } from '@tiptap/core';
+import { mergeAttributes, Node, InputRule, nodeInputRule, nodePasteRule } from '@tiptap/core';
 
 // Match dates in the format YYYY-MM-DD
 const DATE_REGEX = /(?:\s|^)(\d{4}-\d{2}-\d{2})(?:\s|$)/;
@@ -85,18 +85,43 @@ export const DateNode = Node.create({
 
   addInputRules() {
     return [
-      nodeInputRule({
+      new InputRule({
         find: DATE_REGEX,
-        type: this.type,
-        getAttributes: match => {
-          return { date: match[1] };
+        handler: ({ state, range, match }) => {
+          const { tr } = state;
+          const start = range.from;
+          const end = range.to;
+
+          // Prevent conversion if we are inside a link, code, or other mark that should stay text
+          let shouldSkip = false;
+          state.doc.nodesBetween(start, end, (node) => {
+            if (node.marks.some(mark => ['link', 'code'].includes(mark.type.name))) {
+              shouldSkip = true;
+            }
+          });
+
+          if (shouldSkip) return null;
+
+          tr.replaceWith(start, end, this.type.create({ date: match[1].trim() }));
         },
       }),
-      nodeInputRule({
+      new InputRule({
         find: /(?<=\s|^)\/\/$/,
-        type: this.type,
-        getAttributes: () => {
-          return { date: new Date().toISOString().split('T')[0] };
+        handler: ({ state, range, match }) => {
+          const { tr } = state;
+          const start = range.from;
+          const end = range.to;
+
+          let shouldSkip = false;
+          state.doc.nodesBetween(start, end, (node) => {
+            if (node.marks.some(mark => ['link', 'code'].includes(mark.type.name))) {
+              shouldSkip = true;
+            }
+          });
+
+          if (shouldSkip) return null;
+
+          tr.replaceWith(start, end, this.type.create({ date: new Date().toISOString().split('T')[0] }));
         },
       }),
     ];

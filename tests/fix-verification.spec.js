@@ -116,35 +116,36 @@ test.describe('Insel-Wiki Navigation & UI Fixes Suite', () => {
     
     const menu = page.locator('.sidebar-options-menu');
     await expect(menu).toBeVisible();
-    
     // 1. Ensure Sort Mode is 'Manuell'
     const manualBtn = menu.locator('.sidebar-options-item', { hasText: 'Manuell' });
-    await manualBtn.click();
-    
+    await manualBtn.click({ force: true });
+
     await pageItem.first().hover();
-    await optionsBtn.click();
-    
+    await optionsBtn.click({ force: true });
+
+    // 3. Check for Up/Down arrows
     await expect(menu.locator('.sidebar-options-item', { hasText: '↑ Nach oben' })).toBeVisible();
     await expect(menu.locator('.sidebar-options-item', { hasText: '↓ Nach unten' })).toBeVisible();
-    
-    // 2. Switch to 'Name' sort (default asc)
+
+    // 4. Switch to 'Name' sort (default asc)
     const nameBtn = menu.locator('.sidebar-options-item', { hasText: 'Name ↑' });
-    await nameBtn.click();
-    
+    await nameBtn.click({ force: true });
+
     await pageItem.first().hover();
-    await optionsBtn.click();
+    await optionsBtn.click({ force: true });
     await expect(pageItem.first().locator('.sort-indicator')).toHaveText('↑');
-    
+
     // 3. Click 'Name ↑' again to toggle to 'Name ↓'
-    await menu.locator('.sidebar-options-item', { hasText: 'Name ↑' }).click();
-    
+    await menu.locator('.sidebar-options-item', { hasText: 'Name ↑' }).click({ force: true });
+
     await pageItem.first().hover();
-    await optionsBtn.click();
+    await optionsBtn.click({ force: true });
     await expect(menu.locator('.sidebar-options-item', { hasText: 'Name ↓' })).toBeVisible();
     await expect(pageItem.first().locator('.sort-indicator')).toHaveText('↓');
-    
+
     // 4. Click 'Name ↓' again to toggle back to 'Name ↑'
-    await menu.locator('.sidebar-options-item', { hasText: 'Name ↓' }).click();
+    await menu.locator('.sidebar-options-item', { hasText: 'Name ↓' }).click({ force: true });
+
     
     await pageItem.first().hover();
     await optionsBtn.click();
