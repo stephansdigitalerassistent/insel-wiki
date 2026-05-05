@@ -36,24 +36,40 @@ async function prefetchPage(pageId) {
 const SORT_MODES = ['manual', 'name', 'created', 'changed'];
 const SORT_LABELS = {
   manual: 'Manuell',
-  name: 'Name ↑',
-  created: 'Erstellt ↓',
-  changed: 'Geändert ↓',
+  name: 'Name',
+  created: 'Erstellt',
+  changed: 'Geändert',
 };
 const SORT_KEY = (parentId) => `insel-wiki-sort-${parentId || 'root'}`;
 
-function getSortMode(parentId) {
+/**
+ * Returns { mode, dir } for a given parent.
+ * dir is 'asc' or 'desc'.
+ */
+function getSortConfig(parentId) {
   try {
-    const v = localStorage.getItem(SORT_KEY(parentId));
-    return SORT_MODES.includes(v) ? v : 'manual';
+    const v = localStorage.getItem(SORT_KEY(parentId)) || 'manual';
+    let [mode, dir] = v.split(':');
+    if (!SORT_MODES.includes(mode)) mode = 'manual';
+    if (!dir) {
+      // Default directions: Name is asc, dates are desc
+      dir = (mode === 'name' || mode === 'manual') ? 'asc' : 'desc';
+    }
+    return { mode, dir };
   } catch {
-    return 'manual';
+    return { mode: 'manual', dir: 'asc' };
   }
 }
 
-function setSortMode(parentId, mode) {
-  if (!SORT_MODES.includes(mode)) return;
-  try { localStorage.setItem(SORT_KEY(parentId), mode); } catch {}
+function setSortConfig(parentId, mode, dir) {
+  try {
+    localStorage.setItem(SORT_KEY(parentId), `${mode}:${dir}`);
+  } catch {}
+}
+
+// Keep for backward compatibility if used elsewhere, but ideally use getSortConfig
+function getSortMode(parentId) {
+  return getSortConfig(parentId).mode;
 }
 
 function tsMs(ts) {
@@ -64,18 +80,21 @@ function tsMs(ts) {
   return 0;
 }
 
-function applySort(pages, mode) {
+function applySort(pages, sortConfig) {
   const arr = [...pages];
+  const { mode, dir } = typeof sortConfig === 'string' ? { mode: sortConfig, dir: 'asc' } : sortConfig;
+  const mult = dir === 'desc' ? -1 : 1;
+
   switch (mode) {
     case 'name':
-      return arr.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'de', { sensitivity: 'base' }));
+      return arr.sort((a, b) => mult * (a.title || '').localeCompare(b.title || '', 'de', { sensitivity: 'base' }));
     case 'created':
-      return arr.sort((a, b) => tsMs(b.createdAt) - tsMs(a.createdAt));
+      return arr.sort((a, b) => mult * (tsMs(a.createdAt) - tsMs(b.createdAt))); // default desc handled by getSortConfig
     case 'changed':
-      return arr.sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt));
+      return arr.sort((a, b) => mult * (tsMs(a.updatedAt) - tsMs(b.updatedAt))); // default desc handled by getSortConfig
     case 'manual':
     default:
-      return arr.sort((a, b) => (a.order || 0) - (b.order || 0));
+      return arr.sort((a, b) => mult * ((a.order || 0) - (b.order || 0)));
   }
 }
 
@@ -219,12 +238,25 @@ function openOptionsMenu(anchorEl, { parentId, page }) {
   heading.textContent = parentId ? 'Unterseiten sortieren' : 'Hauptseiten sortieren';
   menu.appendChild(heading);
 
+  const { mode: currentMode, dir: currentDir } = getSortConfig(parentId);
   for (const mode of SORT_MODES) {
     const item = document.createElement('button');
-    item.className = `sidebar-options-item sidebar-options-radio${mode === currentSortMode ? ' selected' : ''}`;
-    item.innerHTML = `<span class="sidebar-options-check">${mode === currentSortMode ? '✓' : ''}</span><span>${SORT_LABELS[mode]}</span>`;
+    const isActive = mode === currentMode;
+    const arrow = (isActive && currentDir === 'desc') ? '↓' : '↑';
+    const label = SORT_LABELS[mode] + (mode === 'manual' ? '' : ` ${arrow}`);
+
+    item.className = `sidebar-options-item sidebar-options-radio${isActive ? ' selected' : ''}`;
+    item.innerHTML = `<span class="sidebar-options-check">${isActive ? '✓' : ''}</span><span>${label}</span>`;
     item.addEventListener('click', () => {
-      setSortMode(parentId, mode);
+      let nextDir = currentDir;
+      if (isActive) {
+        // Toggle direction if clicking same mode
+        nextDir = currentDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        // Reset to default direction for new mode
+        nextDir = (mode === 'name' || mode === 'manual') ? 'asc' : 'desc';
+      }
+      setSortConfig(parentId, mode, nextDir);
       closeMenu();
       const treeContainer = document.getElementById('page-tree');
       if (treeContainer) renderTree(treeContainer);
@@ -450,7 +482,7 @@ function renderTree(container) {
       .filter(Boolean);
     const rest = applySort(
       rootPages.filter((p) => !pinnedIds.includes(p.id)),
-      getSortMode(null)
+      getSortConfig(null)
     );
     rootPages = [...pinned, ...rest];
   }
@@ -531,15 +563,15 @@ function createTreeItem(page, allFilteredPages) {
   row.appendChild(name);
 
   // Sorting Indicator (Arrow)
-  const activeSort = getSortMode(page.id);
-  if (activeSort !== 'manual' && hasChildren && !searchFilter) {
+  const sortConfig = getSortConfig(page.id);
+  if (sortConfig.mode !== 'manual' && hasChildren && !searchFilter) {
     const sortIndicator = document.createElement('span');
     sortIndicator.className = 'sort-indicator';
     sortIndicator.style.marginRight = '4px';
     sortIndicator.style.fontSize = '0.7rem';
     sortIndicator.style.opacity = '0.5';
-    sortIndicator.title = `Sortiert nach: ${SORT_LABELS[activeSort]}`;
-    sortIndicator.textContent = activeSort === 'name' ? '↑' : '↓';
+    sortIndicator.title = `Sortiert nach: ${SORT_LABELS[sortConfig.mode]}`;
+    sortIndicator.textContent = sortConfig.dir === 'asc' ? '↑' : '↓';
     row.appendChild(sortIndicator);
   }
 
@@ -707,7 +739,7 @@ function createTreeItem(page, allFilteredPages) {
     const isExpanded = expandedFolders.has(page.id);
     const childContainer = document.createElement('div');
     childContainer.className = `tree-children ${isExpanded ? '' : 'collapsed'}`;
-    applySort(children, getSortMode(page.id)).forEach((child) => {
+    applySort(children, getSortConfig(page.id)).forEach((child) => {
       childContainer.appendChild(createTreeItem(child, allFilteredPages));
     });
     item.appendChild(childContainer);

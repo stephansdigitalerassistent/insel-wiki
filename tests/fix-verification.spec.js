@@ -77,10 +77,8 @@ test.describe('Insel-Wiki Navigation & UI Fixes Suite', () => {
     await ensureSidebarOpen(page);
     
     // 1. Open New Page Modal
-    // Use evaluate to avoid viewport issues on mobile if button is tricky
     await page.evaluate(() => document.getElementById('new-page-btn')?.click());
     
-    // Use more specific locator to avoid strict mode violation
     const newPageModal = page.locator('.modal-box', { hasText: 'Neue Seite erstellen' });
     await expect(newPageModal).toBeVisible();
     
@@ -93,15 +91,13 @@ test.describe('Insel-Wiki Navigation & UI Fixes Suite', () => {
     
     await page.click('#new-page-modal-submit');
     
-    // If our fix works, we should arrive at the new page title without seeing the leaveConfirmModal
     await expect(page.locator('#page-title')).toHaveValue(title, { timeout: 15000 });
     await expect(leaveConfirmModal).not.toBeVisible();
     
-    // Get ID for cleanup
     const url = page.url();
     createdPageId = url.split('#/')[1]?.split('/')[0];
     
-    // 4. Cleanup: Delete the page using the new confirmModal
+    // 4. Cleanup
     await page.click('#delete-page-btn');
     const deleteConfirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
     await expect(deleteConfirm).toBeVisible();
@@ -109,12 +105,10 @@ test.describe('Insel-Wiki Navigation & UI Fixes Suite', () => {
     await expect(page.locator('#empty-state')).toBeVisible();
   });
 
-  test('Sidebar: Context Menu Sorting Arrows', async ({ page }) => {
+  test('Sidebar: Context Menu Sorting Arrows and Toggle', async ({ page }) => {
     await page.goto('/#/page-tests');
     await ensureSidebarOpen(page);
     
-    // 1. Right click on 'Entwicklung' or a known page to open context menu
-    // Using more-btn instead of btn-options as identified in the code
     const pageItem = page.locator('.tree-item').filter({ hasText: /^Entwicklung/ });
     await pageItem.first().hover();
     const optionsBtn = pageItem.first().locator('.more-btn');
@@ -123,26 +117,38 @@ test.describe('Insel-Wiki Navigation & UI Fixes Suite', () => {
     const menu = page.locator('.sidebar-options-menu');
     await expect(menu).toBeVisible();
     
-    // 2. Ensure Sort Mode is 'Manuell'
+    // 1. Ensure Sort Mode is 'Manuell'
     const manualBtn = menu.locator('.sidebar-options-item', { hasText: 'Manuell' });
-    await manualBtn.click(); // Sets or ensures state
+    await manualBtn.click();
     
-    // Open again to check arrows
     await pageItem.first().hover();
     await optionsBtn.click();
     
-    // 3. Check for Up/Down arrows
     await expect(menu.locator('.sidebar-options-item', { hasText: '↑ Nach oben' })).toBeVisible();
     await expect(menu.locator('.sidebar-options-item', { hasText: '↓ Nach unten' })).toBeVisible();
     
-    // 4. Switch to 'Name' sort and ensure arrows are gone
+    // 2. Switch to 'Name' sort (default asc)
+    const nameBtn = menu.locator('.sidebar-options-item', { hasText: 'Name ↑' });
+    await nameBtn.click();
+    
+    await pageItem.first().hover();
+    await optionsBtn.click();
+    await expect(pageItem.first().locator('.sort-indicator')).toHaveText('↑');
+    
+    // 3. Click 'Name ↑' again to toggle to 'Name ↓'
     await menu.locator('.sidebar-options-item', { hasText: 'Name ↑' }).click();
     
     await pageItem.first().hover();
     await optionsBtn.click();
-    await expect(menu.locator('.sidebar-options-item', { hasText: '↑ Nach oben' })).not.toBeVisible();
+    await expect(menu.locator('.sidebar-options-item', { hasText: 'Name ↓' })).toBeVisible();
+    await expect(pageItem.first().locator('.sort-indicator')).toHaveText('↓');
     
-    // 5. Verify the sorting indicator arrow (↑) is visible in the sidebar tree item
+    // 4. Click 'Name ↓' again to toggle back to 'Name ↑'
+    await menu.locator('.sidebar-options-item', { hasText: 'Name ↓' }).click();
+    
+    await pageItem.first().hover();
+    await optionsBtn.click();
+    await expect(menu.locator('.sidebar-options-item', { hasText: 'Name ↑' })).toBeVisible();
     await expect(pageItem.first().locator('.sort-indicator')).toHaveText('↑');
   });
 });
