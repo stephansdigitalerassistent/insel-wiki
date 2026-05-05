@@ -5,7 +5,7 @@ import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from '../f
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
 import { loadCommentsForPage } from '../components/comments.js';
-import { promptModal, newPageModal } from '../components/modal.js';
+import { promptModal, newPageModal, confirmModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 import { canEdit, getCurrentUser, isLoggedIn } from '../firebase/auth.js';
 import { formatDefaultName, slugify } from '../utils/string.js';
@@ -577,7 +577,7 @@ async function handleDeletePage() {
     showToast('Diese Systemseite ist angeheftet und kann nicht gelöscht werden.', 'warning');
     return;
   }
-  const confirmed = confirm('Diese Seite und alle Unterseiten in den Papierkorb verschieben?');
+  const confirmed = await confirmModal('Seite löschen?', 'Diese Seite und alle Unterseiten in den Papierkorb verschieben?');
   if (!confirmed) return;
   try {
     await deletePage(currentPageId);

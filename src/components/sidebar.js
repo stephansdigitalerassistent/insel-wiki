@@ -1,6 +1,7 @@
 // Sidebar component — hierarchical page tree with real-time updates
 import { subscribeToPages, createPage, getDeletedPages, restorePage, permanentlyDeletePage, updatePageHierarchy, deletePage, getPage } from '../firebase/firestore.js';
 import { canEdit, onAuthChange } from '../firebase/auth.js';
+import { promptModal, confirmModal } from './modal.js';
 
 // --- Hover prefetch ---
 // Warm the localStorage page cache on hover so the click feels instant.
@@ -35,9 +36,9 @@ async function prefetchPage(pageId) {
 const SORT_MODES = ['manual', 'name', 'created', 'changed'];
 const SORT_LABELS = {
   manual: 'Manuell',
-  name: 'Name',
-  created: 'Erstellt',
-  changed: 'Geändert',
+  name: 'Name ↑',
+  created: 'Erstellt ↓',
+  changed: 'Geändert ↓',
 };
 const SORT_KEY = (parentId) => `insel-wiki-sort-${parentId || 'root'}`;
 
@@ -124,6 +125,8 @@ function openOptionsMenu(anchorEl, { parentId, page }) {
   const menu = document.createElement('div');
   menu.className = 'sidebar-options-menu';
 
+  const currentSortMode = getSortMode(parentId);
+
   // --- Standard actions (only for a specific page, not root) ---
   if (page && canEdit()) {
     const newChild = document.createElement('button');
@@ -131,7 +134,7 @@ function openOptionsMenu(anchorEl, { parentId, page }) {
     newChild.textContent = 'Neue Unterseite';
     newChild.addEventListener('click', async () => {
       closeMenu();
-      const title = prompt('Titel der neuen Unterseite:');
+      const title = await promptModal('Titel der neuen Unterseite:', 'Titel eingeben...');
       if (!title || !title.trim()) return;
       try {
         const id = await createPage(title.trim(), page.id);
@@ -148,7 +151,8 @@ function openOptionsMenu(anchorEl, { parentId, page }) {
     del.textContent = 'Löschen';
     del.addEventListener('click', async () => {
       closeMenu();
-      if (!confirm(`„${page.title || 'Ohne Titel'}" in den Papierkorb verschieben?`)) return;
+      const confirmed = await confirmModal('Seite löschen?', `„${page.title || 'Ohne Titel'}" in den Papierkorb verschieben?`);
+      if (!confirmed) return;
       try {
         await deletePage(page.id);
       } catch (err) {
@@ -156,6 +160,53 @@ function openOptionsMenu(anchorEl, { parentId, page }) {
       }
     });
     menu.appendChild(del);
+
+    // Add Move Up/Down buttons if sort mode is manual
+    if (currentSortMode === 'manual') {
+      const sepMove = document.createElement('div');
+      sepMove.className = 'sidebar-options-sep';
+      menu.appendChild(sepMove);
+
+      const moveUp = document.createElement('button');
+      moveUp.className = 'sidebar-options-item';
+      moveUp.innerHTML = '<span style="margin-right: 8px;">↑</span> Nach oben';
+      moveUp.addEventListener('click', async () => {
+        closeMenu();
+        const siblings = allPages
+          .filter(p => p.parentId === page.parentId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0) || (a.title || '').localeCompare(b.title || ''));
+        const index = siblings.findIndex(p => p.id === page.id);
+        if (index > 0) {
+          const prev = siblings[index - 1];
+          let newOrder = (prev.order || 0) - 1;
+          if (index > 1) {
+            newOrder = ((siblings[index - 2].order || 0) + (prev.order || 0)) / 2;
+          }
+          await updatePageHierarchy(page.id, page.parentId, newOrder);
+        }
+      });
+      menu.appendChild(moveUp);
+
+      const moveDown = document.createElement('button');
+      moveDown.className = 'sidebar-options-item';
+      moveDown.innerHTML = '<span style="margin-right: 8px;">↓</span> Nach unten';
+      moveDown.addEventListener('click', async () => {
+        closeMenu();
+        const siblings = allPages
+          .filter(p => p.parentId === page.parentId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0) || (a.title || '').localeCompare(b.title || ''));
+        const index = siblings.findIndex(p => p.id === page.id);
+        if (index < siblings.length - 1) {
+          const next = siblings[index + 1];
+          let newOrder = (next.order || 0) + 1;
+          if (index < siblings.length - 2) {
+            newOrder = ((next.order || 0) + (siblings[index + 2].order || 0)) / 2;
+          }
+          await updatePageHierarchy(page.id, page.parentId, newOrder);
+        }
+      });
+      menu.appendChild(moveDown);
+    }
 
     const sep = document.createElement('div');
     sep.className = 'sidebar-options-sep';
@@ -168,11 +219,10 @@ function openOptionsMenu(anchorEl, { parentId, page }) {
   heading.textContent = parentId ? 'Unterseiten sortieren' : 'Hauptseiten sortieren';
   menu.appendChild(heading);
 
-  const current = getSortMode(parentId);
   for (const mode of SORT_MODES) {
     const item = document.createElement('button');
-    item.className = `sidebar-options-item sidebar-options-radio${mode === current ? ' selected' : ''}`;
-    item.innerHTML = `<span class="sidebar-options-check">${mode === current ? '✓' : ''}</span><span>${SORT_LABELS[mode]}</span>`;
+    item.className = `sidebar-options-item sidebar-options-radio${mode === currentSortMode ? ' selected' : ''}`;
+    item.innerHTML = `<span class="sidebar-options-check">${mode === currentSortMode ? '✓' : ''}</span><span>${SORT_LABELS[mode]}</span>`;
     item.addEventListener('click', () => {
       setSortMode(parentId, mode);
       closeMenu();
@@ -744,7 +794,8 @@ async function renderTrash(container) {
         deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
         deleteBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (!confirm('Endgültig löschen? Dies kann nicht rückgängig gemacht werden.')) return;
+          const confirmed = await confirmModal('Endgültig löschen?', 'Dies kann nicht rückgängig gemacht werden.');
+          if (!confirmed) return;
           try {
             await permanentlyDeletePage(page.id);
             renderTrash(container);

@@ -3,6 +3,79 @@ import { slugify } from '../utils/string.js';
 import { getCurrentPageId } from '../controllers/page.js';
 
 /**
+ * Custom Promise-based modal for confirming actions.
+ * Replaces the native and ugly `window.confirm()`.
+ */
+export function confirmModal(title, message = '') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-box';
+    
+    const header = document.createElement('h3');
+    header.className = 'modal-title';
+    header.textContent = title;
+    
+    const text = document.createElement('p');
+    text.className = 'modal-message';
+    text.style.marginBottom = '1.5rem';
+    text.textContent = message;
+    
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = 'Abbrechen';
+    
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'btn btn-danger';
+    submitBtn.textContent = 'Löschen';
+    
+    actions.appendChild(cancelBtn);
+    actions.appendChild(submitBtn);
+    
+    modal.appendChild(header);
+    if (message) modal.appendChild(text);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    setTimeout(() => submitBtn.focus(), 10);
+
+    const cleanup = () => {
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
+    };
+
+    const submit = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    const cancel = () => {
+      cleanup();
+      resolve(false);
+    };
+
+    submitBtn.addEventListener('click', submit);
+    cancelBtn.addEventListener('click', cancel);
+    
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') cancel();
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cancel();
+    });
+  });
+}
+
+/**
  * Custom Promise-based modal for getting user inputs.
  * Replaces the native and ugly `window.prompt()`.
  */

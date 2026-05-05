@@ -10,6 +10,7 @@ import { initDashboard } from './components/dashboard.js';
 import { showToast, initGlobalErrorHandler } from './components/toast.js';
 import { initAuthUI, handleAuthChange } from './controllers/auth-ui.js';
 import { initPageController, loadPage, showEmptyState, getFormatToolbar, getPageTitleInput, rejoinPresence } from './controllers/page.js';
+import { confirmModal } from './components/modal.js';
 
 // --- DOM Elements ---
 const appEl = document.getElementById('app');
@@ -32,7 +33,7 @@ let isRevertingHash = false;
 let ignoreNextHashCheck = false;
 let previousHash = window.location.hash;
 
-function handleRoute() {
+async function handleRoute() {
   const skipCheck = ignoreNextHashCheck;
   ignoreNextHashCheck = false;
 
@@ -44,7 +45,8 @@ function handleRoute() {
 
   const provider = getProvider();
   if (!skipCheck && provider && provider.hasUnsavedChanges) {
-    if (!window.confirm('Es gibt noch ungespeicherte Änderungen (Synchronisation läuft). Möchten Sie die Seite wirklich verlassen?')) {
+    const confirmed = await confirmModal('Seite verlassen?', 'Es gibt noch ungespeicherte Änderungen (Synchronisation läuft). Möchten Sie die Seite wirklich verlassen?');
+    if (!confirmed) {
       isRevertingHash = true;
       window.location.hash = previousHash;
       return;
