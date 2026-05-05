@@ -530,6 +530,19 @@ function createTreeItem(page, allFilteredPages) {
   name.textContent = page.title || 'Ohne Titel';
   row.appendChild(name);
 
+  // Sorting Indicator (Arrow)
+  const activeSort = getSortMode(page.id);
+  if (activeSort !== 'manual' && hasChildren && !searchFilter) {
+    const sortIndicator = document.createElement('span');
+    sortIndicator.className = 'sort-indicator';
+    sortIndicator.style.marginRight = '4px';
+    sortIndicator.style.fontSize = '0.7rem';
+    sortIndicator.style.opacity = '0.5';
+    sortIndicator.title = `Sortiert nach: ${SORT_LABELS[activeSort]}`;
+    sortIndicator.textContent = activeSort === 'name' ? '↑' : '↓';
+    row.appendChild(sortIndicator);
+  }
+
   // Per-page options menu (⋮)
   const moreBtn = document.createElement('button');
   moreBtn.className = 'more-btn';
