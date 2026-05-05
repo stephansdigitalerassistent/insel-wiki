@@ -29,9 +29,13 @@ function closeSidebarOnMobile() {
 
 // --- Routing ---
 let isRevertingHash = false;
+let ignoreNextHashCheck = false;
 let previousHash = window.location.hash;
 
 function handleRoute() {
+  const skipCheck = ignoreNextHashCheck;
+  ignoreNextHashCheck = false;
+
   if (isRevertingHash) {
     isRevertingHash = false;
     previousHash = window.location.hash;
@@ -39,7 +43,7 @@ function handleRoute() {
   }
 
   const provider = getProvider();
-  if (provider && provider.hasUnsavedChanges) {
+  if (!skipCheck && provider && provider.hasUnsavedChanges) {
     if (!window.confirm('Es gibt noch ungespeicherte Änderungen (Synchronisation läuft). Möchten Sie die Seite wirklich verlassen?')) {
       isRevertingHash = true;
       window.location.hash = previousHash;
@@ -60,11 +64,10 @@ function handleRoute() {
 }
 
 function navigateToPage(pageId, title = '') {
-  if (title) {
-    const slug = slugify(title);
-    window.location.hash = `#/${pageId}/${slug}`;
-  } else {
-    window.location.hash = `#/${pageId}`;
+  const newHash = title ? `#/${pageId}/${slugify(title)}` : (pageId ? `#/${pageId}` : '');
+  if (window.location.hash !== newHash) {
+    ignoreNextHashCheck = true;
+    window.location.hash = newHash;
   }
   if (sidebar) sidebar.classList.remove('open');
   if (sidebarOverlay) sidebarOverlay.classList.remove('show');

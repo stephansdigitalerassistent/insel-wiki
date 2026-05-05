@@ -551,6 +551,12 @@ async function handleNewPage() {
       if (ed) {
         const slug = slugify(title);
         ed.chain().focus().insertContent(`<a href="#/${pageId}/${slug}">${title}</a> `).run();
+        
+        // Ensure the Yjs update is flushed immediately so the router doesn't 
+        // see 'unsaved changes' and trigger the leave-confirmation dialog.
+        const provider = getProvider();
+        if (provider) await provider.flushPending();
+
         const currentMarkdown = getMarkdown();
         if (currentPageId && currentMarkdown) {
           await handleSave(currentPageId, currentMarkdown);
@@ -575,7 +581,7 @@ async function handleDeletePage() {
   if (!confirmed) return;
   try {
     await deletePage(currentPageId);
-    window.location.hash = '';
+    navigateCallback('');
     showToast('Seite in den Papierkorb verschoben.', 'success');
   } catch (err) {
     console.error('Error deleting page:', err);
