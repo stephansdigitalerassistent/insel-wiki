@@ -18,3 +18,7 @@ playwright-report/
 /test-regex-v*.mjs
 /test-tasks.mjs
 /test-turndown.mjs
+
+# Burn pipeline transient sidecars (auto-dev/execute-burn coordination)
+.burn/output.json
+.burn/result.json
