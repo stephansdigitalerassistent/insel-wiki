@@ -1,4 +1,4 @@
-import { mergeAttributes, Node, InputRule, nodeInputRule, nodePasteRule } from '@tiptap/core';
+import { mergeAttributes, Node, InputRule, PasteRule, nodeInputRule, nodePasteRule } from '@tiptap/core';
 
 // Match dates in the format YYYY-MM-DD
 const DATE_REGEX = /(?:\s|^)(\d{4}-\d{2}-\d{2})(?:\s|$)/;
@@ -88,38 +88,51 @@ export const DateNode = Node.create({
       new InputRule({
         find: DATE_REGEX,
         handler: ({ state, range, match }) => {
-          const { tr } = state;
-          const start = range.from;
-          const end = range.to;
+          const { tr, schema } = state;
+          const captureGroup = match[1];
+          if (!captureGroup) return null;
+
+          const fullMatch = match[0];
+          let { from, to } = range;
+
+          // Adjust range to only cover the date part, preserving surrounding whitespace
+          if (fullMatch.startsWith(' ')) {
+            from += 1;
+          }
+          if (fullMatch.endsWith(' ')) {
+            to -= 1;
+          }
 
           // Prevent conversion if we are inside a link, code, or other mark that should stay text
-          let shouldSkip = false;
-          state.doc.nodesBetween(start, end, (node) => {
-            if (node.marks.some(mark => ['link', 'code'].includes(mark.type.name))) {
-              shouldSkip = true;
-            }
-          });
+          const hasLink = (schema.marks.link && state.doc.rangeHasMark(from, to, schema.marks.link)) || 
+                          state.selection.$from.marks().some(m => m.type.name === 'link');
+          const hasCode = (schema.marks.code && state.doc.rangeHasMark(from, to, schema.marks.code)) ||
+                          state.selection.$from.marks().some(m => m.type.name === 'code') ||
+                          state.selection.$from.parent.type.name === 'codeBlock';
+          
+          if (hasLink || hasCode) {
+            return null;
+          }
 
-          if (shouldSkip) return null;
-
-          tr.replaceWith(start, end, this.type.create({ date: match[1].trim() }));
+          tr.replaceWith(from, to, this.type.create({ date: captureGroup.trim() }));
         },
       }),
       new InputRule({
         find: /(?<=\s|^)\/\/$/,
         handler: ({ state, range, match }) => {
-          const { tr } = state;
+          const { tr, schema } = state;
           const start = range.from;
           const end = range.to;
 
-          let shouldSkip = false;
-          state.doc.nodesBetween(start, end, (node) => {
-            if (node.marks.some(mark => ['link', 'code'].includes(mark.type.name))) {
-              shouldSkip = true;
-            }
-          });
-
-          if (shouldSkip) return null;
+          const hasLink = (schema.marks.link && state.doc.rangeHasMark(start, end, schema.marks.link)) ||
+                          state.selection.$from.marks().some(m => m.type.name === 'link');
+          const hasCode = (schema.marks.code && state.doc.rangeHasMark(start, end, schema.marks.code)) ||
+                          state.selection.$from.marks().some(m => m.type.name === 'code') ||
+                          state.selection.$from.parent.type.name === 'codeBlock';
+          
+          if (hasLink || hasCode) {
+            return null;
+          }
 
           tr.replaceWith(start, end, this.type.create({ date: new Date().toISOString().split('T')[0] }));
         },
@@ -129,13 +142,37 @@ export const DateNode = Node.create({
 
   addPasteRules() {
     return [
-      nodePasteRule({
+      new PasteRule({
         find: DATE_REGEX,
-        type: this.type,
-        getAttributes: match => {
-          return { date: match[1] };
+        handler: ({ state, range, match }) => {
+          const { tr, schema } = state;
+          const captureGroup = match[1];
+          if (!captureGroup) return null;
+
+          const fullMatch = match[0];
+          let { from, to } = range;
+
+          // Adjust range to only cover the date part, preserving surrounding whitespace
+          if (fullMatch.startsWith(' ')) {
+            from += 1;
+          }
+          if (fullMatch.endsWith(' ')) {
+            to -= 1;
+          }
+
+          // Prevent conversion if we are inside a link, code, or other mark that should stay text
+          // For paste, we check the range marks
+          const hasLink = schema.marks.link && state.doc.rangeHasMark(from, to, schema.marks.link);
+          const hasCode = schema.marks.code && state.doc.rangeHasMark(from, to, schema.marks.code);
+          
+          if (hasLink || hasCode) {
+            return null;
+          }
+
+          tr.replaceWith(from, to, this.type.create({ date: captureGroup.trim() }));
         },
       }),
     ];
   }
 });
+

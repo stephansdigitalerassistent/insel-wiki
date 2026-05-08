@@ -827,7 +827,8 @@ function setContentInternal(editor, markdown) {
       const nodesToReplace = [];
       let n;
       while ((n = walker.nextNode())) {
-        if (n.parentNode && n.parentNode.closest('CODE, PRE, A')) continue;
+        const parent = n.parentElement || (n.parentNode instanceof Element ? n.parentNode : null);
+        if (parent && parent.closest && parent.closest('CODE, PRE, A, [data-type="date"], .date-pill')) continue;
         if (/\b\d{4}-\d{2}-\d{2}\b/.test(n.nodeValue)) nodesToReplace.push(n);
       }
       nodesToReplace.forEach(textNode => {
@@ -844,7 +845,9 @@ function setContentInternal(editor, markdown) {
             frag.appendChild(document.createTextNode(part));
           }
         });
-        textNode.parentNode.replaceChild(frag, textNode);
+        if (textNode.parentNode) {
+          textNode.parentNode.replaceChild(frag, textNode);
+        }
       });
       html = doc.body.innerHTML;
     }
