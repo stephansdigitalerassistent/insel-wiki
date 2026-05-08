@@ -3,6 +3,18 @@
  * Supports dictation, navigation, and formatting via Web Speech API.
  */
 
+const insertPunctuation = (editor, punctuation) => {
+  const { state } = editor;
+  const { from } = state.selection;
+  const textBefore = state.doc.textBetween(Math.max(0, from - 1), from);
+  
+  if (textBefore === ' ') {
+    editor.chain().focus().deleteRange(from - 1, from).insertContentAt(from - 1, punctuation).run();
+  } else {
+    editor.chain().focus().insertContent(punctuation).run();
+  }
+};
+
 const COMMANDS = {
   // Navigation
   'neuer absatz': (editor) => editor.chain().focus().enter().run(),
@@ -23,12 +35,12 @@ const COMMANDS = {
   'checkliste': (editor) => editor.chain().focus().toggleTaskList().run(),
 
   // Punctuation
-  'punkt': (editor) => editor.chain().focus().insertContent('. ').run(),
-  'komma': (editor) => editor.chain().focus().insertContent(', ').run(),
-  'fragezeichen': (editor) => editor.chain().focus().insertContent('? ').run(),
-  'ausrufezeichen': (editor) => editor.chain().focus().insertContent('! ').run(),
-  'doppelpunkt': (editor) => editor.chain().focus().insertContent(': ').run(),
-  'semikolon': (editor) => editor.chain().focus().insertContent('; ').run(),
+  'punkt': (editor) => insertPunctuation(editor, '. '),
+  'komma': (editor) => insertPunctuation(editor, ', '),
+  'fragezeichen': (editor) => insertPunctuation(editor, '? '),
+  'ausrufezeichen': (editor) => insertPunctuation(editor, '! '),
+  'doppelpunkt': (editor) => insertPunctuation(editor, ': '),
+  'semikolon': (editor) => insertPunctuation(editor, '; '),
 };
 
 export class VoiceAssistant {
