@@ -42,6 +42,7 @@ import { navigateTo } from '../controllers/page.js';
 import { uploadImageFile } from '../firebase/storage.js';
 import { isSpellCheckEnabled } from '../firebase/auth.js';
 import { SpellCheckerBot } from './SpellCheckerBot.js';
+import { VoiceAssistant } from './VoiceAssistant.js';
 
 // --- LRU cache of page editors ---
 const cache = new Map();         // pageId -> CacheEntry
@@ -129,6 +130,7 @@ function destroyEntry(entry) {
   if (!entry) return;
   clearTimeout(entry.autoSaveTimer);
   if (entry.spellCheckerBot) { try { entry.spellCheckerBot.destroy(); } catch (e) {} entry.spellCheckerBot = null; }
+  if (entry.voiceAssistant) { try { entry.voiceAssistant.destroy(); } catch (e) {} entry.voiceAssistant = null; }
   if (entry.formatTippy) { try { entry.formatTippy.destroy(); } catch (e) {} entry.formatTippy = null; }
   if (entry.linkTippy) { try { entry.linkTippy.destroy(); } catch (e) {} entry.linkTippy = null; }
   if (entry.detachSelectionListener) { try { entry.detachSelectionListener(); } catch (e) {} }
@@ -294,6 +296,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     autoSaveTimer: null,
     saveCallback: null,
     spellCheckerBot: null,
+    voiceAssistant: null,
     formatTippy: null,
     linkTippy: null,
     detachSelectionListener: null,
@@ -783,6 +786,13 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     entry.spellCheckerBot.start();
   }
 
+  entry.voiceAssistant = new VoiceAssistant(editor);
+  entry.voiceAssistant.onStateChange = (isRecording) => {
+    if (formatToolbarRef && currentPageId === pageId) {
+      updateToolbarState(formatToolbarRef, editor);
+    }
+  };
+
   cache.set(pageId, entry);
   bumpLRU(pageId);
   currentPageId = pageId;
@@ -930,6 +940,7 @@ export function createFormatToolbar(container) {
     <div class="divider"></div>
     <button class="format-btn" data-action="link" title="Link (Ctrl+K)">🔗</button>
     <button class="format-btn" data-action="image" title="Bild">🖼</button>
+    <button class="format-btn" data-action="voice" title="Spracheingabe (Diktat)">🎤</button>
     <button class="format-btn" data-action="comment" title="Kommentar hinzufügen">💬</button>
   `;
   container.insertBefore(toolbar, container.firstChild);
@@ -977,6 +988,13 @@ export function createFormatToolbar(container) {
         if (src) chain.setImage({ src }).run();
         break;
       }
+      case 'voice': {
+        const entry = _active();
+        if (entry && entry.voiceAssistant) {
+          entry.voiceAssistant.toggle();
+        }
+        break;
+      }
       case 'comment': {
         const commentId = `comment-${Date.now()}`;
         chain.setComment(commentId).run();
@@ -1011,6 +1029,12 @@ function updateToolbarState(toolbar, editor) {
       case 'taskList': isActive = editor.isActive('taskList'); break;
       case 'blockquote': isActive = editor.isActive('blockquote'); break;
       case 'codeBlock': isActive = editor.isActive('codeBlock'); break;
+      case 'voice': {
+        const entry = _active();
+        isActive = entry && entry.voiceAssistant && entry.voiceAssistant.isRecording;
+        btn.classList.toggle('is-recording', isActive);
+        break;
+      }
     }
     btn.classList.toggle('is-active', isActive);
   });
