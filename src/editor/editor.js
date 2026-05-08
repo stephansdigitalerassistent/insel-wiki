@@ -352,8 +352,8 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
 
   const extensions = [
     StarterKit.configure({
-      history: false,
-      undoRedo: false,
+      history: !!window.__E2E_DISABLE_COLLAB__,
+      undoRedo: !!window.__E2E_DISABLE_COLLAB__,
       codeBlock: false,
       link: false,
     }),
@@ -385,23 +385,25 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     TableCell,
     TableHeader,
     CharacterCount.configure({ limit: 100000 }),
-    Collaboration.configure({ document: ydoc }),
-    CollaborationCursor.configure({
-      provider,
-      user: { name: user.name, color: user.color },
-      render(cursorUser) {
-        const cursor = document.createElement('span');
-        cursor.classList.add('collaboration-cursor__caret');
-        cursor.setAttribute('style', `border-color: ${cursorUser.color}`);
-        const label = document.createElement('div');
-        label.classList.add('collaboration-cursor__label');
-        label.setAttribute('style', `background-color: ${cursorUser.color}`);
-        const displayName = cursorUser.name || 'Gast';
-        label.insertBefore(document.createTextNode(displayName), null);
-        cursor.insertBefore(label, null);
-        return cursor;
-      },
-    }),
+    ...(window.__E2E_DISABLE_COLLAB__ ? [] : [
+      Collaboration.configure({ document: ydoc }),
+      CollaborationCursor.configure({
+        provider,
+        user: { name: user.name, color: user.color },
+        render(cursorUser) {
+          const cursor = document.createElement('span');
+          cursor.classList.add('collaboration-cursor__caret');
+          cursor.setAttribute('style', `border-color: ${cursorUser.color}`);
+          const label = document.createElement('div');
+          label.classList.add('collaboration-cursor__label');
+          label.setAttribute('style', `background-color: ${cursorUser.color}`);
+          const displayName = cursorUser.name || 'Gast';
+          label.insertBefore(document.createTextNode(displayName), null);
+          cursor.insertBefore(label, null);
+          return cursor;
+        },
+      }),
+    ]),
   ];
 
   const editor = new Editor({
@@ -901,7 +903,19 @@ export function destroyEditor() {
   if (currentPageId) parkActive();
 }
 
-
+/**
+ * Clear all cached editors and their providers (used for E2E testing isolation).
+ */
+export function clearEditorCache() {
+  for (const entry of cache.values()) {
+    destroyEntry(entry);
+  }
+  cache.clear();
+  cacheOrder.length = 0;
+  currentPageId = null;
+  window.editor = null;
+}
+window.clearEditorCache = clearEditorCache;
 
 export function getProvider() { return _active()?.provider || null; }
 export function getEditor() { return _active()?.editor || null; }

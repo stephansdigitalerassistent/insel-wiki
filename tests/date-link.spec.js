@@ -38,11 +38,14 @@ async function ensureSidebarClosed(page) {
 }
 
 test.describe('Date in Link Verification', () => {
+  test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__E2E_DISABLE_COLLAB__ = true;
+    });
     await login(page);
-    // Use a known existing page but with a random hash to force a "fresh" view if needed
-    // Actually, navigating to page-tests is safest for ensuring the editor UI exists
+    // Use page-tests but with collab disabled via the init script and editor.js logic
     await page.goto('/#/page-tests');
     
     // The editor might be hidden if it's loading
@@ -50,6 +53,7 @@ test.describe('Date in Link Verification', () => {
     await expect(editor).toBeVisible({ timeout: 30000 });
     
     await page.waitForFunction(() => window.editor !== undefined, { timeout: 15000 });
+    await page.waitForTimeout(1000); // Give it a moment to settle
     
     // Ensure we have a clean slate on this page
     await page.evaluate(() => {
@@ -60,6 +64,12 @@ test.describe('Date in Link Verification', () => {
     await expect(page.locator('.date-pill')).toHaveCount(0, { timeout: 10000 });
     
     await ensureSidebarClosed(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      if (window.clearEditorCache) window.clearEditorCache();
+    });
   });
 
   test('should NOT convert date to chip when typing a date inside a link', async ({ page }) => {
@@ -118,10 +128,11 @@ test.describe('Date in Link Verification', () => {
         bubbles: true,
         cancelable: true
       });
-      document.querySelector('.tiptap').dispatchEvent(event);
+      // Targeted dispatch to the active editor DOM
+      window.editor.view.dom.dispatchEvent(event);
     }, ' 2024-05-09 ');
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000); // Wait for paste to process
 
     // Verify it is still a link and NO date chip
     const link = editor.locator('a.editable-link');
