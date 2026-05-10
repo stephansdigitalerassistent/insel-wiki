@@ -43,6 +43,7 @@ import { uploadImageFile } from '../firebase/storage.js';
 import { isSpellCheckEnabled } from '../firebase/auth.js';
 import { SpellCheckerBot } from './SpellCheckerBot.js';
 import { VoiceAssistant } from './VoiceAssistant.js';
+import { t } from '../i18n.js';
 
 // --- LRU cache of page editors ---
 const cache = new Map();         // pageId -> CacheEntry
@@ -371,7 +372,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
       HTMLAttributes: { class: 'mention' },
       suggestion,
     }),
-    Placeholder.configure({ placeholder: 'Beginne hier zu schreiben…' }),
+    Placeholder.configure({ placeholder: t('editor.placeholder') }),
     Image.configure({ inline: true }),
     Link.configure({
       autolink: true,
@@ -397,7 +398,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
           const label = document.createElement('div');
           label.classList.add('collaboration-cursor__label');
           label.setAttribute('style', `background-color: ${cursorUser.color}`);
-          const displayName = cursorUser.name || 'Gast';
+          const displayName = cursorUser.name || t('editor.guest');
           label.insertBefore(document.createTextNode(displayName), null);
           cursor.insertBefore(label, null);
           return cursor;
@@ -517,7 +518,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
               if (editor && url) editor.chain().focus().setImage({ src: url }).run();
             } catch (err) {
               console.error('Image upload failed', err);
-              alert('Fehler beim Hochladen des Bildes: ' + err.message);
+              alert(t('editor.uploadError') + err.message);
             }
           });
           return true;
@@ -535,7 +536,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
                 if (editor && url) editor.chain().focus().setImage({ src: url }).run();
               } catch (err) {
                 console.error('Image upload failed', err);
-                alert('Fehler beim Hochladen des Bildes: ' + err.message);
+                alert(t('editor.uploadError') + err.message);
               }
             });
             return true;
@@ -938,27 +939,27 @@ export function createFormatToolbar(container) {
   const toolbar = document.createElement('div');
   toolbar.className = 'format-toolbar';
   toolbar.innerHTML = `
-    <button class="format-btn" data-action="bold" title="Fett (Ctrl+B)"><b>B</b></button>
-    <button class="format-btn" data-action="italic" title="Kursiv (Ctrl+I)"><i>I</i></button>
-    <button class="format-btn" data-action="strike" title="Durchgestrichen (Ctrl+Shift+X)">S̶</button>
-    <button class="format-btn" data-action="code" title="Code (Ctrl+E)">&lt;&gt;</button>
+    <button class="format-btn" data-action="bold" title="${t('editor.toolbar.bold')}"><b>B</b></button>
+    <button class="format-btn" data-action="italic" title="${t('editor.toolbar.italic')}"><i>I</i></button>
+    <button class="format-btn" data-action="strike" title="${t('editor.toolbar.strike')}">S̶</button>
+    <button class="format-btn" data-action="code" title="${t('editor.toolbar.code')}">&lt;&gt;</button>
     <div class="divider"></div>
-    <button class="format-btn" data-action="h1" title="Überschrift 1 (Ctrl+Alt+1)">H1</button>
-    <button class="format-btn" data-action="h2" title="Überschrift 2 (Ctrl+Alt+2)">H2</button>
-    <button class="format-btn" data-action="h3" title="Überschrift 3 (Ctrl+Alt+3)">H3</button>
+    <button class="format-btn" data-action="h1" title="${t('editor.toolbar.h1')}">H1</button>
+    <button class="format-btn" data-action="h2" title="${t('editor.toolbar.h2')}">H2</button>
+    <button class="format-btn" data-action="h3" title="${t('editor.toolbar.h3')}">H3</button>
     <div class="divider"></div>
-    <button class="format-btn" data-action="bulletList" title="Aufzählung (Ctrl+Shift+8)">•</button>
-    <button class="format-btn" data-action="orderedList" title="Nummerierung (Ctrl+Shift+7)">1.</button>
-    <button class="format-btn" data-action="taskList" title="Aufgabenliste (Ctrl+Shift+9)">☑</button>
+    <button class="format-btn" data-action="bulletList" title="${t('editor.toolbar.bulletList')}">•</button>
+    <button class="format-btn" data-action="orderedList" title="${t('editor.toolbar.orderedList')}">1.</button>
+    <button class="format-btn" data-action="taskList" title="${t('editor.toolbar.taskList')}">☑</button>
     <div class="divider"></div>
-    <button class="format-btn" data-action="blockquote" title="Zitat (Ctrl+Shift+B)">❝</button>
-    <button class="format-btn" data-action="codeBlock" title="Code-Block (Ctrl+Alt+C)">▤</button>
-    <button class="format-btn" data-action="horizontalRule" title="Trennlinie (Ctrl+Enter)">—</button>
+    <button class="format-btn" data-action="blockquote" title="${t('editor.toolbar.blockquote')}">❝</button>
+    <button class="format-btn" data-action="codeBlock" title="${t('editor.toolbar.codeBlock')}">▤</button>
+    <button class="format-btn" data-action="horizontalRule" title="${t('editor.toolbar.horizontalRule')}">—</button>
     <div class="divider"></div>
-    <button class="format-btn" data-action="link" title="Link (Ctrl+K)">🔗</button>
-    <button class="format-btn" data-action="image" title="Bild">🖼</button>
-    <button class="format-btn" data-action="voice" title="Spracheingabe (Diktat)">🎤</button>
-    <button class="format-btn" data-action="comment" title="Kommentar hinzufügen">💬</button>
+    <button class="format-btn" data-action="link" title="${t('editor.toolbar.link')}">🔗</button>
+    <button class="format-btn" data-action="image" title="${t('editor.toolbar.image')}">🖼</button>
+    <button class="format-btn" data-action="voice" title="${t('editor.toolbar.voice')}">🎤</button>
+    <button class="format-btn" data-action="comment" title="${t('editor.toolbar.comment')}">💬</button>
   `;
   container.insertBefore(toolbar, container.firstChild);
   toolbar.addEventListener('click', async (e) => {
