@@ -21,8 +21,8 @@ export const VoiceGhost = Extension.create({
 
   addCommands() {
     return {
-      setVoiceTranscript: (transcript) => ({ storage }) => {
-        storage.transcript = transcript;
+      setVoiceTranscript: (transcript) => ({ editor }) => {
+        editor.storage.voiceGhost.transcript = transcript;
         return true;
       },
     };
