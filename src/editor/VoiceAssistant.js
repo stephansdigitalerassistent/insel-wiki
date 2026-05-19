@@ -147,7 +147,7 @@ export class VoiceAssistant {
     // start()/stop() may have changed state while the token was being fetched.
     if (!this.isRecording) return;
 
-    const wsUrl = `${location.origin.replace(/^http/, 'ws')}${TRANSCRIBE_PATH}`;
+    const wsUrl = 'wss://transcribe-485637054444.europe-west1.run.app/api/transcribe';
     let ws;
     try {
       ws = new WebSocket(wsUrl);

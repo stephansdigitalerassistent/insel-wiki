@@ -46,7 +46,12 @@ const CLOSE_ERROR = 4500; // recognition failed — client reconnects, counts it
 
 const server = http.createServer((req, res) => {
   // Cloud Run startup/liveness probes and any non-WebSocket hit land here.
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.writeHead(200, {
+    'Content-Type': 'text/plain',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
   res.end('transcribe-service\n');
 });
 
