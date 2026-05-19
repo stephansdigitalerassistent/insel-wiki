@@ -74,7 +74,7 @@ const CLOSE_AUTH = 4401;
 export class VoiceAssistant {
   constructor(editor) {
     this.editor = editor;
-    this.lang = 'de-CH'; // Swiss German, per project context
+    this.lang = 'de-DE';
     this.isRecording = false;
     this.onStateChange = null; // (isRecording: boolean) => void
     this.onError = null;       // (code: string, message: string) => void
