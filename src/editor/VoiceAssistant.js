@@ -62,8 +62,11 @@ const COMMANDS = {
   'semikolon': (editor) => insertPunctuation(editor, '; '),
 };
 
-// Backend WebSocket — served same-origin via the Hosting /api rewrite.
-const TRANSCRIBE_PATH = '/api/transcribe';
+// Backend WebSocket — the transcribe Cloud Run service, addressed directly.
+// Firebase Hosting does not proxy WebSocket upgrades (it strips the Upgrade
+// header and the request arrives as a plain GET), so a same-origin /api
+// rewrite cannot be used; the browser connects straight to Cloud Run.
+const TRANSCRIBE_URL = 'wss://transcribe-485637054444.europe-west1.run.app/api/transcribe';
 // MediaRecorder emits a WebM/Opus blob this often; each is streamed as it lands.
 const TIMESLICE_MS = 250;
 // Consecutive failed (re)connections tolerated before giving up.
@@ -147,10 +150,9 @@ export class VoiceAssistant {
     // start()/stop() may have changed state while the token was being fetched.
     if (!this.isRecording) return;
 
-    const wsUrl = `${location.origin.replace(/^http/, 'ws')}${TRANSCRIBE_PATH}`;
     let ws;
     try {
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(TRANSCRIBE_URL);
     } catch (e) {
       console.error('[VoiceAssistant] Could not open WebSocket:', e);
       this._scheduleReconnect('Spracherkennungs-Dienst nicht erreichbar.');
