@@ -62,11 +62,8 @@ const COMMANDS = {
   'semikolon': (editor) => insertPunctuation(editor, '; '),
 };
 
-// Backend WebSocket — the transcribe Cloud Run service, addressed directly.
-// Firebase Hosting does not proxy WebSocket upgrades (it strips the Upgrade
-// header and the request arrives as a plain GET), so a same-origin /api
-// rewrite cannot be used; the browser connects straight to Cloud Run.
-const TRANSCRIBE_URL = 'wss://transcribe-485637054444.europe-west1.run.app/api/transcribe';
+// Backend WebSocket — served same-origin via the Hosting /api rewrite.
+const TRANSCRIBE_PATH = '/api/transcribe';
 // MediaRecorder emits a WebM/Opus blob this often; each is streamed as it lands.
 const TIMESLICE_MS = 250;
 // Consecutive failed (re)connections tolerated before giving up.
@@ -150,9 +147,10 @@ export class VoiceAssistant {
     // start()/stop() may have changed state while the token was being fetched.
     if (!this.isRecording) return;
 
+    const wsUrl = `${location.origin.replace(/^http/, 'ws')}${TRANSCRIBE_PATH}`;
     let ws;
     try {
-      ws = new WebSocket(TRANSCRIBE_URL);
+      ws = new WebSocket(wsUrl);
     } catch (e) {
       console.error('[VoiceAssistant] Could not open WebSocket:', e);
       this._scheduleReconnect('Spracherkennungs-Dienst nicht erreichbar.');
@@ -173,11 +171,18 @@ export class VoiceAssistant {
         this._consecutiveFailures = 0; // a clean handshake resets the budget
         this._startRecorder(ws);
       } else if (msg.type === 'interim') {
-        if (this.onInterim) this.onInterim(msg.transcript || '');
+        if (this.onInterim) this.onInterim(msg.transcript || '', msg.words || []);
       } else if (msg.type === 'final') {
-        if (this.onInterim) this.onInterim('');
         const transcript = (msg.transcript || '').trim();
-        if (transcript) this._handleFinalTranscript(transcript);
+        // Don't clear the interim preview immediately if we have a final transcript
+        // to process. The editor insertion will handle the state transition.
+        if (transcript) {
+          this._handleFinalTranscript(transcript, msg.words || []);
+          // Only clear interim if we've successfully handled the final
+          if (this.onInterim) this.onInterim('', []);
+        } else {
+          if (this.onInterim) this.onInterim('', []);
+        }
       } else if (msg.type === 'error') {
         console.error('[VoiceAssistant] Backend error:', msg.message);
       }
@@ -254,7 +259,7 @@ export class VoiceAssistant {
     }
   }
 
-  _handleFinalTranscript(transcript) {
+  _handleFinalTranscript(transcript, words = []) {
     console.log('[VoiceAssistant] Final transcript:', transcript);
 
     // Normalize for command matching only — inserted text keeps its casing.

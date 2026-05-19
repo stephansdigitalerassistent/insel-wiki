@@ -1,28 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/test-fixture.js';
 import { createTestPage, deletePageViaUI, ensureSidebarOpen, ensureSidebarClosed } from './helpers/page-utils.js';
+import { login as sharedLogin } from './helpers/auth.js';
 
 const TEST_USER = 'test.user@insel.ch';
 const TEST_PASS = 'InselWikiTest2026!';
 
 async function login(page) {
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-
-  const overlay = page.locator('#auth-overlay');
-  if (await overlay.isHidden() && await page.locator('#user-info span').isVisible()) {
-    return;
-  }
-
-  // Handle Login
-  if (await overlay.isVisible()) {
-    await page.fill('#login-email', TEST_USER);
-    await page.fill('#login-password', TEST_PASS);
-    await page.click('#login-btn');
-    await expect(overlay).toBeHidden({ timeout: 15000 });
-  }
-
-  await expect(page.locator('#user-info span')).toBeVisible({ timeout: 15000 });
-  await page.waitForTimeout(500);
+  await sharedLogin(page, TEST_USER, TEST_PASS);
 }
 
 test.describe('Link Overlap Repro', () => {

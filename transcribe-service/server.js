@@ -69,18 +69,13 @@ wss.on('connection', (ws) => {
     recognizeStream = speechClient
       .streamingRecognize({
         config: {
+          // WEBM_OPUS carries its sample rate in the container header, so
+          // sampleRateHertz is intentionally omitted (auto-detected).
           encoding: 'WEBM_OPUS',
-          // MediaRecorder's Opus output is always 48 kHz; streamingRecognize
-          // does not reliably read the rate from the WebM header, so it is
-          // set explicitly (otherwise STT reports "Opus sample rate (0)").
-          sampleRateHertz: 48000,
-          // Primary language plus alternatives — STT detects which of these
-          // the speaker is actually using, per utterance.
           languageCode,
-          alternativeLanguageCodes: ['de-DE', 'en-US', 'fr-CH'],
           enableAutomaticPunctuation: true,
-          // No explicit model: the specialised models are not offered for
-          // de-CH, so the default model is used.
+          enableWordTimeOffsets: true,
+          model: 'latest_long',
         },
         interimResults: true,
       })
@@ -88,7 +83,16 @@ wss.on('connection', (ws) => {
         const result = data.results && data.results[0];
         const alt = result && result.alternatives && result.alternatives[0];
         if (!alt || !alt.transcript) return;
-        send({ type: result.isFinal ? 'final' : 'interim', transcript: alt.transcript });
+        
+        const payload = { type: result.isFinal ? 'final' : 'interim', transcript: alt.transcript };
+        if (alt.words && alt.words.length > 0) {
+          payload.words = alt.words.map(w => ({
+            word: w.word,
+            startTime: w.startTime ? (Number(w.startTime.seconds || 0) + (Number(w.startTime.nanos || 0) / 1e9)) : 0,
+            endTime: w.endTime ? (Number(w.endTime.seconds || 0) + (Number(w.endTime.nanos || 0) / 1e9)) : 0,
+          }));
+        }
+        send(payload);
       })
       .on('error', (err) => {
         // code 11 (OUT_OF_RANGE) is the ~5-min single-stream limit.

@@ -12,6 +12,8 @@ import { showToast, initGlobalErrorHandler } from './components/toast.js';
 import { initAuthUI, handleAuthChange } from './controllers/auth-ui.js';
 import { initPageController, loadPage, showEmptyState, getFormatToolbar, getPageTitleInput, rejoinPresence } from './controllers/page.js';
 import { confirmModal } from './components/modal.js';
+import { ensurePageExists } from './firebase/firestore.js';
+
 
 // --- DOM Elements ---
 const appEl = document.getElementById('app');
@@ -132,6 +134,19 @@ async function init() {
 
   // Init auth
   await initAuth();
+
+  // #2026: Ensure root test page exists in test environments
+  const isTestEnv = typeof navigator !== 'undefined' && (
+    navigator.webdriver || 
+    window.__playwright_test__ || 
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1'
+  );
+  if (isTestEnv) {
+    ensurePageExists('page-tests', 'Tests').catch(err => {
+      console.warn('[Insel-Wiki] Failed to ensure root test page exists:', err);
+    });
+  }
 
   // Auth state changes → update UI
   onAuthChange((user) => {

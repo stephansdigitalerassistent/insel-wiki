@@ -318,6 +318,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
   const fireReady = () => {
     if (onReadyFired) return;
     onReadyFired = true;
+    pane.dataset.synced = 'true';
 
     // Apply fallback content if the editor is still empty after loading or timeout.
     // This ensures we show the Firestore Markdown content if Yjs is empty or slow.
@@ -796,6 +797,43 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
   entry.voiceAssistant.onStateChange = (isRecording) => {
     if (formatToolbarRef && currentPageId === pageId) {
       updateToolbarState(formatToolbarRef, editor);
+    }
+    const overlay = document.getElementById('voice-preview-overlay');
+    if (overlay) {
+      if (!isRecording) {
+        overlay.classList.add('hidden');
+      } else {
+        // Reset state for new recording session
+        const content = document.getElementById('voice-preview-content');
+        if (content) content.innerHTML = '';
+        // We don't remove 'hidden' yet — wait for first interim result
+        // so we don't show an empty floating box.
+      }
+    }
+  };
+  entry.voiceAssistant.onInterim = (transcript, words) => {
+    const overlay = document.getElementById('voice-preview-overlay');
+    const content = document.getElementById('voice-preview-content');
+    if (!overlay || !content) return;
+
+    if (!transcript) {
+      overlay.classList.add('hidden');
+      content.innerHTML = '';
+      return;
+    }
+
+    overlay.classList.remove('hidden');
+
+    if (words && words.length > 0) {
+      const now = performance.now() / 1000; // not synced to audio, just a rough visual
+      // For a true karaoke effect, we'd need audio playback time. 
+      // Instead, we just highlight the last few recognized words to show activity.
+      content.innerHTML = words.map((w, i) => {
+        const isRecent = i >= words.length - 3; // Highlight last 3 words
+        return `<span class="voice-word ${isRecent ? 'highlighted' : ''}">${w.word}</span>`;
+      }).join('');
+    } else {
+      content.textContent = transcript;
     }
   };
 

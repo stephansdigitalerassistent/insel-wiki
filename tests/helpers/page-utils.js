@@ -43,7 +43,8 @@ export async function ensureSidebarClosed(page) {
 export async function createTestPage(page, title) {
   // Navigate to 'Tests' page root
   await page.goto('/#/page-tests');
-  await page.waitForLoadState('domcontentloaded');
+  // Wait for sidebar or specific element instead of networkidle
+  await expect(page.locator('#sidebar')).toBeVisible({ timeout: 15000 });
   await page.waitForTimeout(1000); // Give auth and state time to settle
 
   const emptyNewBtn = page.locator('#empty-new-page');
@@ -52,10 +53,9 @@ export async function createTestPage(page, title) {
   } else {
     await ensureSidebarOpen(page);
     await page.waitForTimeout(500);
-    await page.evaluate(() => {
-      const btn = document.getElementById('new-page-btn') || document.getElementById('toolbar-new-page-btn');
-      if (btn) btn.click();
-    });
+    const newPageBtn = page.locator('#new-page-btn, #toolbar-new-page-btn').first();
+    await newPageBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await newPageBtn.click({ force: true });
   }
   
   await page.waitForSelector('#new-page-modal-input', { timeout: 10000 });
@@ -85,17 +85,12 @@ export async function createTestPage(page, title) {
  */
 export async function deletePageViaUI(page, pageId) {
   await page.goto(`/#/${pageId}`);
-  await page.waitForLoadState('domcontentloaded');
+  await expect(page.locator('#sidebar')).toBeVisible({ timeout: 15000 });
   await ensureSidebarClosed(page);
   
-  // Ensure no modal is blocking the delete button
-  const overlay = page.locator('.modal-overlay:visible');
-  if (await overlay.count() > 0) {
-    await expect(overlay.first()).toBeHidden({ timeout: 10000 });
-  }
-  
-  await page.waitForSelector('#delete-page-btn', { timeout: 10000 });
-  await page.click('#delete-page-btn');
+  const deleteBtn = page.locator('#delete-page-btn');
+  await expect(deleteBtn).toBeVisible({ timeout: 10000 });
+  await deleteBtn.click({ force: true });
   
   const confirm = page.locator('.modal-box', { hasText: 'Seite löschen' });
   if (await confirm.isVisible({ timeout: 5000 })) {

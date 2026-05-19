@@ -1,35 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { login as sharedLogin } from './helpers/auth.js';
 
 const TEST_USER = 'test.user@insel.ch';
 const TEST_PASS = 'InselWikiTest2026!';
 
 async function login(page) {
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  
-  const overlay = page.locator('#auth-overlay');
-
-  // Skip if already logged in
-  if (await overlay.isHidden() || await overlay.evaluate(el => el.classList.contains('hidden'))) {
-    if (await page.locator('#user-info span').isVisible()) {
-      console.log('Already logged in, skipping.');
-      return;
-    }
-  }
-
-  try {
-    if (await overlay.isVisible()) {
-      await page.fill('#login-email', TEST_USER);
-      await page.fill('#login-password', TEST_PASS);
-      await page.click('#login-btn');
-      await expect(overlay).toHaveClass(/hidden/, { timeout: 15000 });
-    }
-  } catch (e) {
-    // Already hidden or handled
-  }
-
-  await page.evaluate(() => document.getElementById('auth-overlay')?.remove());
-  await expect(page.locator('#user-info span')).toBeVisible({ timeout: 15000 });
+  await sharedLogin(page, TEST_USER, TEST_PASS);
 }
 
 test.describe('Mention Ranking', () => {

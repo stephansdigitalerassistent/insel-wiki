@@ -457,5 +457,29 @@ export async function getUsers() {
   return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+/**
+ * Ensure a page exists (e.g. root test page)
+ */
+export async function ensurePageExists(pageId, title = 'Tests', parentId = null) {
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  const snap = await getDoc(pageRef);
+  if (!snap.exists()) {
+    console.log('[Firestore] Creating missing root page:', pageId);
+    await setDoc(pageRef, {
+      title,
+      parentId,
+      order: 0,
+      content: '',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdBy: 'system',
+      deleted: false
+    });
+    return true;
+  }
+  return false;
+}
+
+
 
 

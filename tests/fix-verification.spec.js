@@ -1,5 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/test-fixture.js';
 import { createTestPage, deletePageViaUI, ensureSidebarOpen, ensureSidebarClosed } from './helpers/page-utils.js';
+import { login as sharedLogin } from './helpers/auth.js';
 
 // Credentials for testing
 const TEST_USER = 'test.user@insel.ch';
@@ -9,41 +10,7 @@ const TEST_PASS = 'InselWikiTest2026!';
  * Helper to perform login
  */
 async function login(page) {
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  
-  // Wait for auth to initialize or show login form
-  const overlay = page.locator('#auth-overlay');
-  
-  // Skip if already logged in
-  if (await overlay.isHidden() || await overlay.evaluate(el => el.classList.contains('hidden'))) {
-    if (await page.locator('#user-info span').isVisible()) {
-      console.log('Already logged in, skipping.');
-      return;
-    }
-  }
-
-  try {
-    // Check if we need to login (wait a bit to see if overlay stays)
-    await expect(overlay).not.toHaveClass(/hidden/, { timeout: 2000 });
-    
-    // If it didn't throw, we need to login
-    await page.fill('#login-email', TEST_USER);
-    await page.fill('#login-password', TEST_PASS);
-    await page.click('#login-btn');
-    await expect(overlay).toHaveClass(/hidden/, { timeout: 15000 });
-  } catch (e) {
-    // Already logged in (overlay is hidden)
-  }
-
-  // Force remove to be 100% sure it's not intercepting on mobile
-  await page.evaluate(() => document.getElementById('auth-overlay')?.remove());
-  
-  // Wait for the user profile to be rendered, confirming full auth state
-  await expect(page.locator('#user-info span')).toBeVisible({ timeout: 15000 });
-  
-  // Extra wait to ensure transitions are finished
-  await page.waitForTimeout(500);
+  await sharedLogin(page, TEST_USER, TEST_PASS);
 }
 
 test.describe('Insel-Wiki Navigation & UI Fixes Suite', () => {

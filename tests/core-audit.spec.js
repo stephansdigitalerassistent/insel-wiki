@@ -1,5 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/test-fixture.js';
 import { createTestPage, deletePageViaUI, ensureSidebarOpen, ensureSidebarClosed } from './helpers/page-utils.js';
+import { login as sharedLogin } from './helpers/auth.js';
 
 const TEST_USER = 'test.user@insel.ch';
 const TEST_PASS = 'InselWikiTest2026!';
@@ -12,34 +13,7 @@ test.describe('Insel-Wiki Core Audit', () => {
   let createdTitles = [];
 
   async function login(page) {
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    
-    const overlay = page.locator('#auth-overlay');
-    
-    // Skip if already logged in
-    if (await overlay.isHidden() || await overlay.evaluate(el => el.classList.contains('hidden'))) {
-      if (await page.locator('#user-info span').isVisible()) {
-        console.log('Already logged in, skipping.');
-        return;
-      }
-    }
-
-    try {
-      // Check if login is needed
-      await expect(overlay).not.toHaveClass(/hidden/, { timeout: 3000 });
-      await page.fill('#login-email', TEST_USER);
-      await page.fill('#login-password', TEST_PASS);
-      await page.click('#login-btn');
-      await expect(overlay).toHaveClass(/hidden/, { timeout: 20000 });
-    } catch (e) {
-      // Might already be logged in
-    }
-
-    // Ensure overlay is gone and auth is stable
-    await page.evaluate(() => document.getElementById('auth-overlay')?.remove());
-    await expect(page.locator('#user-info span')).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(1000);
+    await sharedLogin(page, TEST_USER, TEST_PASS);
   }
 
   async function createPage(page, title, isChild = false) {

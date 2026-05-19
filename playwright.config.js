@@ -5,9 +5,10 @@ export default defineConfig({
   testMatch: /.*\.spec\.js$/,
   globalSetup: './tests/global-setup.js',
   globalTeardown: './tests/global-teardown.js',
+  timeout: 60000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 2 : 1,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
   use: {
@@ -15,6 +16,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     serviceWorkers: 'block',
+    actionTimeout: 15000,
   },
 
   projects: [

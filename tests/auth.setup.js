@@ -9,6 +9,22 @@ setup('authenticate', async ({ page }) => {
   // Use a long timeout for the initial login
   setup.setTimeout(90000);
 
+  // Clear any existing state before login to ensure a clean auth session
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  // Clear IndexedDB
+  await page.evaluate(async () => {
+    if (window.indexedDB && window.indexedDB.databases) {
+      const dbs = await window.indexedDB.databases();
+      for (const db of dbs) {
+        window.indexedDB.deleteDatabase(db.name);
+      }
+    }
+  });
+
   await login(page, TEST_USER, TEST_PASS);
   
   // Ensure the user info is not just visible, but has text (confirming sync)

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './helpers/test-fixture.js';
 import { login } from './helpers/auth.js';
 
 // Credentials for testing
