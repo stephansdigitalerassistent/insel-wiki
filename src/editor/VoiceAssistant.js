@@ -49,6 +49,9 @@ export class VoiceAssistant {
     this.recognition = null;
     this.isRecording = false;
     this.onStateChange = null;
+    this._networkErrorPending = false;
+    this._recoveryRetryCount = 0;
+    this._MAX_RECOVERY_RETRIES = 3;
 
     this._initRecognition();
   }
@@ -66,6 +69,9 @@ export class VoiceAssistant {
     this.recognition.lang = 'de-CH'; // Default to Swiss German as per project context
 
     this.recognition.onresult = (event) => {
+      // Reset recovery counter on successful result
+      this._recoveryRetryCount = 0;
+
       let interimTranscript = '';
       let finalTranscript = '';
 
@@ -84,6 +90,12 @@ export class VoiceAssistant {
 
     this.recognition.onstart = () => {
       console.log('[VoiceAssistant] Recording started...');
+      // NOTE: do NOT reset _recoveryRetryCount here. `onstart` fires on every
+      // recovery restart — even when the speech endpoint is blocked and the
+      // session errors out milliseconds later. Resetting here would zero the
+      // counter on each cycle and the retry cap would never trip (infinite
+      // loop in restricted environments). The counter is only cleared by
+      // `onresult`, which proves the endpoint actually responded.
     };
 
     this.recognition.onend = () => {
@@ -116,7 +128,14 @@ export class VoiceAssistant {
       console.error('[VoiceAssistant] Error occurred in recognition:', event.error);
       
       if (event.error === 'network' && this.isRecording) {
-        console.warn('[VoiceAssistant] Network error detected. Attempting to recover in 1s...');
+        if (this._recoveryRetryCount >= this._MAX_RECOVERY_RETRIES) {
+          console.error('[VoiceAssistant] Max recovery retries reached. Stopping.');
+          this.stop();
+          return;
+        }
+
+        this._recoveryRetryCount++;
+        console.warn(`[VoiceAssistant] Network error detected. Attempting recovery attempt ${this._recoveryRetryCount}/${this._MAX_RECOVERY_RETRIES} in 1s...`);
         this._networkErrorPending = true;
 
         // Wait a bit before retrying to avoid rapid failure loops
