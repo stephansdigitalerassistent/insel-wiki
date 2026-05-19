@@ -1,0 +1,24 @@
+node_modules/
+dist/
+.firebase/
+*.log
+
+# Environment variables (secrets!)
+.env
+.env.local
+.env.*.local
+
+# Playwright artifacts
+test-results/
+playwright-report/
+
+# Root-level scratch / experiment scripts
+/test-extract.mjs
+/test-regex.mjs
+/test-regex-v*.mjs
+/test-tasks.mjs
+/test-turndown.mjs
+
+# Burn pipeline transient sidecars (auto-dev/execute-burn coordination)
+.burn/output.json
+.burn/result.json

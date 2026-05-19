@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Insel-Wiki — Kollaboratives Wiki</title>
+  <meta name="description" content="Insel-Wiki: Kollaboratives Echtzeit-Wiki für das Inselspital Bern. Gemeinsam Wissen teilen und bearbeiten." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/styles/index.css" />
+  <link rel="stylesheet" href="/src/styles/toast.css" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+</head>
+<body>
+  <!-- Auth Overlay (for non-logged-in users) -->
+  <div id="auth-overlay" class="auth-overlay hidden">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <svg viewBox="0 0 48 48" width="48" height="48" fill="none">
+          <rect width="48" height="48" rx="12" fill="url(#grad)" />
+          <path d="M14 34V14h4v20h-4zm8-10h4v10h-4V24zm8-6h4v16h-4V18z" fill="#fff" opacity="0.9"/>
+          <defs><linearGradient id="grad" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#56D4A5"/><stop offset="1" stop-color="#3DB88C"/></linearGradient></defs>
+        </svg>
+        <h1>Insel-Wiki</h1>
+      </div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="auth-form">
+        <h2 data-i18n="auth.login.title">Anmelden</h2>
+        <div class="form-group">
+          <label for="login-email" data-i18n="auth.login.emailLabel">E-Mail (@insel.ch)</label>
+          <input type="email" id="login-email" data-i18n="[placeholder]auth.login.emailPlaceholder" placeholder="vorname.name@insel.ch" required />
+        </div>
+        <div class="form-group">
+          <label for="login-password" data-i18n="auth.login.passwordLabel">Passwort</label>
+          <input type="password" id="login-password" data-i18n="[placeholder]auth.login.passwordPlaceholder" placeholder="Ihr Passwort" required />
+        </div>
+        <button type="submit" class="btn btn-primary" id="login-btn" data-i18n="auth.login.submit">Anmelden</button>
+        <div class="auth-error hidden" id="login-error"></div>
+        <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
+        <button type="button" id="show-register-btn" class="btn btn-outline" data-i18n="auth.login.register">
+          Neuen Account erstellen
+        </button>
+        <button type="button" id="show-forgot-btn" class="btn btn-outline" style="border: none; margin-top: 8px;" data-i18n="auth.login.forgotPassword">
+          Passwort vergessen?
+        </button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="register-form" class="auth-form hidden">
+        <h2 data-i18n="auth.register.title">Registrieren</h2>
+        <p class="auth-hint" style="text-align: center; margin-bottom: 20px;" data-i18n="auth.register.hint">
+          Geben Sie Ihre @insel.ch Adresse und ein gewünschtes Passwort ein. Es wird eine E-Mail vorbereitet — senden Sie diese von Ihrem @insel.ch Postfach ab.
+        </p>
+        <div class="form-group">
+          <label for="register-email" data-i18n="auth.register.emailLabel">E-Mail (@insel.ch)</label>
+          <input type="email" id="register-email" data-i18n="[placeholder]auth.register.emailPlaceholder" placeholder="vorname.name@insel.ch" required />
+        </div>
+        <div class="form-group">
+          <label for="register-password" data-i18n="auth.register.passwordLabel">Gewünschtes Passwort</label>
+          <input type="password" id="register-password" data-i18n="[placeholder]auth.register.passwordPlaceholder" placeholder="Mindestens 6 Zeichen" required minlength="6" />
+        </div>
+        <button type="submit" class="btn btn-primary" id="register-btn" data-i18n="auth.register.submit">Registrieren</button>
+        <div class="auth-error hidden" id="register-error"></div>
+        <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
+        <button type="button" id="show-login-btn" class="btn btn-outline" style="border: none;" data-i18n="auth.register.backToLogin">
+          Zurück zur Anmeldung
+        </button>
+      </form>
+
+      <!-- Activation Panel (shown after a successful registration) -->
+      <div id="activation-panel" class="auth-form hidden">
+        <h2 data-i18n="auth.activation.title">Letzter Schritt: Account aktivieren</h2>
+        <p class="auth-hint" style="text-align: center; margin-bottom: 16px;" data-i18n-html="auth.activation.hint">
+          Senden Sie eine leere E-Mail von Ihrem <strong>@insel.ch</strong> Postfach an die folgende Adresse, um Ihren Account zu aktivieren:
+        </p>
+        <div style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.04); border-radius: 6px; font-family: monospace; font-size: 13px; word-break: break-all;">
+          <div><strong data-i18n="auth.activation.to">An:</strong> <span id="activation-recipient"></span></div>
+          <div style="margin-top: 4px;"><strong data-i18n="auth.activation.subject">Betreff:</strong> <span id="activation-subject"></span></div>
+        </div>
+        <a id="activation-mailto-btn" class="btn btn-primary" href="#" style="display: block; text-align: center; text-decoration: none;" data-i18n="auth.activation.openEmail">E-Mail-Programm öffnen</a>
+        <button type="button" id="activation-copy-btn" class="btn btn-outline" style="margin-top: 8px;" data-i18n="auth.activation.copyDetails">Details in die Zwischenablage kopieren</button>
+        <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
+        <button type="button" id="activation-back-btn" class="btn btn-outline" style="border: none;" data-i18n="auth.activation.backToLogin">Zurück zur Anmeldung</button>
+      </div>
+
+      <!-- Forgot Password Form -->
+      <form id="forgot-form" class="auth-form hidden">
+        <h2 data-i18n="auth.forgot.title">Passwort zurücksetzen</h2>
+        <p class="auth-hint" style="text-align: center; margin-bottom: 20px;" data-i18n="auth.forgot.hint">
+          Geben Sie Ihre @insel.ch Adresse ein. Es wird eine E-Mail vorbereitet — senden Sie diese von Ihrem @insel.ch Postfach ab, um das Zurücksetzen anzufordern.
+        </p>
+        <div class="form-group">
+          <label for="forgot-email" data-i18n="auth.forgot.emailLabel">E-Mail (@insel.ch)</label>
+          <input type="email" id="forgot-email" data-i18n="[placeholder]auth.register.emailPlaceholder" placeholder="vorname.name@insel.ch" required />
+        </div>
+        <button type="submit" class="btn btn-primary" id="forgot-btn" data-i18n="auth.forgot.submit">Zurücksetzen anfordern</button>
+        <div class="auth-error hidden" id="forgot-error"></div>
+        <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
+        <button type="button" id="show-login-from-forgot-btn" class="btn btn-outline" style="border: none;" data-i18n="auth.forgot.backToLogin">
+          Zurück zur Anmeldung
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main App Layout -->
+  <div id="app" class="app-layout">
+    <!-- Sidebar -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <svg viewBox="0 0 32 32" width="24" height="24" fill="none">
+            <rect width="32" height="32" rx="8" fill="url(#grad2)" />
+            <path d="M9 23V9h3v14H9zm5-7h3v7h-3v-7zm5-4h3v11h-3V12z" fill="#fff" opacity="0.9"/>
+            <defs><linearGradient id="grad2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#56D4A5"/><stop offset="1" stop-color="#3DB88C"/></linearGradient></defs>
+          </svg>
+          <span class="sidebar-title">Insel-Wiki</span>
+        </div>
+        <div class="sidebar-header-actions">
+          <button id="shortcuts-btn" class="btn-icon" title="Tastenkombinationen" data-i18n="[title]navigation.shortcuts">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="6" y2="12"/><line x1="10" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="14" y2="12"/><line x1="18" y1="12" x2="18" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+          </button>
+          <button id="new-page-btn" class="btn-icon" title="Neue Seite" data-i18n="[title]navigation.newPage.button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button id="sort-root-btn" class="btn-icon" title="Optionen" data-i18n="[title]navigation.options">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+          </button>
+          <button id="sidebar-close-btn" class="btn-icon mobile-only" title="Menü schliessen" data-i18n="[title]navigation.closeMenu">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="sidebar-search">
+        <input type="text" id="search-input" data-i18n="[placeholder]navigation.searchPlaceholder" placeholder="Suchen…" />
+      </div>
+      <nav id="page-tree" class="page-tree"></nav>
+      <div class="sidebar-footer">
+        <div id="user-info" class="user-info" title="Profil bearbeiten"></div>
+        <button id="open-dashboard-btn" class="btn-icon btn-small" title="Task Dashboard" data-i18n="[title]navigation.dashboard">📋</button>
+        <button id="logout-btn" class="btn-icon btn-small" title="Abmelden" data-i18n="[title]navigation.logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Link Bubble Menu -->
+      <div id="link-bubble-menu" class="bubble-menu" style="display: none;">
+        <a href="#" id="bubble-link-url" class="bubble-link-text">URL öffnen</a>
+        <div class="bubble-divider"></div>
+        <button id="bubble-link-edit" class="bubble-btn" title="Link bearbeiten">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button id="bubble-link-unlink" class="bubble-btn" title="Link entfernen">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+        </button>
+      </div>
+
+      <!-- Format Bubble Menu (Mobile optimization) -->
+      <div id="format-bubble-menu" class="bubble-menu" style="display: none;">
+        <button class="bubble-btn format-bubble-action" data-action="bold"><b>B</b></button>
+        <button class="bubble-btn format-bubble-action" data-action="italic"><i>I</i></button>
+        <button class="bubble-btn format-bubble-action" data-action="h1">H1</button>
+        <button class="bubble-btn format-bubble-action" data-action="h2">H2</button>
+        <button class="bubble-btn format-bubble-action" data-action="bulletList">•</button>
+        <button class="bubble-btn format-bubble-action" data-action="date" title="Datum einfügen">📅</button>
+        <div class="bubble-divider"></div>
+        <button class="bubble-btn format-bubble-action" data-action="link">🔗</button>
+      </div>
+      <!-- Header / Toolbar -->
+      <header id="toolbar" class="toolbar">
+        <button id="sidebar-toggle" class="btn-icon mobile-only" title="Menü" data-i18n="[title]navigation.menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div id="breadcrumb" class="breadcrumb"></div>
+        <div class="toolbar-actions">
+          <div id="collab-cursors" class="collab-cursors"></div>
+          
+          <button id="history-btn" class="btn-icon" title="Verlauf" data-i18n="[title]editor.history">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </button>
+
+          <button id="delete-page-btn" class="btn-icon btn-danger" title="Seite löschen" data-i18n="[title]editor.deletePage">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+          </button>
+
+          <button id="print-page-btn" class="btn-icon" title="Seite drucken" data-i18n="[title]editor.printPage">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
+
+          <button id="copy-link-btn" class="btn-icon" title="Internen Link kopieren" data-i18n="[title]editor.internalLink">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
+
+          <button id="toolbar-new-page-btn" class="btn-icon" title="Neue Seite…" data-i18n="[title]editor.newPageDots">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Editor area -->
+      <div id="editor-container" class="editor-container">
+        <div id="title-input-wrapper" class="title-input-wrapper">
+          <input type="text" id="page-title" class="page-title-input" data-i18n="[placeholder]editor.titlePlaceholder" placeholder="Seitentitel…" autocomplete="off" />
+          <div id="last-edited-badge" class="last-edited-badge hidden"></div>
+          <span id="save-status" class="save-status" data-i18n="common.saved">Gespeichert</span>
+        </div>
+        <div id="editor" class="editor"></div>
+        
+        <!-- Loading Overlay -->
+        <div id="editor-loading-overlay" class="editor-loading-overlay hidden">
+          <div class="editor-skeleton">
+            <div class="skeleton-loading-text" data-i18n="editor.loadingPage">Seite wird geladen...</div>
+            <div class="skeleton-line skeleton-title"></div>
+            <div class="skeleton-line skeleton-text"></div>
+            <div class="skeleton-line skeleton-text"></div>
+            <div class="skeleton-line skeleton-text short"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Panel (slide-in) -->
+      <div id="history-panel" class="history-panel hidden">
+        <div class="history-header">
+          <h3>Verlauf</h3>
+          <button id="close-history" class="btn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+        <div id="history-preview" class="history-preview"></div>
+      </div>
+
+      <!-- Profile Modal (hidden by default) -->
+      <div id="profile-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+          <h3 class="modal-title" data-i18n="profile.title">Profil bearbeiten</h3>
+          
+          <div class="form-group" style="margin-bottom: 24px;">
+            <label for="profile-name" data-i18n="profile.displayName">Anzeigename</label>
+            <input type="text" id="profile-name" class="modal-input" placeholder="Max Muster" data-i18n="[placeholder]profile.namePlaceholder" />
+          </div>
+
+          <div class="form-group" style="margin-bottom: 24px;">
+            <label for="profile-language" data-i18n="profile.language">Sprache</label>
+            <select id="profile-language" class="modal-input">
+              <option value="de">Deutsch (DE)</option>
+              <option value="fr">Français (FR)</option>
+              <option value="it">Italiano (IT)</option>
+              <option value="en">English (EN)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 32px;">
+            <label for="profile-avatar-file" data-i18n="profile.avatarUpload">Avatar hochladen</label>
+            <input type="file" id="profile-avatar-file" class="modal-input" accept="image/jpeg, image/png, image/webp" style="padding: 8px;" />
+            <div id="avatar-preview-container" style="display: none; margin-top: 12px; align-items: center; gap: 12px;">
+              <img id="avatar-preview-img" src="" alt="Vorschau" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border);" />
+              <span style="font-size: 0.8rem; color: var(--text-secondary);" data-i18n="profile.newSelection">Neue Auswahl</span>
+            </div>
+            <p class="auth-hint" style="margin-top: 8px; text-align: left;" data-i18n="profile.avatarHint">Maximal 2 MB Format: JPG, PNG, WEBP.</p>
+          </div>
+          <label class="toggle-label" for="profile-spellcheck" style="margin-bottom: 32px;">
+            <span class="toggle-text">
+              <span class="toggle-title" data-i18n="profile.spellcheckTitle">🤖 Rechtschreib-Assistent</span>
+              <span class="toggle-hint" data-i18n="profile.spellcheckHint">Korrigiert automatisch Tippfehler während Sie schreiben (z.B. Buchstabendreher).</span>
+            </span>
+            <span class="toggle-switch">
+              <input type="checkbox" id="profile-spellcheck" />
+              <span class="toggle-slider"></span>
+            </span>
+          </label>
+
+          <div class="auth-divider" style="margin: 24px 0;"><span data-i18n="profile.changePassword">Passwort ändern</span></div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label for="profile-old-password" data-i18n="profile.oldPassword">Aktuelles Passwort</label>
+            <input type="password" id="profile-old-password" class="modal-input" placeholder="••••••••" />
+          </div>
+
+          <div class="form-group" style="margin-bottom: 24px;">
+            <label for="profile-new-password" data-i18n="profile.newPassword">Neues Passwort</label>
+            <input type="password" id="profile-new-password" class="modal-input" placeholder="Mind. 6 Zeichen" data-i18n="[placeholder]profile.passwordHint" />
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="profile-cancel-btn" data-i18n="common.cancel">Abbrechen</button>
+            <button type="button" class="btn btn-primary" id="profile-save-btn" data-i18n="common.save">Speichern</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="empty-state" class="empty-state hidden">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <h2 data-i18n="emptyState.title">Willkommen im Insel-Wiki 🏝️</h2>
+        <p style="max-width: 600px; text-align: center; line-height: 1.5; color: var(--text-secondary);" data-i18n-html="emptyState.description">
+          Dies ist ein privates Projekt von <strong>Stephan</strong>, da er ohne ein Wiki einfach nicht arbeiten kann. 
+          Es dient dem Wissensaustausch und der kollaborativen Dokumentation.
+        </p>
+        <div style="margin: 12px 0; padding: 16px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; border-left: 4px solid #f59e0b; text-align: left; max-width: 600px;">
+          <strong style="display: block; margin-bottom: 4px; color: #f59e0b;" data-i18n="emptyState.warningTitle">⚠️ Wichtiger Sicherheitshinweis</strong>
+          <span style="font-size: 0.9rem; color: var(--text-secondary);" data-i18n-html="emptyState.warningDescription">
+            Dieses Wiki ist <strong>nicht</strong> für geschützte Daten klassifiziert. Bitte speichere hier daher <strong>keine Informationen mit der Klassifizierung INTERN oder höher</strong>.
+          </span>
+        </div>
+        <button id="empty-new-page" class="btn btn-primary" data-i18n="emptyState.createButton">+ Neue Seite erstellen</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Keyboard Shortcuts Modal -->
+  <div id="shortcuts-modal" class="modal-overlay hidden">
+    <div class="modal-box shortcuts-modal-box">
+      <h3 class="modal-title" data-i18n="shortcuts.title">Tastenkombinationen</h3>
+      <div class="shortcuts-grid">
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>B</kbd> <span data-i18n="shortcuts.bold">Fett</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>I</kbd> <span data-i18n="shortcuts.italic">Kursiv</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd> <span data-i18n="shortcuts.strike">Durchgestrichen</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>E</kbd> <span data-i18n="shortcuts.code">Code</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Alt</kbd> + <kbd>1-3</kbd> <span data-i18n="shortcuts.h13">Überschrift 1-3</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>8</kbd> <span data-i18n="shortcuts.bulletList">Aufzählung</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>7</kbd> <span data-i18n="shortcuts.orderedList">Nummerierung</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>9</kbd> <span data-i18n="shortcuts.taskList">Aufgabenliste</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> <span data-i18n="shortcuts.blockquote">Zitat</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd> <span data-i18n="shortcuts.codeBlock">Code-Block</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>K</kbd> <span data-i18n="shortcuts.link">Link einfügen</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Enter</kbd> <span data-i18n="shortcuts.horizontalRule">Trennlinie</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Z</kbd> <span data-i18n="shortcuts.undo">Rückgängig</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>Y</kbd> <span data-i18n="shortcuts.redo">Wiederholen</span></div>
+        <div class="shortcut-item"><kbd>Strg</kbd> + <kbd>S</kbd> <span data-i18n="shortcuts.save">Speichern</span></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="shortcuts-close-btn" data-i18n="common.close">Schliessen</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

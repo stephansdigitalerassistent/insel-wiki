@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "insel-wiki",
+    "beta": "insel-wiki-beta"
+  }
+}
