@@ -74,7 +74,8 @@ wss.on('connection', (ws) => {
           encoding: 'WEBM_OPUS',
           languageCode,
           enableAutomaticPunctuation: true,
-          model: 'latest_long',
+          // No explicit model: the specialised models (latest_long, …) are
+          // not offered for de-CH, so the default model is used.
         },
         interimResults: true,
       })
