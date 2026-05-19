@@ -69,13 +69,18 @@ wss.on('connection', (ws) => {
     recognizeStream = speechClient
       .streamingRecognize({
         config: {
-          // WEBM_OPUS carries its sample rate in the container header, so
-          // sampleRateHertz is intentionally omitted (auto-detected).
           encoding: 'WEBM_OPUS',
+          // MediaRecorder's Opus output is always 48 kHz; streamingRecognize
+          // does not reliably read the rate from the WebM header, so it is
+          // set explicitly (otherwise STT reports "Opus sample rate (0)").
+          sampleRateHertz: 48000,
+          // Primary language plus alternatives — STT detects which of these
+          // the speaker is actually using, per utterance.
           languageCode,
+          alternativeLanguageCodes: ['de-DE', 'en-US', 'fr-CH'],
           enableAutomaticPunctuation: true,
-          // No explicit model: the specialised models (latest_long, …) are
-          // not offered for de-CH, so the default model is used.
+          // No explicit model: the specialised models are not offered for
+          // de-CH, so the default model is used.
         },
         interimResults: true,
       })
