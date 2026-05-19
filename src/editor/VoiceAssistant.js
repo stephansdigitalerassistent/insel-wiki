@@ -89,6 +89,12 @@ export class VoiceAssistant {
     this.recognition.onend = () => {
       console.log('[VoiceAssistant] Recording ended.');
       
+      // If we are recovering from a network error, the setTimeout will handle the restart.
+      if (this._networkErrorPending) {
+        console.log('[VoiceAssistant] Network error recovery pending, skipping immediate restart.');
+        return;
+      }
+
       // Mobile Safari often ends the session unexpectedly. 
       // If we are still supposed to be recording, try to restart.
       if (this.isRecording && this.recognition) {
@@ -111,15 +117,23 @@ export class VoiceAssistant {
       
       if (event.error === 'network' && this.isRecording) {
         console.warn('[VoiceAssistant] Network error detected. Attempting to recover in 1s...');
+        this._networkErrorPending = true;
+
         // Wait a bit before retrying to avoid rapid failure loops
         setTimeout(() => {
+          this._networkErrorPending = false;
           if (this.isRecording && this.recognition) {
             try {
               console.log('[VoiceAssistant] Recovery: Restarting recognition...');
               this.recognition.start();
             } catch (e) {
-              console.error('[VoiceAssistant] Recovery attempt failed:', e);
-              this.stop();
+              // If it's already started (race condition), we can ignore it.
+              if (e.name === 'InvalidStateError') {
+                console.log('[VoiceAssistant] Recovery: Recognition already started, ignoring error.');
+              } else {
+                console.error('[VoiceAssistant] Recovery attempt failed:', e);
+                this.stop();
+              }
             }
           } else {
             console.log('[VoiceAssistant] Recovery: Recording was stopped or recognition nullified during wait.');
