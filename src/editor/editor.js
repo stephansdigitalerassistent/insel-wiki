@@ -43,6 +43,7 @@ import { uploadImageFile } from '../firebase/storage.js';
 import { isSpellCheckEnabled } from '../firebase/auth.js';
 import { SpellCheckerBot } from './SpellCheckerBot.js';
 import { VoiceAssistant } from './VoiceAssistant.js';
+import { VoiceGhost } from './VoiceGhost.js';
 import i18next from '../i18n.js';
 
 // --- LRU cache of page editors ---
@@ -385,6 +386,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     TableRow,
     TableCell,
     TableHeader,
+    VoiceGhost,
     CharacterCount.configure({ limit: 100000 }),
     ...(window.__E2E_DISABLE_COLLAB__ ? [] : [
       Collaboration.configure({ document: ydoc }),
@@ -802,16 +804,22 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     if (overlay) {
       if (!isRecording) {
         overlay.classList.add('hidden');
+        editor.commands.setVoiceTranscript('');
       } else {
         // Reset state for new recording session
         const content = document.getElementById('voice-preview-content');
         if (content) content.innerHTML = '';
+        // Also clear ghost text in editor
+        editor.commands.setVoiceTranscript('');
         // We don't remove 'hidden' yet — wait for first interim result
         // so we don't show an empty floating box.
       }
     }
   };
   entry.voiceAssistant.onInterim = (transcript, words) => {
+    // Show ghost text at cursor position
+    editor.commands.setVoiceTranscript(transcript);
+
     const overlay = document.getElementById('voice-preview-overlay');
     const content = document.getElementById('voice-preview-content');
     if (!overlay || !content) return;

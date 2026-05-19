@@ -1454,3 +1454,12 @@ html, body {
   opacity: 1;
   color: var(--accent);
 }
+
+/* --- Voice Ghost Text --- */
+.voice-ghost-text {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
+}

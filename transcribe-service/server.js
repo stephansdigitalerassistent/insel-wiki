@@ -74,9 +74,8 @@ wss.on('connection', (ws) => {
     recognizeStream = speechClient
       .streamingRecognize({
         config: {
-          // WEBM_OPUS carries its sample rate in the container header, so
-          // sampleRateHertz is intentionally omitted (auto-detected).
           encoding: 'WEBM_OPUS',
+          sampleRateHertz: 48000,
           languageCode,
           enableAutomaticPunctuation: true,
           enableWordTimeOffsets: true,
