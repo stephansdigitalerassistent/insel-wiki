@@ -800,49 +800,12 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     if (formatToolbarRef && currentPageId === pageId) {
       updateToolbarState(formatToolbarRef, editor);
     }
-    const overlay = document.getElementById('voice-preview-overlay');
-    if (overlay) {
-      if (!isRecording) {
-        overlay.classList.add('hidden');
-        editor.commands.setVoiceTranscript('');
-      } else {
-        // Reset state for new recording session
-        const content = document.getElementById('voice-preview-content');
-        if (content) content.innerHTML = '';
-        // Also clear ghost text in editor
-        editor.commands.setVoiceTranscript('');
-        // We don't remove 'hidden' yet — wait for first interim result
-        // so we don't show an empty floating box.
-      }
-    }
+    // Clear ghost text on state change (start/stop)
+    editor.commands.setVoiceTranscript('');
   };
-  entry.voiceAssistant.onInterim = (transcript, words) => {
+  entry.voiceAssistant.onInterim = (transcript) => {
     // Show ghost text at cursor position
     editor.commands.setVoiceTranscript(transcript);
-
-    const overlay = document.getElementById('voice-preview-overlay');
-    const content = document.getElementById('voice-preview-content');
-    if (!overlay || !content) return;
-
-    if (!transcript) {
-      overlay.classList.add('hidden');
-      content.innerHTML = '';
-      return;
-    }
-
-    overlay.classList.remove('hidden');
-
-    if (words && words.length > 0) {
-      const now = performance.now() / 1000; // not synced to audio, just a rough visual
-      // For a true karaoke effect, we'd need audio playback time. 
-      // Instead, we just highlight the last few recognized words to show activity.
-      content.innerHTML = words.map((w, i) => {
-        const isRecent = i >= words.length - 3; // Highlight last 3 words
-        return `<span class="voice-word ${isRecent ? 'highlighted' : ''}">${w.word}</span>`;
-      }).join('');
-    } else {
-      content.textContent = transcript;
-    }
   };
 
   cache.set(pageId, entry);

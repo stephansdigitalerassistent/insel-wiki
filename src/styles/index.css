@@ -1457,9 +1457,9 @@ html, body {
 
 /* --- Voice Ghost Text --- */
 .voice-ghost-text {
-  color: var(--text-muted);
-  font-style: italic;
-  opacity: 0.7;
+  background-color: var(--accent-subtle);
+  color: inherit;
+  border-radius: 2px;
   pointer-events: none;
   user-select: none;
 }
