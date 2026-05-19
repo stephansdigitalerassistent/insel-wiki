@@ -1,15 +1,19 @@
-import { test, expect } from '@playwright/test';
-import { createTestPage, deletePageViaUI, ensureSidebarOpen, ensureSidebarClosed } from './helpers/page-utils.js';
+import { test, expect } from './helpers/test-fixture.js';
+import { createTestPage, deletePageViaUI, waitForSaved } from './helpers/page-utils.js';
+import { installVoiceMocks } from './helpers/voice-mocks.js';
 
 /**
- * VoiceAssistant Playwright Spec
+ * VoiceAssistant ↔ Tiptap integration.
+ *
+ * VoiceAssistant streams mic audio to /api/transcribe over a WebSocket; the
+ * getUserMedia / MediaRecorder / WebSocket stack is mocked (see voice-mocks.js)
+ * so transcripts can be injected deterministically.
  */
 
 async function loginAndCreatePage(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
 
-  // Handle Login
   const authOverlay = page.locator('#auth-overlay');
   if (await authOverlay.isVisible()) {
     await page.fill('#login-email', 'test.user@insel.ch');
@@ -18,106 +22,84 @@ async function loginAndCreatePage(page) {
     await expect(authOverlay).toBeHidden({ timeout: 15000 });
   }
 
-  // Create a new test page under page-tests
-  const pageTitle = `VoiceTest-${Date.now()}`;
-  const pageId = await createTestPage(page, pageTitle);
+  const pageId = await createTestPage(page, `VoiceTest-${Date.now()}`);
 
-  // Wait for editor to be ready
   const editor = page.locator('.tiptap:visible');
   await expect(editor).toBeVisible({ timeout: 15000 });
   await editor.focus();
-  
+
   return { editor, pageId };
+}
+
+// Click the mic button and wait for a live recognition session (socket open,
+// recorder running) so injected transcripts are not dropped.
+async function startRecording(page, voiceBtn) {
+  await expect(voiceBtn).toBeVisible();
+  await voiceBtn.click();
+  await expect(voiceBtn).toHaveClass(/is-recording/);
+  await page.waitForFunction(() => window.__voice && window.__voice.ready());
 }
 
 test.describe('VoiceAssistant ↔ Tiptap Integration', () => {
   let createdPageId = null;
 
   test.beforeEach(async ({ page }) => {
-    // Mock SpeechRecognition before page load or initialization
-    await page.addInitScript(() => {
-      class MockSpeechRecognition {
-        constructor() {
-          this.continuous = true;
-          this.interimResults = true;
-          this.lang = 'de-CH';
-          this.onstart = null;
-          this.onresult = null;
-          this.onend = null;
-          this.onerror = null;
-          window._mockSpeechInstance = this;
-        }
-        start() {
-          if (this.onstart) setTimeout(() => this.onstart(), 10);
-        }
-        stop() {
-          if (this.onend) setTimeout(() => this.onend(), 10);
-        }
-      }
-
-      window.SpeechRecognition = MockSpeechRecognition;
-      window.webkitSpeechRecognition = MockSpeechRecognition;
-
-      // Global helper to simulate voice input from the test
-      window.simulateVoiceInput = (transcript) => {
-        if (!window._mockSpeechInstance || !window._mockSpeechInstance.onresult) {
-          console.error('[MockSpeech] No active instance or onresult handler');
-          return;
-        }
-        const event = {
-          resultIndex: 0,
-          results: [
-            {
-              isFinal: true,
-              0: { transcript: transcript }
-            }
-          ]
-        };
-        window._mockSpeechInstance.onresult(event);
-      };
-    });
+    await page.addInitScript(installVoiceMocks);
   });
 
   test.afterEach(async ({ page }) => {
     if (createdPageId) {
-        await deletePageViaUI(page, createdPageId);
+      await deletePageViaUI(page, createdPageId);
+      createdPageId = null;
     }
   });
 
-  test('should execute voice commands: "neuer absatz", "fett", and "rückgängig"', async ({ page }) => {
+  test('executes voice commands: "fett", "neuer absatz", "rückgängig"', async ({ page }) => {
     const { editor, pageId } = await loginAndCreatePage(page);
     createdPageId = pageId;
 
     const voiceBtn = page.locator('.format-btn[data-action="voice"]');
-    
-    // Start Voice Assistant
-    await expect(voiceBtn).toBeVisible();
-    await voiceBtn.click();
-    await expect(voiceBtn).toHaveClass(/is-recording/);
+    await startRecording(page, voiceBtn);
 
-    // --- Command 1: 'fett' (toggle bold) ---
-    await page.evaluate(() => window.simulateVoiceInput('fett'));
-    await page.evaluate(() => window.simulateVoiceInput('fetter text'));
-    
-    // Check if bold text was inserted
-    const boldElement = editor.locator('strong, b');
-    await expect(boldElement).toContainText(/fetter text/i);
+    // --- 'fett' (toggle bold) ---
+    await page.evaluate(() => window.__voice.final('fett'));
+    await page.evaluate(() => window.__voice.final('fetter text'));
+    await expect(editor.locator('strong, b')).toContainText(/fetter text/i);
 
-    // --- Command 2: 'neuer absatz' (insert paragraph) ---
-    await page.evaluate(() => window.simulateVoiceInput('neuer absatz'));
-    await page.evaluate(() => window.simulateVoiceInput('zweiter absatz'));
-    
-    // Check if a new paragraph was created
-    const paragraphs = editor.locator('p');
-    await expect(paragraphs).toHaveCount(2);
-    await expect(paragraphs.last()).toContainText(/zweiter absatz/i);
+    // --- 'neuer absatz' (new paragraph) ---
+    await page.evaluate(() => window.__voice.final('neuer absatz'));
+    await page.evaluate(() => window.__voice.final('zweiter absatz'));
+    await expect(editor.locator('p')).toHaveCount(2);
+    await expect(editor.locator('p').last()).toContainText(/zweiter absatz/i);
 
-    // --- Command 3: 'rückgängig' (undo) ---
-    await page.evaluate(() => window.simulateVoiceInput('rückgängig'));
+    // --- 'rückgängig' (undo) ---
+    await page.evaluate(() => window.__voice.final('rückgängig'));
     await expect(editor).not.toContainText(/zweiter absatz/i);
-    
-    // Stop Voice Assistant
+
+    // Let edits persist so afterEach navigation isn't blocked by the
+    // "Seite verlassen?" unsaved-changes guard.
+    await waitForSaved(page);
+
     await voiceBtn.click();
     await expect(voiceBtn).not.toHaveClass(/is-recording/);
+  });
+
+  test('streams audio while recording and closes the session on stop', async ({ page }) => {
+    const { pageId } = await loginAndCreatePage(page);
+    createdPageId = pageId;
+
+    const voiceBtn = page.locator('.format-btn[data-action="voice"]');
+    await startRecording(page, voiceBtn);
+
+    // The mocked MediaRecorder emits chunks that are streamed to the backend.
+    await page.waitForFunction(() => window.__voice.audioFramesSent() > 0);
+    expect(await page.evaluate(() => window.__voice.socketCount())).toBe(1);
+
+    await voiceBtn.click();
+    await expect(voiceBtn).not.toHaveClass(/is-recording/);
+
+    // The recorder is stopped and no new session is opened.
+    expect(await page.evaluate(() => window.__voice.recorderActive())).toBe(false);
+    expect(await page.evaluate(() => window.__voice.socketCount())).toBe(1);
   });
 });

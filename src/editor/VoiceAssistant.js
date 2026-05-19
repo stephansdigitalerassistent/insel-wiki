@@ -1,13 +1,32 @@
 /**
- * VoiceAssistant — Real-time voice input for Tiptap editor
- * Supports dictation, navigation, and formatting via Web Speech API.
+ * VoiceAssistant — Voice input for the Tiptap editor.
+ *
+ * Recognition runs through the wiki's OWN backend, not the browser's Web
+ * Speech API (whose vendor speech endpoint is blocked in restricted networks):
+ *
+ *   mic → MediaRecorder (WebM/Opus) → WebSocket /api/transcribe
+ *       → Cloud Run service → Google Speech-to-Text (streaming) → transcript
+ *
+ * The only network call the browser makes is to the wiki's own origin (already
+ * reachable — the wiki loaded), so the restricted block is bypassed.
+ *
+ * Streaming (vs. the earlier chunked POSTs): Speech-to-Text sees a continuous
+ * audio stream, so results break at natural pauses instead of arbitrary chunk
+ * edges — no word-boundary clipping. Final results drive editor insertion and
+ * commands; interim results are surfaced via the optional onInterim callback
+ * for a live preview, but are not inserted into the document.
+ *
+ * The service caps a single recognition stream at ~5 min; when it closes for
+ * that reason the client transparently opens a fresh session and keeps going.
  */
+
+import { auth } from '../firebase/config.js';
 
 const insertPunctuation = (editor, punctuation) => {
   const { state } = editor;
   const { from } = state.selection;
   const textBefore = state.doc.textBetween(Math.max(0, from - 1), from);
-  
+
   if (textBefore === ' ') {
     editor.chain().focus().deleteRange(from - 1, from).insertContentAt(from - 1, punctuation).run();
   } else {
@@ -43,135 +62,202 @@ const COMMANDS = {
   'semikolon': (editor) => insertPunctuation(editor, '; '),
 };
 
+// Backend WebSocket — served same-origin via the Hosting /api rewrite.
+const TRANSCRIBE_PATH = '/api/transcribe';
+// MediaRecorder emits a WebM/Opus blob this often; each is streamed as it lands.
+const TIMESLICE_MS = 250;
+// Consecutive failed (re)connections tolerated before giving up.
+const MAX_CONSECUTIVE_FAILURES = 3;
+// WebSocket close code agreed with the service for an auth rejection.
+const CLOSE_AUTH = 4401;
+
 export class VoiceAssistant {
   constructor(editor) {
     this.editor = editor;
-    this.recognition = null;
+    this.lang = 'de-CH'; // Swiss German, per project context
     this.isRecording = false;
-    this.onStateChange = null;
-    this._networkErrorPending = false;
-    this._recoveryRetryCount = 0;
-    this._MAX_RECOVERY_RETRIES = 3;
+    this.onStateChange = null; // (isRecording: boolean) => void
+    this.onError = null;       // (code: string, message: string) => void
+    this.onInterim = null;     // (text: string) => void — optional live preview
 
-    this._initRecognition();
+    this._stream = null;
+    this._recorder = null;
+    this._ws = null;
+    this._mimeType = null;
+    this._consecutiveFailures = 0;
+    this._reconnectTimer = null;
+    // Set while a session is being torn down on purpose, so the socket's
+    // close handler does not mistake it for a drop worth reconnecting.
+    this._closingSession = false;
   }
 
-  _initRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn('[VoiceAssistant] Browser does not support Web Speech API.');
+  _pickMimeType() {
+    if (typeof MediaRecorder === 'undefined') return null;
+    return ['audio/webm;codecs=opus', 'audio/webm']
+      .find((t) => MediaRecorder.isTypeSupported(t)) || null;
+  }
+
+  async start() {
+    if (this.isRecording) return;
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      this._fail('unsupported', 'Mikrofonzugriff wird von diesem Browser nicht unterstützt.');
+      return;
+    }
+    if (typeof WebSocket === 'undefined') {
+      this._fail('unsupported', 'WebSockets werden von diesem Browser nicht unterstützt.');
+      return;
+    }
+    this._mimeType = this._pickMimeType();
+    if (!this._mimeType) {
+      this._fail('unsupported', 'Audioaufnahme (WebM/Opus) wird von diesem Browser nicht unterstützt.');
+      return;
+    }
+    if (!auth.currentUser) {
+      this._fail('auth', 'Bitte zuerst anmelden, um die Spracheingabe zu nutzen.');
       return;
     }
 
-    this.recognition = new SpeechRecognition();
-    this.recognition.continuous = true;
-    this.recognition.interimResults = true;
-    this.recognition.lang = 'de-CH'; // Default to Swiss German as per project context
+    try {
+      this._stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      console.error('[VoiceAssistant] Microphone access denied:', e);
+      this._fail('mic-denied', 'Kein Zugriff auf das Mikrofon.');
+      return;
+    }
 
-    this.recognition.onresult = (event) => {
-      // Reset recovery counter on successful result
-      this._recoveryRetryCount = 0;
+    this.isRecording = true;
+    this._consecutiveFailures = 0;
+    if (this.onStateChange) this.onStateChange(true);
+    console.log('[VoiceAssistant] Recording started (streaming).');
+    this._openSession();
+  }
 
-      let interimTranscript = '';
-      let finalTranscript = '';
+  async _openSession() {
+    if (!this.isRecording || !this._stream) return;
 
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
+    let token;
+    try {
+      token = await auth.currentUser.getIdToken();
+    } catch (e) {
+      console.error('[VoiceAssistant] Could not obtain auth token:', e);
+      this._fail('auth', 'Sitzung abgelaufen — bitte neu anmelden.');
+      return;
+    }
+    // start()/stop() may have changed state while the token was being fetched.
+    if (!this.isRecording) return;
 
-      if (finalTranscript) {
-        this._handleFinalTranscript(finalTranscript.toLowerCase().trim());
+    const wsUrl = `${location.origin.replace(/^http/, 'ws')}${TRANSCRIBE_PATH}`;
+    let ws;
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (e) {
+      console.error('[VoiceAssistant] Could not open WebSocket:', e);
+      this._scheduleReconnect('Spracherkennungs-Dienst nicht erreichbar.');
+      return;
+    }
+    this._ws = ws;
+    this._closingSession = false;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'auth', token, lang: this.lang }));
+    };
+
+    ws.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+
+      if (msg.type === 'ready') {
+        this._consecutiveFailures = 0; // a clean handshake resets the budget
+        this._startRecorder(ws);
+      } else if (msg.type === 'interim') {
+        if (this.onInterim) this.onInterim(msg.transcript || '');
+      } else if (msg.type === 'final') {
+        if (this.onInterim) this.onInterim('');
+        const transcript = (msg.transcript || '').trim();
+        if (transcript) this._handleFinalTranscript(transcript);
+      } else if (msg.type === 'error') {
+        console.error('[VoiceAssistant] Backend error:', msg.message);
       }
     };
 
-    this.recognition.onstart = () => {
-      console.log('[VoiceAssistant] Recording started...');
-      // NOTE: do NOT reset _recoveryRetryCount here. `onstart` fires on every
-      // recovery restart — even when the speech endpoint is blocked and the
-      // session errors out milliseconds later. Resetting here would zero the
-      // counter on each cycle and the retry cap would never trip (infinite
-      // loop in restricted environments). The counter is only cleared by
-      // `onresult`, which proves the endpoint actually responded.
+    ws.onerror = () => {
+      // onclose carries the decisive signal (and a code); just log here.
+      console.error('[VoiceAssistant] WebSocket error.');
     };
 
-    this.recognition.onend = () => {
-      console.log('[VoiceAssistant] Recording ended.');
-      
-      // If we are recovering from a network error, the setTimeout will handle the restart.
-      if (this._networkErrorPending) {
-        console.log('[VoiceAssistant] Network error recovery pending, skipping immediate restart.');
+    ws.onclose = (ev) => {
+      if (this._ws === ws) this._ws = null;
+      this._stopRecorder();
+      if (!this.isRecording || this._closingSession) return;
+
+      if (ev.code === CLOSE_AUTH) {
+        this._fail('auth', 'Nicht autorisiert für die Spracheingabe.');
         return;
       }
+      // Unexpected drop — a network blip or the service's ~5-min stream limit.
+      // Reconnect transparently; a reconnect that itself fails counts toward
+      // the failure budget, a successful one ('ready') resets it.
+      console.log('[VoiceAssistant] Session closed, reconnecting…');
+      this._scheduleReconnect('Spracherkennungs-Dienst nicht erreichbar.');
+    };
+  }
 
-      // Mobile Safari often ends the session unexpectedly. 
-      // If we are still supposed to be recording, try to restart.
-      if (this.isRecording && this.recognition) {
-        console.log('[VoiceAssistant] Attempting to restart recognition...');
-        try {
-          this.recognition.start();
-        } catch (e) {
-          console.error('[VoiceAssistant] Auto-restart failed:', e);
-          this.isRecording = false;
-          if (this.onStateChange) this.onStateChange(false);
-        }
-      } else {
-        this.isRecording = false;
-        if (this.onStateChange) this.onStateChange(false);
+  _startRecorder(ws) {
+    if (!this.isRecording || ws.readyState !== WebSocket.OPEN) return;
+
+    let recorder;
+    try {
+      recorder = new MediaRecorder(this._stream, { mimeType: this._mimeType });
+    } catch (e) {
+      console.error('[VoiceAssistant] Failed to create MediaRecorder:', e);
+      this._fail('recorder', 'Audioaufnahme konnte nicht gestartet werden.');
+      return;
+    }
+    this._recorder = recorder;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+        ws.send(e.data);
       }
     };
+    recorder.start(TIMESLICE_MS);
+  }
 
-    this.recognition.onerror = (event) => {
-      console.error('[VoiceAssistant] Error occurred in recognition:', event.error);
-      
-      if (event.error === 'network' && this.isRecording) {
-        if (this._recoveryRetryCount >= this._MAX_RECOVERY_RETRIES) {
-          console.error('[VoiceAssistant] Max recovery retries reached. Stopping.');
-          this.stop();
-          return;
-        }
+  _stopRecorder() {
+    const recorder = this._recorder;
+    this._recorder = null;
+    if (recorder && recorder.state !== 'inactive') {
+      try { recorder.stop(); } catch { /* already stopping */ }
+    }
+  }
 
-        this._recoveryRetryCount++;
-        console.warn(`[VoiceAssistant] Network error detected. Attempting recovery attempt ${this._recoveryRetryCount}/${this._MAX_RECOVERY_RETRIES} in 1s...`);
-        this._networkErrorPending = true;
+  _scheduleReconnect(message) {
+    this._consecutiveFailures++;
+    if (this._consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      console.error('[VoiceAssistant] Too many consecutive failures. Stopping.');
+      this._fail('backend', message);
+      return;
+    }
+    const delay = 300 * this._consecutiveFailures;
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = null;
+      this._openSession();
+    }, delay);
+  }
 
-        // Wait a bit before retrying to avoid rapid failure loops
-        setTimeout(() => {
-          this._networkErrorPending = false;
-          if (this.isRecording && this.recognition) {
-            try {
-              console.log('[VoiceAssistant] Recovery: Restarting recognition...');
-              this.recognition.start();
-            } catch (e) {
-              // If it's already started (race condition), we can ignore it.
-              if (e.name === 'InvalidStateError') {
-                console.log('[VoiceAssistant] Recovery: Recognition already started, ignoring error.');
-              } else {
-                console.error('[VoiceAssistant] Recovery attempt failed:', e);
-                this.stop();
-              }
-            }
-          } else {
-            console.log('[VoiceAssistant] Recovery: Recording was stopped or recognition nullified during wait.');
-          }
-        }, 1000);
-      } else {
-        console.log('[VoiceAssistant] Non-recoverable error or recording inactive. Stopping.');
-        this.stop();
-      }
-    };
+  _closeWs(ws, code = 1000) {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      try { ws.close(code); } catch { /* ignore */ }
+    }
   }
 
   _handleFinalTranscript(transcript) {
     console.log('[VoiceAssistant] Final transcript:', transcript);
 
-    // Normalize transcript for matching
+    // Normalize for command matching only — inserted text keeps its casing.
     const normalized = transcript.toLowerCase().trim();
 
-    // Check for commands (exact match or at the end of string for better UX)
     for (const [command, action] of Object.entries(COMMANDS)) {
       if (normalized === command || normalized.endsWith(' ' + command)) {
         console.log('[VoiceAssistant] Executing command:', command);
@@ -180,15 +266,15 @@ export class VoiceAssistant {
       }
     }
 
-    // Default: Insert text
-    // Capitalize first letter if it's the start of a sentence or empty editor
     let textToInsert = transcript.trim();
     if (!textToInsert) return;
 
+    // Capitalize the first letter at the start of a sentence / empty editor.
     const { state } = this.editor;
     const { selection } = state;
-    const isStart = selection.from === 1 || state.doc.textBetween(selection.from - 2, selection.from).match(/[.!?]\s$/);
-    
+    const isStart = selection.from === 1
+      || state.doc.textBetween(selection.from - 2, selection.from).match(/[.!?]\s$/);
+
     if (isStart) {
       textToInsert = textToInsert.charAt(0).toUpperCase() + textToInsert.slice(1);
     }
@@ -204,30 +290,72 @@ export class VoiceAssistant {
     }
   }
 
-  start() {
-    if (this.recognition) {
-      this.isRecording = true; // Set before starting to handle onend auto-restart
-      if (this.onStateChange) this.onStateChange(true);
+  stop() {
+    if (!this.isRecording) {
+      this._teardown();
+      return;
+    }
+    this.isRecording = false;
+    this._closingSession = true;
+
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+
+    const ws = this._ws;
+    const recorder = this._recorder;
+    this._recorder = null;
+
+    if (recorder && recorder.state !== 'inactive') {
+      // onstop fires after the final ondataavailable, so the service gets the
+      // last audio blob before the stop signal that flushes recognition.
+      recorder.onstop = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'stop' }));
+        }
+      };
       try {
-        this.recognition.start();
-      } catch (e) {
-        console.error('[VoiceAssistant] Failed to start recognition:', e);
-        this.isRecording = false;
-        if (this.onStateChange) this.onStateChange(false);
+        recorder.stop();
+      } catch {
+        this._closeWs(ws);
       }
+    } else {
+      this._closeWs(ws);
+    }
+
+    this._releaseStream();
+    console.log('[VoiceAssistant] Recording stopped.');
+    if (this.onStateChange) this.onStateChange(false);
+  }
+
+  _releaseStream() {
+    if (this._stream) {
+      this._stream.getTracks().forEach((t) => t.stop());
+      this._stream = null;
     }
   }
 
-  stop() {
-    if (this.recognition && this.isRecording) {
-      this.isRecording = false;
-      if (this.onStateChange) this.onStateChange(false);
-      this.recognition.stop();
+  _teardown() {
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
     }
+    this._stopRecorder();
+    this._closeWs(this._ws);
+    this._ws = null;
+    this._releaseStream();
+  }
+
+  _fail(code, message) {
+    console.error(`[VoiceAssistant] ${code}: ${message}`);
+    if (this.onError) this.onError(code, message);
+    this.stop();
   }
 
   destroy() {
+    this._closingSession = true;
     this.stop();
-    this.recognition = null;
+    this._teardown();
   }
 }

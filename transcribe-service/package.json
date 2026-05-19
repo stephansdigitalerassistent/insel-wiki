@@ -1,0 +1,17 @@
+{
+  "name": "insel-wiki-transcribe-service",
+  "description": "Streaming speech-to-text proxy (Cloud Run) for insel-wiki voice input",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@google-cloud/speech": "^6.7.0",
+    "firebase-admin": "^13.0.2",
+    "ws": "^8.18.0"
+  }
+}

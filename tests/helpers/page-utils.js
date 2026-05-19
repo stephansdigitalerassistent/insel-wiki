@@ -88,6 +88,12 @@ export async function deletePageViaUI(page, pageId) {
   await page.waitForLoadState('domcontentloaded');
   await ensureSidebarClosed(page);
   
+  // Ensure no modal is blocking the delete button
+  const overlay = page.locator('.modal-overlay:visible');
+  if (await overlay.count() > 0) {
+    await expect(overlay.first()).toBeHidden({ timeout: 10000 });
+  }
+  
   await page.waitForSelector('#delete-page-btn', { timeout: 10000 });
   await page.click('#delete-page-btn');
   
@@ -98,4 +104,21 @@ export async function deletePageViaUI(page, pageId) {
   
   // Wait for redirect to home or parent
   await expect(page).not.toHaveURL(new RegExp(`${pageId}$`), { timeout: 10000 });
+}
+
+/**
+ * Waits for the editor to be fully synced (Yjs + Tiptap ready)
+ */
+export async function waitForEditorSynced(page) {
+  const editor = page.locator('.editor-pane[data-synced="true"]:visible');
+  await editor.waitFor({ state: 'attached', timeout: 15000 });
+}
+
+/**
+ * Waits until pending edits are persisted (the #save-status indicator leaves
+ * its "saving" state). Navigating away before this trips the "Seite
+ * verlassen?" unsaved-changes guard, which blocks helpers like deletePageViaUI.
+ */
+export async function waitForSaved(page) {
+  await expect(page.locator('#save-status')).not.toHaveClass(/saving/, { timeout: 15000 });
 }

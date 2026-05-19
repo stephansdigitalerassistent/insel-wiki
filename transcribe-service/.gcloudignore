@@ -1,0 +1,4 @@
+# Keep the source upload small; Cloud Build buildpacks install deps fresh.
+node_modules/
+.git/
+*.log
