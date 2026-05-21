@@ -1,6 +1,11 @@
 /**
  * Converts an email prefix to a capitalized default name.
  * e.g. "max.muster" -> "Max Muster"
+ *
+ * @example
+ * import { formatDefaultName } from './utils/string.js';
+ * const name = formatDefaultName('max.muster@insel.ch');
+ * console.log(name); // "Max Muster"
  */
 export function formatDefaultName(email) {
   if (!email || email === 'Gast') return 'Gast';
@@ -20,6 +25,11 @@ export function formatDefaultName(email) {
 
 /**
  * Convert title to URL-safe slug
+ *
+ * @example
+ * import { slugify } from './utils/string.js';
+ * const slug = slugify('Über uns & mehr!');
+ * console.log(slug); // "ber-uns-mehr"
  */
 export function slugify(text) {
   if (!text) return '';
