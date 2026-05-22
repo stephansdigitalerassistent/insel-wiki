@@ -52,7 +52,7 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "dotenv": "^17.4.2",
-    "firebase-tools": "^15.11.0",
+    "firebase-tools": "^15.18.0",
     "vite-plugin-pwa": "^1.2.0"
   },
   "overrides": {
