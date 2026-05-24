@@ -2,7 +2,10 @@
  * Extrahiert alle Todos aus einem gegebenen Markdown-Text.
  * Erkennt Formate wie '- [ ] Aufgabe' oder '- [x] Erledigt'.
  *
- * @example
+ * @param {string} content - Der zu analysierende Markdown-Text.
+ * @returns {Array<{done: boolean, text: string, raw: string, index: number, indent: number}>} Die extrahierten Aufgaben.
+ *
+ * @example Usage
  * import { extractTasksFromContent } from './utils/tasks.js';
  * const tasks = extractTasksFromContent('- [ ] Aufgabe\n- [x] Erledigt');
  * console.log(tasks);
