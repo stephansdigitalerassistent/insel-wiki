@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "deploy": "npm run build && firebase deploy",
     "deploy:beta": "npm run build && firebase deploy -P beta",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "node tests/run-unit-tests.js",
+    "postinstall": "node .burn/patch-lodash.cjs"
   },
   "keywords": [
     "wiki",
@@ -55,5 +57,14 @@
     "dotenv": "^17.4.2",
     "firebase-tools": "^15.11.0",
     "vite-plugin-pwa": "^1.2.0"
+  },
+  "overrides": {
+    "@babel/plugin-transform-modules-systemjs": "7.29.4",
+    "basic-ftp": "5.3.1",
+    "fast-uri": "3.1.2",
+    "lodash": "4.18.0",
+    "protobufjs": "7.5.9",
+    "serialize-javascript": "7.0.5",
+    "uuid": "14.0.0"
   }
 }
