@@ -520,7 +520,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
               if (editor && url) editor.chain().focus().setImage({ src: url }).run();
             } catch (err) {
               console.error('Image upload failed', err);
-              alert('Fehler beim Hochladen des Bildes: ' + err.message);
+              alert(t('editor.uploadError') + err.message);
             }
           });
           return true;
@@ -538,7 +538,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
                 if (editor && url) editor.chain().focus().setImage({ src: url }).run();
               } catch (err) {
                 console.error('Image upload failed', err);
-                alert('Fehler beim Hochladen des Bildes: ' + err.message);
+                alert(t('editor.uploadError') + err.message);
               }
             });
             return true;
