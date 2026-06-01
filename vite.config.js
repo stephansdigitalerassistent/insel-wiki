@@ -6,17 +6,18 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     chunkSizeWarningLimit: 1200,
+    target: 'esnext',
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('@tiptap')) {
+            if (id.includes('@tiptap') || id.includes('prosemirror')) {
               return 'tiptap';
             }
             if (id.includes('firebase')) {
               return 'firebase';
             }
-            if (id.includes('yjs')) {
+            if (id.includes('/yjs/') || id.includes('/y-') || id.includes('yjs')) {
               return 'yjs';
             }
             return 'vendor';

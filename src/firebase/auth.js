@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { createAuthUser, changeUserPassword } from '../services/auth-service.js';
+import i18next, { translatePage } from '../i18n.js';
 
 // Wiki admin email — receiving end for access requests
 const WIKI_ADMIN_EMAIL = 'stephansdigitalassistent@gmail.com';
@@ -187,11 +188,9 @@ export function initAuth() {
           // Load and apply language preference
           const lang = userSnap.data().language;
           if (lang) {
-            import('../i18n.js').then(({ default: i18n, translatePage }) => {
-              if (i18n.language !== lang) {
-                i18n.changeLanguage(lang).then(() => translatePage());
-              }
-            }).catch(err => console.error('[Auth] Failed to load i18n for language preference:', err));
+            if (i18next.language !== lang) {
+              i18next.changeLanguage(lang).then(() => translatePage()).catch(err => console.error('[Auth] Failed to apply language preference:', err));
+            }
           }
         }
       } else {
