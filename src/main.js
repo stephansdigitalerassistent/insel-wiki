@@ -155,6 +155,7 @@ async function init() {
       formatToolbar: getFormatToolbar(),
       pageTitleInput: getPageTitleInput()
     });
+    reevaluateSpellCheck();
   });
 
   // Hash-based routing

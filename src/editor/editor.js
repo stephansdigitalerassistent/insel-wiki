@@ -931,6 +931,19 @@ export function clearEditorCache() {
 window.clearEditorCache = clearEditorCache;
 
 export function getProvider() { return _active()?.provider || null; }
+export function reevaluateSpellCheck() {
+  const enabled = isSpellCheckEnabled();
+  cache.forEach((entry) => {
+    if (enabled && !entry.spellCheckerBot) {
+      entry.spellCheckerBot = new SpellCheckerBot(entry.editor, entry.provider);
+      entry.spellCheckerBot.start();
+    } else if (!enabled && entry.spellCheckerBot) {
+      entry.spellCheckerBot.destroy();
+      entry.spellCheckerBot = null;
+    }
+  });
+}
+
 export function getEditor() { return _active()?.editor || null; }
 
 /**
