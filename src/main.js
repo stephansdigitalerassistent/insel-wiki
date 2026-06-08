@@ -3,7 +3,7 @@
 
 import i18next, { translatePage } from './i18n.js';
 import { initAuth, onAuthChange, canEdit } from './firebase/auth.js';
-import { setEditable, getProvider } from './editor/editor.js';
+import { setEditable, getProvider, reevaluateSpellCheck } from './editor/editor.js';
 import { slugify } from './utils/string.js';
 import { initSidebar } from './components/sidebar.js';
 import { initComments } from './components/comments.js';
