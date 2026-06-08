@@ -184,7 +184,7 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     
     // Soft Delete
     await page.click('#delete-page-btn');
-    const deleteConfirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+    const deleteConfirm = page.locator('.modal-box', { hasText: 'Seite löschen' });
     if (await deleteConfirm.isVisible({ timeout: 5000 })) {
         await deleteConfirm.locator('button', { hasText: 'Löschen' }).click();
     }

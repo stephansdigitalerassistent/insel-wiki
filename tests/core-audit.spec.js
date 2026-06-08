@@ -171,7 +171,7 @@ test.describe('Insel-Wiki Core Audit', () => {
 
     // --- 7. Soft Delete ---
     await page.click('#delete-page-btn');
-    const confirm = page.locator('.modal-box', { hasText: 'Seite löschen?' });
+    const confirm = page.locator('.modal-box', { hasText: 'Seite löschen' });
     await expect(confirm).toBeVisible();
     await confirm.locator('button', { hasText: 'Löschen' }).click();
     await expect(page.locator('#empty-state')).toBeVisible({ timeout: 10000 });

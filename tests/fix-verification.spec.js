@@ -70,7 +70,7 @@ test.describe('Insel-Wiki Navigation & UI Fixes Suite', () => {
     await page.goto('/#/page-tests');
     await ensureSidebarOpen(page);
     
-    const pageItem = page.locator('.tree-item').filter({ hasText: /^Entwicklung/ });
+    const pageItem = page.locator('.tree-item').filter({ hasText: /Weiterentwicklung/ });
     await pageItem.first().hover();
     const optionsBtn = pageItem.first().locator('.more-btn');
     await optionsBtn.click();
