@@ -28,7 +28,7 @@
     "@tiptap/html": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
     "firebase-admin": "^12.6.0",
-    "firebase-functions": "^6.1.0",
+    "firebase-functions": "^7.2.5",
     "turndown": "^7.2.4",
     "y-prosemirror": "^1.2.12",
     "yjs": "^13.6.30"
