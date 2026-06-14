@@ -1,4 +1,5 @@
 import i18next from '../i18n.js';
+import { logClientError } from '../firebase/firestore.js';
 
 // Toast Notification System — replaces native alert() calls
 let toastContainer = null;
@@ -67,7 +68,48 @@ function dismissToast(toast) {
  * Initialize global error handler (#14).
  * Catches unhandled promise rejections and JS errors.
  */
+let isLoggingError = false;
+
 export function initGlobalErrorHandler() {
+  const originalConsoleError = console.error;
+  console.error = (...args) => {
+    originalConsoleError.apply(console, args);
+
+    if (isLoggingError) return;
+
+    // Suppress internal Firestore BloomFilter errors in tests as they are expected when Service Workers are blocked
+    if (args[0] && typeof args[0] === 'string' && args[0].includes('BloomFilter error')) return;
+
+    isLoggingError = true;
+    try {
+      const message = args.map(arg => {
+        if (arg instanceof Error) return arg.message;
+        if (arg && typeof arg === 'object') {
+          try {
+            return JSON.stringify(arg);
+          } catch (e) {
+            return String(arg);
+          }
+        }
+        return String(arg);
+      }).join(' ');
+
+      if (message.includes('[Firestore] Failed to log client error')) {
+        isLoggingError = false;
+        return;
+      }
+
+      const errorObj = args.find(arg => arg instanceof Error);
+      const stack = errorObj ? errorObj.stack : null;
+
+      logClientError(message, stack);
+    } catch (err) {
+      originalConsoleError('[Logging] Failed to process console error:', err);
+    } finally {
+      isLoggingError = false;
+    }
+  };
+
   window.addEventListener('unhandledrejection', (event) => {
     console.error('[Insel-Wiki] Unhandled rejection:', event.reason);
     const message = event.reason?.message || i18next.t('errors.unexpected');

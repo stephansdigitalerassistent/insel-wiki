@@ -91,5 +91,10 @@ service cloud.firestore {
         )
       );
     }
+
+    match /client_errors/{errorId} {
+      allow create: if true;
+      allow read, update, delete: if isBot();
+    }
   }
 }

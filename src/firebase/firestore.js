@@ -1,5 +1,5 @@
 // Firestore CRUD operations for wiki pages
-import { db } from './config.js';
+import { db, auth } from './config.js';
 import {
   collection,
   doc,
@@ -569,6 +569,35 @@ export async function ensurePageExists(pageId, title = 'Tests', parentId = null)
     return true;
   }
   return false;
+}
+
+/**
+ * Log a client-side error to the database
+ */
+export async function logClientError(message, stack = null) {
+  try {
+    // Avoid logging known transient Firebase offline/unavailable errors to database
+    // since they are expected and can clutter the logs.
+    if (message.includes('Failed to get document') || message.includes('unavailable')) {
+      return;
+    }
+
+    const errorData = {
+      message,
+      stack,
+      url: typeof window !== 'undefined' ? window.location.href : '',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      userId: auth?.currentUser?.uid || 'anonymous',
+      userName: auth?.currentUser?.displayName || auth?.currentUser?.email || 'anonymous',
+      timestamp: serverTimestamp()
+    };
+
+    const errorsRef = collection(db, 'client_errors');
+    await addDoc(errorsRef, errorData);
+  } catch (err) {
+    // Use console.warn to avoid recursion loops with console.error
+    console.warn('[Firestore] Failed to log client error to database:', err);
+  }
 }
 
 
