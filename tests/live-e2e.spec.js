@@ -90,9 +90,10 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
        const trashItem = page.locator('.trash-item', { hasText: title });
        if (await trashItem.isVisible()) {
           await trashItem.locator('.btn-danger').click();
-          const confirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
-          if (await confirm.isVisible({ timeout: 5000 })) {
-              await confirm.locator('button', { hasText: 'Löschen' }).click();
+          const confirm = page.locator('.modal-overlay:visible .modal-box');
+          await confirm.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+          if (await confirm.isVisible()) {
+              await confirm.locator('button.btn-danger').click();
           }
           await expect(trashItem).not.toBeVisible({timeout: 5000});
        }
@@ -184,10 +185,9 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     
     // Soft Delete
     await page.click('#delete-page-btn');
-    const deleteConfirm = page.locator('.modal-box', { hasText: 'Seite löschen' });
-    if (await deleteConfirm.isVisible({ timeout: 5000 })) {
-        await deleteConfirm.locator('button', { hasText: 'Löschen' }).click();
-    }
+    const deleteConfirm = page.locator('.modal-overlay:visible .modal-box');
+    await deleteConfirm.waitFor({ state: 'visible', timeout: 5000 });
+    await deleteConfirm.locator('button.btn-danger').click();
     await page.waitForTimeout(2000);
     
     // Permanent Delete
@@ -199,10 +199,9 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     await expect(trashItem).toBeVisible({ timeout: 5000 });
     
     await trashItem.locator('.btn-danger').click();
-    const permConfirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
-    if (await permConfirm.isVisible({ timeout: 5000 })) {
-        await permConfirm.locator('button', { hasText: 'Löschen' }).click();
-    }
+    const permConfirm = page.locator('.modal-overlay:visible .modal-box');
+    await permConfirm.waitFor({ state: 'visible', timeout: 5000 });
+    await permConfirm.locator('button.btn-danger').click();
     await expect(trashItem).not.toBeVisible({ timeout: 5000 });
   });
 });

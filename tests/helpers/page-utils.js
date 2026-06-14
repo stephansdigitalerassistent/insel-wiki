@@ -92,10 +92,9 @@ export async function deletePageViaUI(page, pageId) {
   await expect(deleteBtn).toBeVisible({ timeout: 10000 });
   await deleteBtn.click({ force: true });
   
-  const confirm = page.locator('.modal-box', { hasText: 'Seite löschen' });
-  if (await confirm.isVisible({ timeout: 5000 })) {
-      await confirm.locator('button', { hasText: 'Löschen' }).click();
-  }
+  const confirm = page.locator('.modal-overlay:visible .modal-box', { has: page.locator('button.btn-danger') });
+  await confirm.waitFor({ state: 'visible', timeout: 5000 });
+  await confirm.locator('button.btn-danger').click();
   
   // Wait for redirect to home or parent
   await expect(page).not.toHaveURL(new RegExp(`${pageId}$`), { timeout: 10000 });

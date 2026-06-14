@@ -35,6 +35,7 @@ export class FirestoreYjsProvider {
     // Initialize awareness state for ourselves
     this.awareness.setLocalStateField('user', {
       name: user?.name || i18next.t('common.guest'),
+      email: user?.email || '',
       color: user?.color || this.getRandomColor(),
       photoURL: user?.photoURL || null
     });
@@ -118,6 +119,21 @@ export class FirestoreYjsProvider {
 
   async compact() {
     try {
+      // 1. Fetch all pending updates currently in the database
+      const updatesSnap = await getDocs(query(this.updatesRef, orderBy('timestamp', 'asc')));
+      
+      // 2. Apply any updates we don't have yet to ensure the compaction is up to date
+      updatesSnap.forEach(change => {
+        const data = change.data();
+        if (data.update) {
+          try {
+            Y.applyUpdate(this.ydoc, data.update.toUint8Array(), this);
+          } catch (e) {
+            console.error('[FirestoreYjs] Failed to apply update during compaction:', e);
+          }
+        }
+      });
+
       await runTransaction(db, async (transaction) => {
         const stateSnap = await transaction.get(this.stateDocRef);
         const existingData = stateSnap.data();
@@ -135,15 +151,14 @@ export class FirestoreYjsProvider {
           state: Bytes.fromUint8Array(newState), 
           updatedAt: serverTimestamp() 
         });
-
-        // We can't delete pending updates within the transaction reliably while they are being written
-        // but we can trigger a cleanup after the transaction succeeds
       });
       
-      // Cleanup all updates older than now to prevent double-charging next load
-      const cleanupQuery = query(this.updatesRef, where('timestamp', '<=', new Date()));
-      const snap = await getDocs(cleanupQuery);
-      snap.forEach(d => deleteDoc(d.ref).catch(() => {}));
+      // 3. Delete ONLY the updates that were read and folded into the compacted state
+      const deletePromises = [];
+      updatesSnap.forEach(d => {
+        deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+      });
+      await Promise.all(deletePromises);
       
       this.localUpdateCount = 0;
       console.log('[FirestoreYjs] Compaction successful.');

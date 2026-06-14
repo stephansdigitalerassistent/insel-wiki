@@ -87,12 +87,13 @@ test.describe('Insel-Wiki Core Audit', () => {
       for (const title of createdTitles) {
          const trashItem = page.locator('.trash-item', { hasText: title });
          if (await trashItem.isVisible()) {
-            await trashItem.locator('.btn-danger').click();
-            const confirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
-            if (await confirm.isVisible({ timeout: 5000 })) {
-                await confirm.locator('button', { hasText: 'Löschen' }).click();
-            }
-            await expect(trashItem).not.toBeVisible({timeout: 10000});
+             await trashItem.locator('.btn-danger').click();
+             const confirm = page.locator('.modal-overlay:visible .modal-box');
+             await confirm.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+             if (await confirm.isVisible()) {
+                 await confirm.locator('button.btn-danger').click();
+             }
+             await expect(trashItem).not.toBeVisible({timeout: 10000});
          }
       }
     } catch (e) {
@@ -171,9 +172,9 @@ test.describe('Insel-Wiki Core Audit', () => {
 
     // --- 7. Soft Delete ---
     await page.click('#delete-page-btn');
-    const confirm = page.locator('.modal-box', { hasText: 'Seite löschen' });
+    const confirm = page.locator('.modal-overlay:visible .modal-box');
     await expect(confirm).toBeVisible();
-    await confirm.locator('button', { hasText: 'Löschen' }).click();
+    await confirm.locator('button.btn-danger').click();
     await expect(page.locator('#empty-state')).toBeVisible({ timeout: 10000 });
 
     // --- 8. Permanent Delete (Verification of Scenario 6) ---
@@ -183,9 +184,9 @@ test.describe('Insel-Wiki Core Audit', () => {
     await expect(trashItem).toBeVisible({ timeout: 10000 });
     
     await trashItem.locator('.btn-danger').click();
-    const permConfirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
+    const permConfirm = page.locator('.modal-overlay:visible .modal-box');
     await expect(permConfirm).toBeVisible();
-    await permConfirm.locator('button', { hasText: 'Löschen' }).click();
+    await permConfirm.locator('button.btn-danger').click();
     await expect(trashItem).not.toBeVisible({ timeout: 15000 });
   });
 });

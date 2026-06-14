@@ -84,11 +84,7 @@ export async function savePage(pageId, content, savedBy = '', savedByName = '', 
     });
   } catch (err) {
     console.error('Firestore save error:', err);
-    if (err.code === 'unavailable') {
-      alert('Verbindung zum Server unterbrochen. Bitte überprüfe deine Internetverbindung.');
-    } else if (err.code === 'resource-exhausted') {
-      alert('Speicherfehler: Der Inhalt der Seite ist zu groß (über 1MB). Bitte reduziere die Menge an eingefügten Bildern.');
-    }
+    throw err;
   }
 }
 
@@ -240,18 +236,73 @@ export async function updatePageTitle(pageId, title) {
 }
 
 /**
+ * Helper to manage atomic batch writes in Firestore.
+ * Automatically chunks writes into batches of up to 400 operations to respect Firestore's 500-write limit.
+ */
+class BatchCommitter {
+  constructor(databaseInstance) {
+    this.db = databaseInstance;
+    this.batch = writeBatch(this.db);
+    this.count = 0;
+    this.promises = [];
+  }
+
+  set(ref, data, options) {
+    if (options) {
+      this.batch.set(ref, data, options);
+    } else {
+      this.batch.set(ref, data);
+    }
+    this._increment();
+  }
+
+  update(ref, data) {
+    this.batch.update(ref, data);
+    this._increment();
+  }
+
+  delete(ref) {
+    this.batch.delete(ref);
+    this._increment();
+  }
+
+  _increment() {
+    this.count++;
+    if (this.count >= 400) {
+      const b = this.batch;
+      this.promises.push(b.commit());
+      this.batch = writeBatch(this.db);
+      this.count = 0;
+    }
+  }
+
+  async commit() {
+    if (this.count > 0) {
+      this.promises.push(this.batch.commit());
+    }
+    await Promise.all(this.promises);
+  }
+}
+
+/**
  * Soft-delete a page and all its children recursively.
  */
 export async function deletePage(pageId) {
+  const committer = new BatchCommitter(db);
+  await _recursiveSoftDelete(pageId, committer);
+  await committer.commit();
+}
+
+async function _recursiveSoftDelete(pageId, committer) {
   const pagesRef = collection(db, PAGES_COLLECTION);
   const q = query(pagesRef, where('parentId', '==', pageId));
   const snapshot = await getDocs(q);
   for (const child of snapshot.docs) {
-    await deletePage(child.id);
+    await _recursiveSoftDelete(child.id, committer);
   }
 
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
-  await updateDoc(pageRef, {
+  committer.update(pageRef, {
     deleted: true,
     deletedAt: serverTimestamp()
   });
@@ -261,8 +312,14 @@ export async function deletePage(pageId) {
  * Restore a soft-deleted page and all its children.
  */
 export async function restorePage(pageId) {
+  const committer = new BatchCommitter(db);
+  await _recursiveRestore(pageId, committer);
+  await committer.commit();
+}
+
+async function _recursiveRestore(pageId, committer) {
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
-  await updateDoc(pageRef, {
+  committer.update(pageRef, {
     deleted: false,
     deletedAt: null
   });
@@ -271,7 +328,7 @@ export async function restorePage(pageId) {
   const q = query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true));
   const snapshot = await getDocs(q);
   for (const child of snapshot.docs) {
-    await restorePage(child.id);
+    await _recursiveRestore(child.id, committer);
   }
 }
 
@@ -291,62 +348,92 @@ export async function getDeletedPages() {
  */
 export async function permanentlyDeletePage(pageId) {
   try {
-    const pageRef = doc(db, PAGES_COLLECTION, pageId);
-    const pageSnap = await getDoc(pageRef);
-    
-    if (!pageSnap.exists()) return;
-    const pageData = pageSnap.data();
-
-    // 1. Archive children first (recursive)
-    const pagesRef = collection(db, PAGES_COLLECTION);
-    const q = query(pagesRef, where('parentId', '==', pageId));
-    const snapshot = await getDocs(q);
-    for (const child of snapshot.docs) {
-      await permanentlyDeletePage(child.id);
-    }
-
-    // 2. Archive history subcollection
-    const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
-    const historySnaps = await getDocs(historyRef);
-    const archivedHistoryRef = collection(db, ARCHIVE_COLLECTION, pageId, 'history');
-    
-    for (const snap of historySnaps.docs) {
-      await setDoc(doc(archivedHistoryRef, snap.id), {
-        ...snap.data(),
-        archivedAt: serverTimestamp()
-      });
-      await deleteDoc(snap.ref);
-    }
-
-    // 3. Archive comments subcollection
-    const commentsRef = collection(db, PAGES_COLLECTION, pageId, 'comments');
-    const commentSnaps = await getDocs(commentsRef);
-    const archivedCommentsRef = collection(db, ARCHIVE_COLLECTION, pageId, 'comments');
-
-    for (const snap of commentSnaps.docs) {
-      await setDoc(doc(archivedCommentsRef, snap.id), {
-        ...snap.data(),
-        archivedAt: serverTimestamp()
-      });
-      await deleteDoc(snap.ref);
-    }
-
-    // 4. Archive the main page document
-    const archiveRef = doc(db, ARCHIVE_COLLECTION, pageId);
-    await setDoc(archiveRef, {
-      ...pageData,
-      archivedAt: serverTimestamp(),
-      originalCollection: PAGES_COLLECTION
-    });
-
-    // 5. Finally delete the original page
-    await deleteDoc(pageRef);
-    
+    const committer = new BatchCommitter(db);
+    await _recursivePermanentDelete(pageId, committer);
+    await committer.commit();
     console.log(`[Insel-Wiki] Page ${pageId} successfully moved to archive.`);
   } catch (err) {
     console.error('Error during permanent delete (archiving):', err);
     throw err;
   }
+}
+
+async function _recursivePermanentDelete(pageId, committer) {
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  const pageSnap = await getDoc(pageRef);
+  
+  if (!pageSnap.exists()) return;
+  const pageData = pageSnap.data();
+
+  // 1. Archive children first (recursive)
+  const pagesRef = collection(db, PAGES_COLLECTION);
+  const q = query(pagesRef, where('parentId', '==', pageId));
+  const snapshot = await getDocs(q);
+  for (const child of snapshot.docs) {
+    await _recursivePermanentDelete(child.id, committer);
+  }
+
+  // 2. Archive history subcollection
+  const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
+  const historySnaps = await getDocs(historyRef);
+  const archivedHistoryRef = collection(db, ARCHIVE_COLLECTION, pageId, 'history');
+  
+  for (const snap of historySnaps.docs) {
+    committer.set(doc(archivedHistoryRef, snap.id), {
+      ...snap.data(),
+      archivedAt: serverTimestamp()
+    });
+    committer.delete(snap.ref);
+  }
+
+  // 3. Archive comments subcollection
+  const commentsRef = collection(db, PAGES_COLLECTION, pageId, 'comments');
+  const commentSnaps = await getDocs(commentsRef);
+  const archivedCommentsRef = collection(db, ARCHIVE_COLLECTION, pageId, 'comments');
+
+  for (const snap of commentSnaps.docs) {
+    committer.set(doc(archivedCommentsRef, snap.id), {
+      ...snap.data(),
+      archivedAt: serverTimestamp()
+    });
+    committer.delete(snap.ref);
+  }
+
+  // 4. Delete other dangling subcollections (Yjs state/updates/awareness, presence)
+  const yjsUpdatesRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_updates');
+  const yjsUpdatesSnaps = await getDocs(yjsUpdatesRef);
+  for (const snap of yjsUpdatesSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  const yjsAwarenessRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_awareness');
+  const yjsAwarenessSnaps = await getDocs(yjsAwarenessRef);
+  for (const snap of yjsAwarenessSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  const yjsStateRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_state');
+  const yjsStateSnaps = await getDocs(yjsStateRef);
+  for (const snap of yjsStateSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  const presenceRef = collection(db, PAGES_COLLECTION, pageId, 'presence');
+  const presenceSnaps = await getDocs(presenceRef);
+  for (const snap of presenceSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  // 5. Archive the main page document
+  const archiveRef = doc(db, ARCHIVE_COLLECTION, pageId);
+  committer.set(archiveRef, {
+    ...pageData,
+    archivedAt: serverTimestamp(),
+    originalCollection: PAGES_COLLECTION
+  });
+
+  // 6. Finally delete the original page
+  committer.delete(pageRef);
 }
 
 /**

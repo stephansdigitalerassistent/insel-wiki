@@ -1,14 +1,13 @@
 // Page Controller — loading, saving, snapshots, link healing, and page actions
 import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, flushSave, hasCachedEditor } from '../editor/editor.js';
-import { joinPage, leavePage, subscribeToPresence, getColorForEmail } from '../firebase/presence.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
 import { loadCommentsForPage } from '../components/comments.js';
 import { promptModal, newPageModal, confirmModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 import { canEdit, getCurrentUser, isLoggedIn } from '../firebase/auth.js';
-import { formatDefaultName, slugify } from '../utils/string.js';
+import { formatDefaultName, slugify, getColorForEmail, getInitials } from '../utils/string.js';
 import { subscribeToPage } from '../firebase/firestore.js';
 import { marked } from 'marked';
 import i18next from '../i18n.js';
@@ -124,6 +123,41 @@ export function navigateTo(pageId, title = '') {
   }
 }
 
+// --- Yjs Presence Helper ---
+function subscribeToYjsPresence(provider, callback) {
+  const handler = () => {
+    const states = provider.awareness.getStates();
+    const users = [];
+    const seenEmails = new Set();
+    
+    states.forEach((state, clientId) => {
+      if (state.user) {
+        const u = state.user;
+        const email = u.email || 'Gast';
+        if (!seenEmails.has(email)) {
+          seenEmails.add(email);
+          users.push({
+            id: clientId.toString(),
+            email: email,
+            name: u.name,
+            photoURL: u.photoURL,
+            color: u.color || getColorForEmail(email),
+            initials: getInitials(u.name || email)
+          });
+        }
+      }
+    });
+    callback(users);
+  };
+  
+  provider.awareness.on('change', handler);
+  handler();
+  
+  return () => {
+    provider.awareness.off('change', handler);
+  };
+}
+
 /**
  * Initialize the page controller
  */
@@ -189,7 +223,6 @@ export function initPageController(opts) {
   window.addEventListener('beforeunload', () => {
     if (!currentPageId) return;
     flushAll();
-    leavePage();
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'hidden' || !currentPageId) return;
@@ -214,7 +247,6 @@ export async function loadPage(pageId) {
   const oldPageId = currentPageId;
   if (oldPageId) {
     snapshotCurrentPage().catch(() => {});
-    leavePage().catch(() => {});
   }
 
   // Cleanup subscriptions synchronously (instant, no network)
@@ -396,12 +428,12 @@ export async function loadPage(pageId) {
     }
   });
 
-  // Comments, presence, and history snapshot — all in parallel, non-blocking
+  // Comments and history snapshot — in parallel, non-blocking
   loadCommentsForPage(pageId);
-  currentPresenceUnsub = subscribeToPresence(pageId, (users) => renderPresence(users));
-
-  if (user) {
-    joinPage(pageId, fullUser).then(id => { currentSessionId = id; }).catch(() => {});
+  
+  if (currentPresenceUnsub) { currentPresenceUnsub(); currentPresenceUnsub = null; }
+  if (newProvider) {
+    currentPresenceUnsub = subscribeToYjsPresence(newProvider, (users) => renderPresence(users));
   }
 
   isSnapshotDirty = false;
@@ -416,7 +448,6 @@ export async function loadPage(pageId) {
 
 export function showEmptyState() {
   snapshotCurrentPage();
-  leavePage();
   if (currentPresenceUnsub) { currentPresenceUnsub(); currentPresenceUnsub = null; }
   clearInterval(historySnapshotInterval);
   currentPageId = null;
@@ -473,6 +504,13 @@ async function handleSave(pageId, markdown) {
   } catch (err) {
     console.error('Save error:', err);
     saveErrored = true;
+    if (err.code === 'unavailable') {
+      showToast(i18next.t('errors.unavailable') || 'Verbindung zum Server unterbrochen. Bitte überprüfe deine Internetverbindung.', 'error');
+    } else if (err.code === 'resource-exhausted') {
+      showToast('Speicherfehler: Der Inhalt der Seite ist zu groß (über 1MB). Bitte reduziere die Menge an eingefügten Bildern.', 'error');
+    } else {
+      showToast(err.message || 'Speicherfehler beim Sichern der Seite.', 'error');
+    }
   } finally {
     pendingMarkdownSaves--;
     recomputeSaveStatus();
@@ -642,11 +680,10 @@ function selfHealLinks(markdown) {
  * Rejoin presence after profile update
  */
 export async function rejoinPresence(updatedUser) {
-  if (currentPageId) {
-    leavePage();
+  const provider = getProvider();
+  if (provider && provider.awareness) {
     const userName = updatedUser?.displayName || formatDefaultName(updatedUser?.email);
-    currentSessionId = await joinPage(currentPageId, {
-      uid: updatedUser?.uid || null,
+    provider.awareness.setLocalStateField('user', {
       name: userName,
       email: updatedUser?.email || '',
       photoURL: updatedUser?.photoURL || null,

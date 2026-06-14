@@ -92,7 +92,19 @@ test.describe('Voice Recognition Accuracy', () => {
     // Interim results stream in but must not touch the document...
     await page.evaluate(() => window.__voice.interim('vorläufig'));
     await page.evaluate(() => window.__voice.interim('vorläufiger text'));
-    await expect(editor).not.toContainText(/vorläufig/i);
+    
+    // Check that it's rendered as a ghost preview
+    await expect(editor.locator('.voice-ghost-text')).toHaveText(/vorläufiger text/i);
+
+    // Verify it is not written to the actual editor document content (excluding the ghost decoration)
+    await expect(async () => {
+      const textWithoutGhost = await editor.evaluate(el => {
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll('.voice-ghost-text').forEach(ghost => ghost.remove());
+        return clone.textContent || '';
+      });
+      expect(textWithoutGhost).not.toMatch(/vorläufig/i);
+    }).toPass({ timeout: 5000 });
 
     // ...only the final result is inserted.
     await page.evaluate(() => window.__voice.final('endgültiger text'));

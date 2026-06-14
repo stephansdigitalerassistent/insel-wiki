@@ -8,6 +8,7 @@ The Insel-Wiki follows a modular, event-driven architectural approach without he
 The heart of the application is **Yjs**.
 - We use a **Custom Firestore Yjs Provider** (`src/editor/FirestoreYjsProvider.js`), which stores binary Yjs state updates in Firestore documents.
 - This enables conflict-free editing (CRDTs) without a central Node.js backend server.
+- **Unified Presence & Awareness**: User presence (active editors/viewers and their cursors) is tracked directly via Yjs awareness states, avoiding duplicate writes, heartbeats, and cleanup races associated with a separate presence database collection.
 
 ### **Data Model (Firestore)**
 - **`pages/`**: Main collection for document contents and metadata (title, hierarchy).

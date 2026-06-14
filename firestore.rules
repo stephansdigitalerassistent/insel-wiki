@@ -2,31 +2,37 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    match /registration_requests/{tokenId} {
-      // Only the backend bot has access (registration data no longer stored here)
-      allow read, write, delete: if request.auth != null && 
+    function isBot() {
+      return request.auth != null && 
         (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' || 
          request.auth.token.email == 'stephansdigitalassistent@gmail.com');
     }
 
+    function isInsel() {
+      return request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
+    }
+
+    match /registration_requests/{tokenId} {
+      // Only the backend bot has access (registration data no longer stored here)
+      allow read, write, delete: if isBot();
+    }
+
     match /archive/{pageId} {
       // Backend bot has full access to manage the archive
-      allow read, write, delete: if request.auth != null && 
-        (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' || 
-         request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+      allow read, write, delete: if isBot();
       
       // Other authenticated users can read/write if they belong to @insel.ch
-      allow read, write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
+      allow read, write: if isInsel();
       
       // Allow recursive access to history subcollection
       match /history/{snapshotId} {
-        allow read, write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
-        allow write, delete: if request.auth != null && request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com';
+        allow read, write: if isInsel();
+        allow write, delete: if isBot();
       }
 
       // Allow recursive access to comments subcollection
       match /comments/{commentId} {
-        allow read, write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
+        allow read, write: if isInsel();
       }
     }
 
@@ -35,69 +41,60 @@ service cloud.firestore {
       // Writes must come from an @insel.ch user, AND if the document carries
       // a `lastSavedBy` field it must equal the authenticated email — so it
       // cannot be spoofed to impersonate an admin and trigger the DevOps bot.
-      allow write: if request.auth != null
-        && request.auth.token.email.matches('.*@insel[.]ch$')
+      allow write: if isInsel()
         && (!(request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSavedBy']))
             || request.resource.data.lastSavedBy == request.auth.token.email);
-      allow delete: if request.auth != null && 
-        (request.auth.token.email.matches('.*@insel[.]ch$') ||
-         request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' ||
-         request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+      allow delete: if isInsel() || isBot();
       
       match /history/{historyId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
-        allow delete: if request.auth != null && 
-          (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' || 
-           request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+        allow write: if isInsel();
+        allow delete: if isBot();
       }
 
       match /presence/{sessionId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
-        allow delete: if request.auth != null && 
-          (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' || 
-           request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+        allow write: if isInsel();
+        allow delete: if isBot();
       }
 
       match /yjs_updates/{updateId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
-        allow delete: if request.auth != null && 
-          (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' || 
-           request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+        allow write: if isInsel();
+        allow delete: if isBot();
       }
 
       match /yjs_awareness/{clientId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
-        allow delete: if request.auth != null && 
-          (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' || 
-           request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+        allow write: if isInsel();
+        allow delete: if isBot();
       }
 
       match /yjs_state/{stateId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
-        allow delete: if request.auth != null && 
-          (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' || 
-           request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+        allow write: if isInsel();
+        allow delete: if isBot();
       }
 
       match /comments/{commentId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
-        allow delete: if request.auth != null && 
-          (request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' || 
-           request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+        allow write: if isInsel();
+        allow delete: if isBot();
       }
     }
 
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && (request.auth.uid == userId ||
-        request.auth.token.email == 'stephansdigitalassistent+wiki@gmail.com' ||
-        request.auth.token.email == 'stephansdigitalassistent@gmail.com');
+      allow write: if request.auth != null && (
+        isBot() || 
+        (request.auth.uid == userId 
+         && request.resource.data.email == request.auth.token.email
+         && (resource == null ? 
+             request.resource.data.isActive == false : 
+             (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isActive']) || request.resource.data.isActive == resource.data.isActive)
+            )
+        )
+      );
     }
   }
 }

@@ -116,9 +116,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.waitForSelector('#delete-page-btn');
     await page.click('#delete-page-btn');
     
-    const confirm = page.locator('.modal-box', { hasText: 'Seite löschen' });
+    const confirm = page.locator('.modal-overlay:visible .modal-box');
     await expect(confirm).toBeVisible();
-    await confirm.locator('button', { hasText: 'Löschen' }).click();
+    await confirm.locator('button.btn-danger').click();
     
     // Should redirect
     await expect(page).not.toHaveURL(new RegExp(`${pageId}$`));
@@ -132,9 +132,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
 
     // 2. Soft delete
     await page.click('#delete-page-btn');
-    const confirm = page.locator('.modal-box', { hasText: 'Seite löschen' });
+    const confirm = page.locator('.modal-overlay:visible .modal-box');
     await expect(confirm).toBeVisible();
-    await confirm.locator('button', { hasText: 'Löschen' }).click();
+    await confirm.locator('button.btn-danger').click();
     await expect(page.locator('#empty-state')).toBeVisible();
 
     // 3. Open Trash
@@ -146,9 +146,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
 
     // 4. Permanent delete
     await trashItem.locator('.btn-danger').click();
-    const permConfirm = page.locator('.modal-box', { hasText: 'Endgültig löschen?' });
+    const permConfirm = page.locator('.modal-overlay:visible .modal-box');
     await expect(permConfirm).toBeVisible();
-    await permConfirm.locator('button', { hasText: 'Löschen' }).click();
+    await permConfirm.locator('button.btn-danger').click();
 
     // 5. Verify gone from trash
     await expect(trashItem).not.toBeVisible();

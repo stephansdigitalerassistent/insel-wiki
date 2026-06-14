@@ -38,6 +38,7 @@ marked.setOptions({ gfm: true, breaks: true });
 
 import { promptModal, linkModal } from '../components/modal.js';
 import { getAllPages } from '../components/sidebar.js';
+import { showToast } from '../components/toast.js';
 import { navigateTo } from '../controllers/page.js';
 import { uploadImageFile } from '../firebase/storage.js';
 import { isSpellCheckEnabled } from '../firebase/auth.js';
@@ -148,9 +149,12 @@ function destroyEntry(entry) {
 function flushDirtyMarkdown(entry) {
   if (!entry || !entry.isMarkdownDirty || !entry.saveCallback) return;
   if (!entry.editor || entry.editor.isDestroyed) return;
-  // In a collaborative session Yjs is the source of truth — flushing markdown
-  // here would race with newer remote writes.
-  if (entry.provider?.awareness?.getStates().size > 1) return;
+  
+  // Only the leader client writes the markdown projection to prevent duplicate writes
+  const states = entry.provider?.awareness ? Array.from(entry.provider.awareness.getStates().keys()) : [];
+  const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
+  if (!isLeader) return;
+
   try {
     const html = entry.editor.getHTML();
     let md = getTurndown().turndown(html);
@@ -520,7 +524,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
               if (editor && url) editor.chain().focus().setImage({ src: url }).run();
             } catch (err) {
               console.error('Image upload failed', err);
-              alert(t('editor.uploadError') + err.message);
+              showToast(t('editor.uploadError') + err.message, 'error');
             }
           });
           return true;
@@ -538,7 +542,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
                 if (editor && url) editor.chain().focus().setImage({ src: url }).run();
               } catch (err) {
                 console.error('Image upload failed', err);
-                alert(t('editor.uploadError') + err.message);
+                showToast(t('editor.uploadError') + err.message, 'error');
               }
             });
             return true;
@@ -552,8 +556,10 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
       clearTimeout(entry.autoSaveTimer);
       entry.autoSaveTimer = setTimeout(() => {
         if (entry.saveCallback && entry.provider && entry.provider.awareness) {
-          if (entry.provider.awareness.getStates().size <= 1) {
-            console.log('[Insel-Wiki] Idle 15s & solo. Auto-saving Markdown...');
+          const states = Array.from(entry.provider.awareness.getStates().keys());
+          const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
+          if (isLeader) {
+            console.log('[Insel-Wiki] Idle 15s & leader. Auto-saving Markdown...');
             const html = ed.getHTML();
             let markdown = getTurndown().turndown(html);
             if (markdown.length > 100000) {
@@ -573,9 +579,11 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     // Don't poke parked editors — a no-op dispatch still flips isMarkdownDirty
     // via onUpdate, which would queue a phantom autosave.
     if (currentPageId !== pageId) return;
-    if (provider.awareness.getStates().size <= 1 && editor && !editor.isDestroyed) {
-      // Trigger a fake update to reset the autosave timer when going solo.
-      editor.view.dispatch(editor.state.tr);
+    if (entry.isMarkdownDirty && editor && !editor.isDestroyed) {
+      // Trigger a fake update to reset the autosave timer when collaborators change.
+      try {
+        editor.view.dispatch(editor.state.tr);
+      } catch (e) {}
     }
   });
 
@@ -900,7 +908,11 @@ export function setEditable(editable) {
 export function flushSave() {
   const entry = _active();
   if (!entry || !entry.isMarkdownDirty || !entry.saveCallback || !entry.editor) return Promise.resolve();
-  if (entry.provider?.awareness?.getStates().size > 1) return Promise.resolve();
+  
+  const states = entry.provider?.awareness ? Array.from(entry.provider.awareness.getStates().keys()) : [];
+  const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
+  if (!isLeader) return Promise.resolve();
+
   clearTimeout(entry.autoSaveTimer);
   const html = entry.editor.getHTML();
   let markdown = getTurndown().turndown(html);

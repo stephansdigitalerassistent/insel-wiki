@@ -62,6 +62,9 @@ test.describe('Link Overlap Repro', () => {
       expect(dropdownBounds.y).toBeGreaterThanOrEqual(inputBounds.y + inputBounds.height - 2);
     }).toPass({ timeout: 10000 });
     
+    // Close the link modal to clean up UI
+    await page.keyboard.press('Escape');
+    
     console.log('Final Input bounds:', inputBounds);
     console.log('Final Dropdown bounds:', dropdownBounds);
   });
