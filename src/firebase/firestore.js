@@ -20,8 +20,20 @@ import {
   getCountFromServer
 } from 'firebase/firestore';
 import DiffMatchPatch from 'diff-match-patch';
+import { shouldLogError } from '../utils/error-filter.js';
+import { getBreadcrumbs } from '../utils/breadcrumbs.js';
 
 const dmp = new DiffMatchPatch();
+
+// Build version injected by Vite (see vite.config.js `define`); falls back to
+// 'dev' in non-bundled contexts such as unit tests.
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+
+// Client-side rate limit so an error inside a render/retry loop can't write
+// thousands of docs. Tracks write timestamps within a rolling window.
+const MAX_ERROR_LOGS_PER_WINDOW = 20;
+const ERROR_LOG_WINDOW_MS = 60_000;
+let errorLogTimestamps = [];
 
 // --- History settings ---
 const SNAPSHOT_KEYFRAME_INTERVAL = 10; // Save full snapshot every 10th change
@@ -572,23 +584,37 @@ export async function ensurePageExists(pageId, title = 'Tests', parentId = null)
 }
 
 /**
- * Log a client-side error to the database
+ * Log a client-side error to the database.
+ * @param {string} message - The error message.
+ * @param {string|null} stack - Optional stack trace.
+ * @param {{severity?: 'error'|'warning'|'unhandled-rejection'|'uncaught', source?: string|null}} [options]
  */
-export async function logClientError(message, stack = null) {
+export async function logClientError(message, stack = null, options = {}) {
+  const { severity = 'error', source = null } = options;
   try {
-    // Avoid logging known transient Firebase offline/unavailable errors to database
-    // since they are expected and can clutter the logs.
-    if (message.includes('Failed to get document') || message.includes('unavailable')) {
-      return;
-    }
+    // Drop known transient/noisy messages (shared with the global handler).
+    if (!shouldLogError(message)) return;
+
+    // Rate limit: cap writes per rolling window to avoid flooding the
+    // collection (and Firestore costs) when an error fires repeatedly.
+    const now = Date.now();
+    errorLogTimestamps = errorLogTimestamps.filter((t) => now - t < ERROR_LOG_WINDOW_MS);
+    if (errorLogTimestamps.length >= MAX_ERROR_LOGS_PER_WINDOW) return;
+    errorLogTimestamps.push(now);
 
     const errorData = {
-      message,
-      stack,
-      url: typeof window !== 'undefined' ? window.location.href : '',
-      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      message: String(message).slice(0, 2000),
+      stack: stack ? String(stack).slice(0, 8000) : null,
+      severity,
+      source,
+      url: typeof window !== 'undefined' ? window.location.href.slice(0, 2000) : '',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 1000) : '',
       userId: auth?.currentUser?.uid || 'anonymous',
       userName: auth?.currentUser?.displayName || auth?.currentUser?.email || 'anonymous',
+      appVersion: APP_VERSION,
+      breadcrumbs: getBreadcrumbs(),
+      online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+      viewport: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : '',
       timestamp: serverTimestamp()
     };
 

@@ -1,5 +1,7 @@
 import i18next from '../i18n.js';
 import { logClientError } from '../firebase/firestore.js';
+import { shouldLogError } from '../utils/error-filter.js';
+import { initBreadcrumbCapture } from '../utils/breadcrumbs.js';
 
 // Toast Notification System — replaces native alert() calls
 let toastContainer = null;
@@ -71,14 +73,13 @@ function dismissToast(toast) {
 let isLoggingError = false;
 
 export function initGlobalErrorHandler() {
+  initBreadcrumbCapture();
+
   const originalConsoleError = console.error;
   console.error = (...args) => {
     originalConsoleError.apply(console, args);
 
     if (isLoggingError) return;
-
-    // Suppress internal Firestore BloomFilter errors in tests as they are expected when Service Workers are blocked
-    if (args[0] && typeof args[0] === 'string' && args[0].includes('BloomFilter error')) return;
 
     isLoggingError = true;
     try {
@@ -94,15 +95,12 @@ export function initGlobalErrorHandler() {
         return String(arg);
       }).join(' ');
 
-      if (message.includes('[Firestore] Failed to log client error')) {
-        isLoggingError = false;
-        return;
-      }
+      if (!shouldLogError(message)) return;
 
       const errorObj = args.find(arg => arg instanceof Error);
       const stack = errorObj ? errorObj.stack : null;
 
-      logClientError(message, stack);
+      logClientError(message, stack, { severity: 'error', source: 'console' });
     } catch (err) {
       originalConsoleError('[Logging] Failed to process console error:', err);
     } finally {
@@ -111,15 +109,23 @@ export function initGlobalErrorHandler() {
   };
 
   window.addEventListener('unhandledrejection', (event) => {
-    console.error('[Insel-Wiki] Unhandled rejection:', event.reason);
-    const message = event.reason?.message || i18next.t('errors.unexpected');
-    // Avoid spamming toasts for known Firebase offline errors
-    if (message.includes('Failed to get document') || message.includes('unavailable')) return;
+    const reason = event.reason;
+    const message = reason?.message || String(reason ?? '') || i18next.t('errors.unexpected');
+    // Use the original console.error so we don't double-log through the funnel
+    // above — we log explicitly below with the correct severity.
+    originalConsoleError('[Insel-Wiki] Unhandled rejection:', reason);
+    if (!shouldLogError(message)) return;
+    logClientError(message, reason?.stack || null, { severity: 'unhandled-rejection', source: 'window' });
     showToast(message, 'error', 6000);
   });
 
   window.addEventListener('error', (event) => {
-    console.error('[Insel-Wiki] Uncaught error:', event.error);
+    const err = event.error;
+    const message = err?.message || event.message || 'Uncaught error';
+    originalConsoleError('[Insel-Wiki] Uncaught error:', err);
+    if (shouldLogError(message)) {
+      logClientError(message, err?.stack || null, { severity: 'uncaught', source: 'window' });
+    }
     showToast(i18next.t('errors.reload'), 'error', 8000);
   });
 }
