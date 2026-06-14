@@ -13,6 +13,9 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: npm ci --legacy-peer-deps && npm run build
         env:
           VITE_FIREBASE_API_KEY: "AIzaSyBIeAMBZePPoKmvsy-yBdhnNow9vxYX1EU"
@@ -23,6 +26,21 @@ jobs:
           VITE_FIREBASE_APP_ID: "1:485637054444:web:b11ab31e2f31b0fb136ac9"
           VITE_FIREBASE_MEASUREMENT_ID: "G-MYMGER7S1R"
           VITE_GEMINI_API_KEY: "${{ secrets.VITE_GEMINI_API_KEY }}"
+      # Install + unit-test the Cloud Functions. A failure here fails the job
+      # before any deploy, so we never ship a half (frontend without function).
+      - name: Install & test functions
+        run: npm ci && npm test
+        working-directory: functions
+      # Deploy functions BEFORE hosting: the frontend no longer writes the
+      # markdown `content` field, so the server-side projection function must be
+      # live first to keep search/history fresh.
+      - name: Deploy Functions
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          npx firebase deploy --only functions --project insel-wiki --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_INSEL_WIKI }}
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:

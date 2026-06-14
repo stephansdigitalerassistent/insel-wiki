@@ -15,6 +15,9 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - run: npm ci --legacy-peer-deps && npm run build
         env:
           VITE_FIREBASE_API_KEY: "AIzaSyBIeAMBZePPoKmvsy-yBdhnNow9vxYX1EU"
@@ -25,6 +28,10 @@ jobs:
           VITE_FIREBASE_APP_ID: "1:485637054444:web:b11ab31e2f31b0fb136ac9"
           VITE_FIREBASE_MEASUREMENT_ID: "G-MYMGER7S1R"
           VITE_GEMINI_API_KEY: "${{ secrets.VITE_GEMINI_API_KEY }}"
+      # Gate PRs on the Cloud Functions unit tests (no functions deploy on PRs).
+      - name: Install & test functions
+        run: npm ci && npm test
+        working-directory: functions
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
