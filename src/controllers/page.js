@@ -1,6 +1,6 @@
 // Page Controller — loading, saving, snapshots, link healing, and page actions
-import { createPage, getPage, savePage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
-import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, flushSave, hasCachedEditor } from '../editor/editor.js';
+import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
+import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, hasCachedEditor } from '../editor/editor.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
 import { loadCommentsForPage } from '../components/comments.js';
@@ -21,9 +21,10 @@ let formatToolbar = null;
 let historySnapshotInterval = null;
 const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
 
-// History optimization
+// History optimization. Snapshots are gated purely by content comparison
+// against the last snapshot (see snapshotCurrentPage) now that the client no
+// longer has a markdown-save hook to flag dirtiness.
 let lastSnapshotContent = '';
-let isSnapshotDirty = false;
 
 // --- Utilities ---
 function debounce(callback, delayMs) {
@@ -69,17 +70,18 @@ const debouncedUpdateTitle = debounce(async (id, title) => {
 
 // --- Save status aggregator ---
 // The visible "Gespeichert / Speichern…" indicator reflects the union of
-// three concurrent write streams: live Yjs updates (every keystroke during
-// editing), debounced markdown saves, and debounced title saves. We coalesce
-// rapid bursts so the label doesn't flicker on every keystroke.
-let pendingMarkdownSaves = 0;
+// two concurrent write streams: live Yjs updates (every keystroke during
+// editing) and debounced title saves. The markdown `content` field is no longer
+// written by the client — it is projected from Yjs server-side
+// (functions/projectYjsToMarkdown) — so it is not part of this aggregate. We
+// coalesce rapid bursts so the label doesn't flicker on every keystroke.
 let pendingTitleSaves = 0;
 let saveErrored = false;
 let savedSettleTimer = null;
 let yjsStatusUnsub = null;
 
 function anySavePending() {
-  if (pendingMarkdownSaves > 0 || pendingTitleSaves > 0) return true;
+  if (pendingTitleSaves > 0) return true;
   const provider = getProvider();
   if (provider && provider.hasUnsavedChanges) return true;
   return false;
@@ -198,13 +200,15 @@ export function initPageController(opts) {
     }
   });
 
-  // Ctrl+S
+  // Ctrl+S — edits live in Yjs (source of truth); a manual save just flushes
+  // the buffered Yjs updates. The markdown `content` field is projected
+  // server-side, so there is nothing to write from the client here.
   window.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
       if (currentPageId) {
-        const markdown = getMarkdown();
-        handleSave(currentPageId, markdown);
+        const provider = getProvider();
+        if (provider) provider.flushPending();
       }
     }
   });
@@ -216,7 +220,6 @@ export function initPageController(opts) {
     debouncedUpdateTitle.flush();
     const provider = getProvider();
     if (provider) provider.flushPending();
-    flushSave();
     snapshotCurrentPage();
   };
   window.addEventListener('beforeunload', () => {
@@ -334,7 +337,6 @@ export async function loadPage(pageId) {
   } catch (e) {}
 
   // Reset aggregate save state for the new page; show "Gespeichert" on entry.
-  pendingMarkdownSaves = 0;
   pendingTitleSaves = 0;
   saveErrored = false;
   clearTimeout(savedSettleTimer);
@@ -352,7 +354,7 @@ export async function loadPage(pageId) {
   };
 
   // Create editor (Yjs provider.init() runs internally)
-  createEditor(editorEl, pageId, fullUser, handleSave, page.content || '', () => {
+  createEditor(editorEl, pageId, fullUser, page.content || '', () => {
     if (loadingOverlay) loadingOverlay.classList.add('hidden');
     // Swap out static preview for real editor
     const staticPreview = document.getElementById('static-editor-preview');
@@ -371,12 +373,14 @@ export async function loadPage(pageId) {
     // Only heal if we fetched fresh data and we are still on this page
     fetchPromise.then(freshPage => {
        if (freshPage && currentPageId === pageId) {
+          // Cosmetic, session-local link healing of the cached fallback markdown.
+          // We no longer write `content` here — it is projected from Yjs
+          // server-side. Persisting healed link slugs would require editing the
+          // Yjs doc (where the link marks actually live); see follow-up note.
           const { markdown: healedMarkdown, changed } = selfHealLinks(freshPage.content || '');
           if (changed) {
             freshPage.content = healedMarkdown;
-            if (canEdit()) {
-              savePage(pageId, healedMarkdown, 'System (Link-Healer)').catch(console.warn);
-            }
+            try { localStorage.setItem(`cache_page_${pageId}`, JSON.stringify(freshPage)); } catch (e) {}
           }
        }
     });
@@ -435,7 +439,6 @@ export async function loadPage(pageId) {
     currentPresenceUnsub = subscribeToYjsPresence(newProvider, (users) => renderPresence(users));
   }
 
-  isSnapshotDirty = false;
   getLatestHistorySnapshot(pageId).then(snap => {
     lastSnapshotContent = snap ? snap.content : (page.content || '');
   }).catch(() => {});
@@ -480,41 +483,6 @@ function renderPresence(users) {
   });
 }
 
-// --- Save ---
-async function handleSave(pageId, markdown) {
-  if (!canEdit()) return;
-
-  // Bot Protection: Never save an empty string if the bot is currently working.
-  // This happens when the bot forces a clean reload and the editor is temporarily empty.
-  if ((!markdown || markdown.trim() === '') && currentPageData?.bot_status && currentPageData.bot_status !== 'completed' && currentPageData.bot_status !== 'fixed') {
-    console.warn('[Insel-Wiki] Blocked saving empty content during bot operation.');
-    return;
-  }
-
-  pendingMarkdownSaves++;
-  isSnapshotDirty = true;
-  recomputeSaveStatus();
-  try {
-    const user = getCurrentUser();
-    const userName = user?.displayName || formatDefaultName(user?.email);
-    await savePage(pageId, markdown, user?.email || '', userName, user?.photoURL || null);
-    saveErrored = false;
-  } catch (err) {
-    console.error('Save error:', err);
-    saveErrored = true;
-    if (err.code === 'unavailable') {
-      showToast(i18next.t('errors.unavailable') || 'Verbindung zum Server unterbrochen. Bitte überprüfe deine Internetverbindung.', 'error');
-    } else if (err.code === 'resource-exhausted') {
-      showToast('Speicherfehler: Der Inhalt der Seite ist zu groß (über 1MB). Bitte reduziere die Menge an eingefügten Bildern.', 'error');
-    } else {
-      showToast(err.message || 'Speicherfehler beim Sichern der Seite.', 'error');
-    }
-  } finally {
-    pendingMarkdownSaves--;
-    recomputeSaveStatus();
-  }
-}
-
 function setSaveStatus(status) {
   if (!saveStatus) return;
   saveStatus.classList.remove('saving', 'error');
@@ -536,15 +504,13 @@ function setSaveStatus(status) {
 // --- History Snapshot ---
 async function snapshotCurrentPage() {
   if (!currentPageId || !canEdit()) return;
-  if (!isSnapshotDirty) return;
   try {
     const markdown = getMarkdown();
     if (!markdown || markdown.trim().length === 0) return;
-    if (markdown === lastSnapshotContent) { isSnapshotDirty = false; return; }
+    if (markdown === lastSnapshotContent) return;
     const user = getCurrentUser();
     await createHistorySnapshot(currentPageId, markdown, pageTitleInput.value, user?.email || '');
     lastSnapshotContent = markdown;
-    isSnapshotDirty = false;
   } catch (err) {
     console.warn('[Insel-Wiki] Snapshot error:', err);
   }
@@ -589,15 +555,12 @@ async function handleNewPage() {
         const slug = slugify(title);
         ed.chain().focus().insertContent(`<a href="#/${pageId}/${slug}">${title}</a> `).run();
         
-        // Ensure the Yjs update is flushed immediately so the router doesn't 
-        // see 'unsaved changes' and trigger the leave-confirmation dialog.
+        // Ensure the Yjs update is flushed immediately so the router doesn't
+        // see 'unsaved changes' and trigger the leave-confirmation dialog. The
+        // inserted link lives in Yjs; the markdown `content` field is projected
+        // server-side, so no explicit content save is needed here.
         const provider = getProvider();
         if (provider) await provider.flushPending();
-
-        const currentMarkdown = getMarkdown();
-        if (currentPageId && currentMarkdown) {
-          await handleSave(currentPageId, currentMarkdown);
-        }
       }
     }
 

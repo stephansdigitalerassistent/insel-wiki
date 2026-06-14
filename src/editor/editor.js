@@ -131,7 +131,6 @@ function evictIfNeeded() {
 
 function destroyEntry(entry) {
   if (!entry) return;
-  clearTimeout(entry.autoSaveTimer);
   if (entry.spellCheckerBot) { try { entry.spellCheckerBot.destroy(); } catch (e) {} entry.spellCheckerBot = null; }
   if (entry.voiceAssistant) { try { entry.voiceAssistant.destroy(); } catch (e) {} entry.voiceAssistant = null; }
   if (entry.formatTippy) { try { entry.formatTippy.destroy(); } catch (e) {} entry.formatTippy = null; }
@@ -144,24 +143,6 @@ function destroyEntry(entry) {
   if (entry.container && entry.container.parentElement) {
     entry.container.parentElement.removeChild(entry.container);
   }
-}
-
-function flushDirtyMarkdown(entry) {
-  if (!entry || !entry.isMarkdownDirty || !entry.saveCallback) return;
-  if (!entry.editor || entry.editor.isDestroyed) return;
-  
-  // Only the leader client writes the markdown projection to prevent duplicate writes,
-  // OR the client who made local changes (to prevent lag when leader is passive/backgrounded).
-  const states = entry.provider?.awareness ? Array.from(entry.provider.awareness.getStates().keys()) : [];
-  const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
-  if (!isLeader && !entry.isLocalChange) return;
-
-  try {
-    const html = entry.editor.getHTML();
-    let md = getTurndown().turndown(html);
-    if (md.length > 100000) md = md.substring(0, 100000);
-    entry.saveCallback(entry.pageId, md);
-  } catch (e) {}
 }
 
 function persistSelection(entry) {
@@ -199,11 +180,9 @@ function parkActive() {
   if (entry.formatTippy) entry.formatTippy.hide();
   if (entry.linkTippy) entry.linkTippy.hide();
 
-  // Preserve "last-person leaves" auto-save behavior: if we're solo and dirty,
-  // flush before going inactive so the markdown column doesn't lag Yjs.
-  flushDirtyMarkdown(entry);
-  clearTimeout(entry.autoSaveTimer);
-  entry.autoSaveTimer = null;
+  // The markdown `content` field is projected from Yjs server-side
+  // (functions/projectYjsToMarkdown). Parking only needs to flush the Yjs
+  // updates buffer, which the provider.suspend() call below handles.
 
   // Detach Firestore watchers + drop awareness doc. The ydoc and the IDB
   // persistence stay alive, so reactivation is still instant; we just stop
@@ -217,14 +196,7 @@ function parkActive() {
   currentPageId = null;
 }
 
-function activateEntry(entry, onSave) {
-  // Page controller passes a fresh save closure each navigation — refresh it.
-  entry.saveCallback = (id, md) => {
-    entry.isMarkdownDirty = false;
-    entry.isLocalChange = false;
-    return onSave(id, md);
-  };
-
+function activateEntry(entry) {
   entry.container.style.display = 'block';
   bumpLRU(entry.pageId);
   currentPageId = entry.pageId;
@@ -253,7 +225,7 @@ function activateEntry(entry, onSave) {
  * Activate (or create) the editor for a given page. Idempotent: if the page is
  * already cached, this re-shows the existing editor instead of rebuilding it.
  */
-export function createEditor(parentEl, pageId, user, onSave, initialContent, onReady) {
+export function createEditor(parentEl, pageId, user, initialContent, onReady) {
   if (currentPageId === pageId && cache.has(pageId)) {
     if (onReady) onReady();
     return cache.get(pageId).editor;
@@ -262,15 +234,15 @@ export function createEditor(parentEl, pageId, user, onSave, initialContent, onR
   if (currentPageId) parkActive();
 
   if (cache.has(pageId)) {
-    activateEntry(cache.get(pageId), onSave);
+    activateEntry(cache.get(pageId));
     if (onReady) requestAnimationFrame(onReady);
     return cache.get(pageId).editor;
   }
 
-  return _createNewEditor(parentEl, pageId, user, onSave, initialContent, onReady);
+  return _createNewEditor(parentEl, pageId, user, initialContent, onReady);
 }
 
-function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onReady) {
+function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
   const pane = document.createElement('div');
   pane.className = 'editor-pane';
   pane.dataset.pid = pageId;
@@ -299,10 +271,6 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     container: pane,
     scrollTop: 0,
     selection: null,
-    isMarkdownDirty: false,
-    isLocalChange: false,
-    autoSaveTimer: null,
-    saveCallback: null,
     spellCheckerBot: null,
     voiceAssistant: null,
     formatTippy: null,
@@ -315,12 +283,6 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     const saved = localStorage.getItem(`insel-wiki-cursor-${pageId}`);
     if (saved) entry.selection = JSON.parse(saved);
   } catch (e) {}
-
-  entry.saveCallback = (id, md) => {
-    entry.isMarkdownDirty = false;
-    entry.isLocalChange = false;
-    return onSave(id, md);
-  };
 
   let onReadyFired = false;
   const fireReady = () => {
@@ -481,11 +443,10 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
           }
           if (isMod && key === 's') {
             event.preventDefault();
-            if (entry.saveCallback) {
-              const html = editor.getHTML();
-              const markdown = getTurndown().turndown(html);
-              entry.saveCallback(entry.pageId, markdown);
-            }
+            // Edits live in Yjs (the source of truth); the markdown `content`
+            // field is projected server-side. A manual save just flushes the
+            // buffered Yjs updates to Firestore immediately.
+            if (entry.provider) entry.provider.flushPending();
             return true;
           }
           if (isMod && key === 'Enter') {
@@ -554,45 +515,13 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
         return false;
       }
     },
-    onUpdate: ({ editor: ed, transaction }) => {
-      entry.isMarkdownDirty = true;
-      const isRemote = transaction && (transaction.getMeta('y-sync') !== undefined && transaction.getMeta('y-sync') !== null);
-      if (!isRemote) {
-        entry.isLocalChange = true;
-      }
-      clearTimeout(entry.autoSaveTimer);
-      entry.autoSaveTimer = setTimeout(() => {
-        if (entry.saveCallback && entry.provider && entry.provider.awareness) {
-          const states = Array.from(entry.provider.awareness.getStates().keys());
-          const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
-          if (isLeader || entry.isLocalChange) {
-            console.log('[Insel-Wiki] Idle 15s. Auto-saving Markdown...');
-            const html = ed.getHTML();
-            let markdown = getTurndown().turndown(html);
-            if (markdown.length > 100000) {
-              markdown = markdown.substring(0, 100000);
-              console.warn('[Insel-Wiki] Saved content exceeded 100,000 characters and was truncated.');
-            }
-            entry.saveCallback(entry.pageId, markdown);
-          }
-        }
-      }, 15000);
-    }
+    // No onUpdate markdown projection: edits flow into Yjs (Collaboration
+    // extension) and are persisted by FirestoreYjsProvider; the markdown
+    // `content` field is projected from Yjs server-side
+    // (functions/projectYjsToMarkdown).
   });
 
   entry.editor = editor;
-
-  provider.awareness.on('change', () => {
-    // Don't poke parked editors — a no-op dispatch still flips isMarkdownDirty
-    // via onUpdate, which would queue a phantom autosave.
-    if (currentPageId !== pageId) return;
-    if (entry.isMarkdownDirty && editor && !editor.isDestroyed) {
-      // Trigger a fake update to reset the autosave timer when collaborators change.
-      try {
-        editor.view.dispatch(editor.state.tr);
-      } catch (e) {}
-    }
-  });
 
   function getSelectionBoundingRect() {
     const { view, state } = editor;
@@ -906,25 +835,6 @@ export function getHTML() {
 export function setEditable(editable) {
   const e = _active()?.editor;
   if (e) e.setEditable(editable);
-}
-
-/**
- * Save the active page's markdown if dirty and we are solo. Safe to call from
- * unload handlers — fire-and-forget; Firestore queues writes via its IDB cache.
- */
-export function flushSave() {
-  const entry = _active();
-  if (!entry || !entry.isMarkdownDirty || !entry.saveCallback || !entry.editor) return Promise.resolve();
-  
-  const states = entry.provider?.awareness ? Array.from(entry.provider.awareness.getStates().keys()) : [];
-  const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
-  if (!isLeader && !entry.isLocalChange) return Promise.resolve();
-
-  clearTimeout(entry.autoSaveTimer);
-  const html = entry.editor.getHTML();
-  let markdown = getTurndown().turndown(html);
-  if (markdown.length > 100000) markdown = markdown.substring(0, 100000);
-  return Promise.resolve(entry.saveCallback(entry.pageId, markdown));
 }
 
 /**
