@@ -17,7 +17,6 @@ let currentPageId = null;
 let currentPageData = null;
 let currentPageUnsub = null;
 let currentPresenceUnsub = null;
-let currentSessionId = null;
 let formatToolbar = null;
 let historySnapshotInterval = null;
 const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
@@ -451,7 +450,6 @@ export function showEmptyState() {
   if (currentPresenceUnsub) { currentPresenceUnsub(); currentPresenceUnsub = null; }
   clearInterval(historySnapshotInterval);
   currentPageId = null;
-  currentSessionId = null;
   destroyEditor();
   editorContainer.classList.add('hidden');
   emptyState.classList.remove('hidden');

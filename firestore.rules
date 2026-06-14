@@ -52,11 +52,6 @@ service cloud.firestore {
         allow delete: if isBot();
       }
 
-      match /presence/{sessionId} {
-        allow read: if request.auth != null;
-        allow write: if isInsel();
-        allow delete: if isBot();
-      }
 
       match /yjs_updates/{updateId} {
         allow read: if request.auth != null;

@@ -150,17 +150,17 @@ function flushDirtyMarkdown(entry) {
   if (!entry || !entry.isMarkdownDirty || !entry.saveCallback) return;
   if (!entry.editor || entry.editor.isDestroyed) return;
   
-  // Only the leader client writes the markdown projection to prevent duplicate writes
+  // Only the leader client writes the markdown projection to prevent duplicate writes,
+  // OR the client who made local changes (to prevent lag when leader is passive/backgrounded).
   const states = entry.provider?.awareness ? Array.from(entry.provider.awareness.getStates().keys()) : [];
   const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
-  if (!isLeader) return;
+  if (!isLeader && !entry.isLocalChange) return;
 
   try {
     const html = entry.editor.getHTML();
     let md = getTurndown().turndown(html);
     if (md.length > 100000) md = md.substring(0, 100000);
     entry.saveCallback(entry.pageId, md);
-    entry.isMarkdownDirty = false;
   } catch (e) {}
 }
 
@@ -221,6 +221,7 @@ function activateEntry(entry, onSave) {
   // Page controller passes a fresh save closure each navigation — refresh it.
   entry.saveCallback = (id, md) => {
     entry.isMarkdownDirty = false;
+    entry.isLocalChange = false;
     return onSave(id, md);
   };
 
@@ -299,6 +300,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
     scrollTop: 0,
     selection: null,
     isMarkdownDirty: false,
+    isLocalChange: false,
     autoSaveTimer: null,
     saveCallback: null,
     spellCheckerBot: null,
@@ -316,6 +318,7 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
 
   entry.saveCallback = (id, md) => {
     entry.isMarkdownDirty = false;
+    entry.isLocalChange = false;
     return onSave(id, md);
   };
 
@@ -551,15 +554,19 @@ function _createNewEditor(parentEl, pageId, user, onSave, initialContent, onRead
         return false;
       }
     },
-    onUpdate: ({ editor: ed }) => {
+    onUpdate: ({ editor: ed, transaction }) => {
       entry.isMarkdownDirty = true;
+      const isRemote = transaction && (transaction.getMeta('y-sync') !== undefined && transaction.getMeta('y-sync') !== null);
+      if (!isRemote) {
+        entry.isLocalChange = true;
+      }
       clearTimeout(entry.autoSaveTimer);
       entry.autoSaveTimer = setTimeout(() => {
         if (entry.saveCallback && entry.provider && entry.provider.awareness) {
           const states = Array.from(entry.provider.awareness.getStates().keys());
           const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
-          if (isLeader) {
-            console.log('[Insel-Wiki] Idle 15s & leader. Auto-saving Markdown...');
+          if (isLeader || entry.isLocalChange) {
+            console.log('[Insel-Wiki] Idle 15s. Auto-saving Markdown...');
             const html = ed.getHTML();
             let markdown = getTurndown().turndown(html);
             if (markdown.length > 100000) {
@@ -911,7 +918,7 @@ export function flushSave() {
   
   const states = entry.provider?.awareness ? Array.from(entry.provider.awareness.getStates().keys()) : [];
   const isLeader = states.length === 0 || Math.min(...states) === entry.provider.clientId;
-  if (!isLeader) return Promise.resolve();
+  if (!isLeader && !entry.isLocalChange) return Promise.resolve();
 
   clearTimeout(entry.autoSaveTimer);
   const html = entry.editor.getHTML();

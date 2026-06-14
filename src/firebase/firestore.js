@@ -238,6 +238,10 @@ export async function updatePageTitle(pageId, title) {
 /**
  * Helper to manage atomic batch writes in Firestore.
  * Automatically chunks writes into batches of up to 400 operations to respect Firestore's 500-write limit.
+ * 
+ * NOTE: This is atomic per 400-operation chunk, not globally atomic across all chunks. 
+ * If a write in a later chunk fails, updates/deletes in earlier chunks will already have been committed. 
+ * For instance, in permanentlyDeletePage, a mid-way failure could leave a page partially archived/deleted.
  */
 class BatchCommitter {
   constructor(databaseInstance) {
