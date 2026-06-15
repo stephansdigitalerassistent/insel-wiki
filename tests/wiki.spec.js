@@ -54,7 +54,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.keyboard.type(`[ ] ${taskText}`);
     await page.keyboard.press('Enter');
     await page.keyboard.press('Control+s');
-    await page.waitForTimeout(6000); // give yjs and firestore time to sync
+    await page.waitForTimeout(2000); // wait for flushPending
+    await page.reload(); // Reload to trigger compaction on init
+    await page.waitForTimeout(15000); // give compaction and Cloud Function time to sync (handles cold starts)
 
     // 2. Open Dashboard
     await ensureSidebarOpen(page);
@@ -64,13 +66,24 @@ test.describe('Insel-Wiki Evolution Suite', () => {
 
     // Wait for the task to appear, retrying if necessary
     await expect(async () => {
-      // Re-open dashboard if it closed or tasks are still rendering
       const taskCard = page.locator('.task-card', { hasText: taskText });
       await expect(taskCard).toBeVisible({ timeout: 2000 });
-    }).toPass({ timeout: 15000 });
+    }).toPass({ timeout: 30000 });
     
-    const taskCard = page.locator('.task-card', { hasText: taskText });
-    await taskCard.first().click({ force: true });
+    const taskCard = page.locator('.task-card', { hasText: taskText }).first();
+    const statusIcon = taskCard.locator('.clickable-status');
+    
+    // Toggle checkmark to completed
+    await statusIcon.click();
+    await expect(statusIcon).toContainText('✅');
+    await expect(taskCard).toHaveClass(/completed/);
+
+    // Toggle checkmark back to open
+    await statusIcon.click();
+    await expect(statusIcon).toContainText('⬜');
+    await expect(taskCard).not.toHaveClass(/completed/);
+
+    await taskCard.click({ force: true });
     await expect(page.locator('.dashboard-overlay')).toBeHidden({ timeout: 5000 });
   });
 

@@ -77,16 +77,15 @@ export async function toggleTask(pageId, taskIndex) {
     const oldContent = pageData.content || '';
     
     // Use the same robust regex as extractTasksFromContent
-    const taskRegex = /^(\s*)(?:-|\*)\s*\[( |x|X)\]\s*(.*)$/gm;
+    const taskRegex = /^([ \t]*)(?:([-*])\s+)?\[( |x|X)\]\s*(.*)$/gm;
     let matchIndex = 0;
-    const newContent = oldContent.replace(taskRegex, (match, whitespace, checked, text) => {
+    const newContent = oldContent.replace(taskRegex, (match, whitespace, marker, checked, text) => {
       if (matchIndex === taskIndex) {
         matchIndex++;
         const isDone = checked.toLowerCase() === 'x';
         const newChecked = isDone ? ' ' : 'x';
-        // Preserve original marker (- or *)
-        const marker = match.trim().startsWith('*') ? '*' : '-';
-        return `${whitespace}${marker} [${newChecked}] ${text}`;
+        const bullet = marker ? `${marker} ` : '';
+        return `${whitespace}${bullet}[${newChecked}] ${text}`;
       }
       matchIndex++;
       return match;
@@ -96,7 +95,7 @@ export async function toggleTask(pageId, taskIndex) {
       await updateDoc(pageRef, {
         content: newContent,
         updatedAt: serverTimestamp(),
-        lastSavedBy: user.uid,
+        lastSavedBy: user.email,
         lastSavedByName: user.displayName || user.email
       });
     }
