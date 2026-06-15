@@ -431,9 +431,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                   const prevSelection = Selection.near(state.doc.resolve(listStart - 1), -1);
                   if (prevSelection && prevSelection.$to) {
                     const prevEndPos = prevSelection.$to.pos;
-                    const currentStartPos = selection.$from.start();
-                    const currentEndPos = selection.$from.end();
-                    const content = state.doc.cut(currentStartPos, currentEndPos).content;
+                    const content = selection.$from.parent.content;
                     
                     const tr = state.tr;
                     tr.insert(prevEndPos, content);

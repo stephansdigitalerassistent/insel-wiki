@@ -191,7 +191,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.keyboard.press('Backspace');
     
     // The text should merge with the first item: "First itemSecond item"
-    await expect(editor).toContainText('First itemSecond item');
+    const listItems = editor.locator('li');
+    await expect(listItems).toHaveCount(1);
+    await expect(listItems.first()).toHaveText('First itemSecond item');
   });
 
   test('List editing: Backspace merges list item text with nested previous item above', async ({ page }) => {
@@ -226,6 +228,9 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.keyboard.press('Backspace');
     
     // The text should merge with "Nested item": "Nested itemOuter item"
-    await expect(editor).toContainText('Nested itemOuter item');
+    const listItems = editor.locator('li');
+    await expect(listItems).toHaveCount(2);
+    await expect(listItems.nth(0)).toContainText('First item');
+    await expect(listItems.nth(1)).toHaveText('Nested itemOuter item');
   });
 });
