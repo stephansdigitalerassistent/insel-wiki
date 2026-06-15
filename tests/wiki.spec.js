@@ -193,4 +193,39 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     // The text should merge with the first item: "First itemSecond item"
     await expect(editor).toContainText('First itemSecond item');
   });
+
+  test('List editing: Backspace merges list item text with nested previous item above', async ({ page }) => {
+    const title = `TEST-ListMergeNested-${Date.now()}`;
+    const pageId = await createTestPage(page, title);
+    createdPageIds.push(pageId);
+
+    await ensureSidebarClosed(page);
+    const editor = page.locator('.tiptap:visible');
+    await editor.focus();
+    
+    // Toggle bullet list
+    await page.keyboard.press('Control+Shift+8');
+    await page.keyboard.type('First item');
+    await page.keyboard.press('Enter');
+    
+    // Indent to create nested item
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Nested item');
+    await page.keyboard.press('Enter');
+    
+    // Outdent to create outer item
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.type('Outer item');
+    
+    // Move cursor to the start of "Outer item"
+    for (let i = 0; i < 'Outer item'.length; i++) {
+      await page.keyboard.press('ArrowLeft');
+    }
+    
+    // Press Backspace at the beginning of "Outer item"
+    await page.keyboard.press('Backspace');
+    
+    // The text should merge with "Nested item": "Nested itemOuter item"
+    await expect(editor).toContainText('Nested itemOuter item');
+  });
 });

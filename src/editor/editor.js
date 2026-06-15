@@ -31,6 +31,7 @@ import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
 import { joinBackward } from '@tiptap/pm/commands';
+import { Selection } from '@tiptap/pm/state';
 
 import TurndownService from 'turndown';
 import { marked } from 'marked';
@@ -425,9 +426,28 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                 selection.$from.node(depth - 1).type.name === 'taskItem'
               );
               if (isInsideList) {
-                if (joinBackward(state, view.dispatch, view)) {
-                  event.preventDefault();
-                  return true;
+                const listStart = selection.$from.before(depth - 1);
+                if (listStart > 0) {
+                  const prevSelection = Selection.near(state.doc.resolve(listStart - 1), -1);
+                  if (prevSelection && prevSelection.$to) {
+                    const prevEndPos = prevSelection.$to.pos;
+                    const currentStartPos = selection.$from.start();
+                    const currentEndPos = selection.$from.end();
+                    const content = state.doc.cut(currentStartPos, currentEndPos).content;
+                    
+                    const tr = state.tr;
+                    tr.insert(prevEndPos, content);
+                    
+                    const shift = content.size;
+                    const deleteStart = selection.$from.before(depth - 1) + shift;
+                    const deleteEnd = selection.$from.after(depth - 1) + shift;
+                    tr.delete(deleteStart, deleteEnd);
+                    
+                    tr.setSelection(Selection.near(tr.doc.resolve(prevEndPos)));
+                    view.dispatch(tr);
+                    event.preventDefault();
+                    return true;
+                  }
                 }
               }
             }
