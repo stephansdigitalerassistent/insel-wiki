@@ -35,7 +35,7 @@ jobs:
       - name: Deploy Rules and Functions
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
-          npx firebase deploy --only firestore:rules,storage:rules,functions --project insel-wiki --non-interactive
+          npx firebase deploy --only firestore:rules,storage,functions --project insel-wiki --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_INSEL_WIKI }}
