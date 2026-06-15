@@ -444,37 +444,10 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                       nestedNodes.push(listItemNode.child(i));
                     }
                     
-                    if (nestedNodes.length > 0) {
-                      let prevListDepth = -1;
-                      for (let d = prevSelection.$to.depth; d >= 0; d--) {
-                        const nodeName = prevSelection.$to.node(d).type.name;
-                        if (nodeName === 'listItem' || nodeName === 'taskItem') {
-                          prevListDepth = d;
-                          break;
-                        }
-                      }
-                      
-                      for (const nestedNode of nestedNodes) {
-                        let insertPos;
-                        if (prevListDepth !== -1) {
-                          const prevListItem = prevSelection.$to.node(prevListDepth);
-                          const lastChild = prevListItem.lastChild;
-                          if (lastChild && lastChild.type === nestedNode.type) {
-                            insertPos = prevSelection.$to.after(prevListDepth) + shift - 2;
-                            tr.insert(insertPos, nestedNode.content);
-                            shift += nestedNode.content.size;
-                          } else {
-                            insertPos = prevSelection.$to.after(prevListDepth) + shift - 1;
-                            tr.insert(insertPos, nestedNode);
-                            shift += nestedNode.nodeSize;
-                          }
-                        } else {
-                          const prevBlockDepth = prevSelection.$to.depth > 0 ? prevSelection.$to.depth : 1;
-                          insertPos = prevSelection.$to.after(prevBlockDepth) + shift;
-                          tr.insert(insertPos, nestedNode);
-                          shift += nestedNode.nodeSize;
-                        }
-                      }
+                    for (const nestedNode of nestedNodes) {
+                      const insertPos = selection.$from.before(depth - 1) + shift;
+                      tr.insert(insertPos, nestedNode.content);
+                      shift += nestedNode.content.size;
                     }
                     
                     const deleteStart = selection.$from.before(depth - 1) + shift;

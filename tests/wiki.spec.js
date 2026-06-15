@@ -267,10 +267,10 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await page.keyboard.press('Backspace');
     
     // The text should merge with "First item": "First itemOuter item"
-    // And "Nested item" must still exist!
+    // And "Nested item" must still exist and be promoted to the same level!
     const listItems = editor.locator('li');
     await expect(listItems).toHaveCount(2);
-    await expect(listItems.nth(0)).toContainText('First itemOuter item');
+    await expect(listItems.nth(0)).toHaveText('First itemOuter item');
     await expect(listItems.nth(1)).toHaveText('Nested item');
   });
 });
