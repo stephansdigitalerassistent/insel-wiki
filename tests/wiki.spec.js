@@ -233,4 +233,45 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await expect(listItems.nth(0)).toContainText('First item');
     await expect(listItems.nth(1)).toHaveText('Nested itemOuter item');
   });
+
+  test('List editing: Backspace on item with nested children does not delete children', async ({ page }) => {
+    const title = `TEST-ListMergeNestedPreserve-${Date.now()}`;
+    const pageId = await createTestPage(page, title);
+    createdPageIds.push(pageId);
+
+    await ensureSidebarClosed(page);
+    const editor = page.locator('.tiptap:visible');
+    await editor.focus();
+    
+    // Toggle bullet list
+    await page.keyboard.press('Control+Shift+8');
+    await page.keyboard.type('First item');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Outer item');
+    await page.keyboard.press('Enter');
+    
+    // Indent to create nested item under Outer item
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Nested item');
+    await page.waitForTimeout(300);
+    
+    // Move cursor back to the start of "Outer item"
+    await page.keyboard.press('ArrowUp');
+    await page.waitForTimeout(100);
+    for (let i = 0; i < 'Outer item'.length; i++) {
+      await page.keyboard.press('ArrowLeft');
+    }
+    await page.waitForTimeout(200);
+    
+    // Press Backspace at the beginning of "Outer item"
+    await page.keyboard.press('Backspace');
+    
+    // The text should merge with "First item": "First itemOuter item"
+    // And "Nested item" must still exist!
+    const listItems = editor.locator('li');
+    await expect(listItems).toHaveCount(2);
+    await expect(listItems.nth(0)).toContainText('First itemOuter item');
+    await expect(listItems.nth(1)).toHaveText('Nested item');
+  });
 });
+

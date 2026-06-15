@@ -42,8 +42,10 @@ service cloud.firestore {
       // a `lastSavedBy` field it must equal the authenticated email — so it
       // cannot be spoofed to impersonate an admin and trigger the DevOps bot.
       allow write: if isInsel()
-        && (!(request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSavedBy']))
-            || request.resource.data.lastSavedBy == request.auth.token.email);
+        && (resource == null ?
+            (!('lastSavedBy' in request.resource.data) || request.resource.data.lastSavedBy == request.auth.token.email) :
+            (!(request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSavedBy'])) || request.resource.data.lastSavedBy == request.auth.token.email)
+           );
       allow delete: if isInsel() || isBot();
       
       match /history/{historyId} {
