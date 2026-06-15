@@ -126,7 +126,14 @@
     "image": "Image",
     "voice": "Voice input",
     "comment": "Add comment",
-    "imageUrlPrompt": "Enter image URL:"
+    "imageUrlPrompt": "Enter image URL:",
+    "voiceErrors": {
+      "mic-denied": "No microphone access.",
+      "unsupported": "Voice input is not supported by this browser.",
+      "auth": "Session expired or not authorized — please log in again.",
+      "recorder": "Could not start audio recording.",
+      "backend": "Speech recognition service unavailable."
+    }
   },
   "dashboard": {
     "title": "Task Overview",

@@ -488,7 +488,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
               if (editor && url) editor.chain().focus().setImage({ src: url }).run();
             } catch (err) {
               console.error('Image upload failed', err);
-              showToast(t('editor.uploadError') + err.message, 'error');
+              showToast(i18next.t('messages.imageUploadError') + err.message, 'error');
             }
           });
           return true;
@@ -506,7 +506,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                 if (editor && url) editor.chain().focus().setImage({ src: url }).run();
               } catch (err) {
                 console.error('Image upload failed', err);
-                showToast(t('editor.uploadError') + err.message, 'error');
+                showToast(i18next.t('messages.imageUploadError') + err.message, 'error');
               }
             });
             return true;
@@ -750,6 +750,15 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
   entry.voiceAssistant.onInterim = (transcript) => {
     // Show ghost text at cursor position
     editor.commands.setVoiceTranscript(transcript);
+  };
+  entry.voiceAssistant.onError = (code, message) => {
+    const key = `editor.voiceErrors.${code}`;
+    const translated = i18next.t(key);
+    if (translated && translated !== key) {
+      showToast(translated, 'error');
+    } else {
+      showToast(message, 'error');
+    }
   };
 
   cache.set(pageId, entry);

@@ -59,6 +59,7 @@ export class SpellCheckerBot {
   _onTransaction({ transaction }) {
     if (this.isDestroyed) return;
     if (!transaction.docChanged) return;
+    if (transaction.getMeta('isSpellCheckerCorrection')) return;
 
     // Use the mapped selection position after the transaction to find what was just typed.
     const { selection } = this.editor.state;
@@ -208,6 +209,7 @@ export class SpellCheckerBot {
       // Apply the correction without stealing focus from the user.
       const { tr } = this.editor.state;
       tr.insertText(cleanCorrected, startPos, endPos);
+      tr.setMeta('isSpellCheckerCorrection', true);
       this.editor.view.dispatch(tr);
 
       // Mark as recently corrected to avoid re-checking

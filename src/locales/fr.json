@@ -126,7 +126,14 @@
     "image": "Image",
     "voice": "Saisie vocale (Dictée)",
     "comment": "Ajouter un commentaire",
-    "imageUrlPrompt": "Entrez l'URL de l'image :"
+    "imageUrlPrompt": "Entrez l'URL de l'image :",
+    "voiceErrors": {
+      "mic-denied": "Aucun accès au microphone.",
+      "unsupported": "La saisie vocale n'est pas prise en charge par ce navigateur.",
+      "auth": "Session expirée ou non autorisée — veuillez vous reconnecter.",
+      "recorder": "Impossible de démarrer l'enregistrement audio.",
+      "backend": "Le service de reconnaissance vocale n'est pas disponible."
+    }
   },
   "dashboard": {
     "title": "Aperçu des tâches",

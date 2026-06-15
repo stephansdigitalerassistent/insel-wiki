@@ -126,7 +126,14 @@
     "image": "Bild",
     "voice": "Spracheingabe (Diktat)",
     "comment": "Kommentar hinzufügen",
-    "imageUrlPrompt": "Bild-URL eingeben:"
+    "imageUrlPrompt": "Bild-URL eingeben:",
+    "voiceErrors": {
+      "mic-denied": "Kein Zugriff auf das Mikrofon.",
+      "unsupported": "Spracheingabe wird von diesem Browser nicht unterstützt.",
+      "auth": "Sitzung abgelaufen oder nicht autorisiert — bitte neu anmelden.",
+      "recorder": "Audioaufnahme konnte nicht gestartet werden.",
+      "backend": "Spracherkennungs-Dienst nicht erreichbar."
+    }
   },
   "dashboard": {
     "title": "Aufgaben-Übersicht",

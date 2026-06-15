@@ -126,7 +126,14 @@
     "image": "Immagine",
     "voice": "Input vocale (Dettatura)",
     "comment": "Aggiungi commento",
-    "imageUrlPrompt": "Inserisci URL immagine:"
+    "imageUrlPrompt": "Inserisci URL immagine:",
+    "voiceErrors": {
+      "mic-denied": "Nessun accesso al microfono.",
+      "unsupported": "L'input vocale non è supportato da questo browser.",
+      "auth": "Sessione scaduta o non autorizzata — effettua nuovamente l'accesso.",
+      "recorder": "Impossibile avviare la registrazione audio.",
+      "backend": "Servizio di riconoscimento vocale non disponibile."
+    }
   },
   "dashboard": {
     "title": "Panoramica attività",

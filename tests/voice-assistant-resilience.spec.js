@@ -111,6 +111,11 @@ test.describe('VoiceAssistant Resilience', () => {
     await voiceBtn.click();
 
     await expect(voiceBtn).not.toHaveClass(/is-recording/);
+
+    // Verify error toast is shown
+    const toast = page.locator('.toast-error');
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText(/mikro|micro/i);
   });
 
   test('handles a browser without MediaRecorder support', async ({ page }) => {
@@ -122,5 +127,10 @@ test.describe('VoiceAssistant Resilience', () => {
     await voiceBtn.click();
 
     await expect(voiceBtn).not.toHaveClass(/is-recording/);
+
+    // Verify error toast is shown
+    const toast = page.locator('.toast-error');
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText(/support|unterstütz|charge/i);
   });
 });
