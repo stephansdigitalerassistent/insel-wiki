@@ -29,13 +29,13 @@ jobs:
       - name: Install & test functions
         run: npm ci && npm test
         working-directory: functions
-      # Deploy functions BEFORE hosting: the frontend no longer writes the
+      # Deploy rules and functions BEFORE hosting: the frontend no longer writes the
       # markdown `content` field, so the server-side projection function must be
       # live first to keep search/history fresh.
-      - name: Deploy Functions
+      - name: Deploy Rules and Functions
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
-          npx firebase deploy --only functions --project insel-wiki --non-interactive
+          npx firebase deploy --only firestore:rules,storage:rules,functions --project insel-wiki --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_INSEL_WIKI }}
