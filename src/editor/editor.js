@@ -30,6 +30,7 @@ import suggestion from './suggestions.js';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
+import { joinBackward } from '@tiptap/pm/commands';
 
 import TurndownService from 'turndown';
 import { marked } from 'marked';
@@ -413,6 +414,25 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
         keydown: (view, event) => {
           const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
           const isMod = ctrlKey || metaKey;
+          
+          if (key === 'Backspace') {
+            const { state } = view;
+            const { selection } = state;
+            if (selection.empty && selection.$from.parentOffset === 0) {
+              const depth = selection.$from.depth;
+              const isInsideList = depth >= 1 && (
+                selection.$from.node(depth - 1).type.name === 'listItem' || 
+                selection.$from.node(depth - 1).type.name === 'taskItem'
+              );
+              if (isInsideList) {
+                if (joinBackward(state, view.dispatch, view)) {
+                  event.preventDefault();
+                  return true;
+                }
+              }
+            }
+          }
+          
           if (isMod && altKey && !shiftKey) {
             if (code === 'Digit1') { editor.chain().focus().toggleHeading({ level: 1 }).run(); return true; }
             if (code === 'Digit2') { editor.chain().focus().toggleHeading({ level: 2 }).run(); return true; }

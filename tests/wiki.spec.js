@@ -166,4 +166,31 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     // 5. Verify gone from trash
     await expect(trashItem).not.toBeVisible();
   });
+
+  test('List editing: Backspace merges list item text with previous item', async ({ page }) => {
+    const title = `TEST-ListMerge-${Date.now()}`;
+    const pageId = await createTestPage(page, title);
+    createdPageIds.push(pageId);
+
+    await ensureSidebarClosed(page);
+    const editor = page.locator('.tiptap:visible');
+    await editor.focus();
+    
+    // Toggle bullet list
+    await page.keyboard.press('Control+Shift+8');
+    await page.keyboard.type('First item');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Second item');
+    
+    // Move cursor to the start of "Second item"
+    for (let i = 0; i < 'Second item'.length; i++) {
+      await page.keyboard.press('ArrowLeft');
+    }
+    
+    // Press Backspace at the beginning of the second list item
+    await page.keyboard.press('Backspace');
+    
+    // The text should merge with the first item: "First itemSecond item"
+    await expect(editor).toContainText('First itemSecond item');
+  });
 });
