@@ -425,11 +425,11 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                 selection.$from.node(depth - 1).type.name === 'listItem' || 
                 selection.$from.node(depth - 1).type.name === 'taskItem'
               );
-              if (isInsideList) {
+              if (isInsideList && selection.$from.index(depth) === 0) {
                 const listStart = selection.$from.before(depth - 1);
                 if (listStart > 0) {
                   const prevSelection = Selection.near(state.doc.resolve(listStart - 1), -1);
-                  if (prevSelection && prevSelection.$to) {
+                  if (prevSelection && prevSelection.$to && prevSelection.$to.pos < listStart) {
                     const prevEndPos = prevSelection.$to.pos;
                     const content = selection.$from.parent.content;
                     
@@ -446,8 +446,20 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                     
                     for (const nestedNode of nestedNodes) {
                       const insertPos = selection.$from.before(depth - 1) + shift;
-                      tr.insert(insertPos, nestedNode.content);
-                      shift += nestedNode.content.size;
+                      if (nestedNode.type.name === 'bulletList' || nestedNode.type.name === 'orderedList' || nestedNode.type.name === 'taskList') {
+                        tr.insert(insertPos, nestedNode.content);
+                        shift += nestedNode.content.size;
+                      } else {
+                        const wrapperType = selection.$from.node(depth - 1).type;
+                        const wrappedNode = wrapperType.createAndFill(null, nestedNode);
+                        if (wrappedNode) {
+                          tr.insert(insertPos, wrappedNode);
+                          shift += wrappedNode.nodeSize;
+                        } else {
+                          tr.insert(insertPos, nestedNode);
+                          shift += nestedNode.nodeSize;
+                        }
+                      }
                     }
                     
                     const deleteStart = selection.$from.before(depth - 1) + shift;

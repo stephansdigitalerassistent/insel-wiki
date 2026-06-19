@@ -273,5 +273,234 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     await expect(listItems.nth(0)).toHaveText('First itemOuter item');
     await expect(listItems.nth(1)).toHaveText('Nested item');
   });
+
+  test('List editing: Backspace on item with multi-level nested children promotes one level without drift', async ({ page }) => {
+    const title = `TEST-ListMergeDeepNested-${Date.now()}`;
+    const pageId = await createTestPage(page, title);
+    createdPageIds.push(pageId);
+
+    await ensureSidebarClosed(page);
+    const editor = page.locator('.tiptap:visible');
+    await editor.focus();
+
+    // Build:
+    // - First item
+    // - Outer item
+    //   - Nested A
+    //     - Deep A1
+    await page.keyboard.press('Control+Shift+8');
+    await page.keyboard.type('First item');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Outer item');
+    await page.keyboard.press('Enter');
+
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Nested A');
+    await page.keyboard.press('Enter');
+
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Deep A1');
+    await page.waitForTimeout(300);
+
+    // Move cursor back to the start of "Outer item"
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await page.waitForTimeout(100);
+    for (let i = 0; i < 'Outer item'.length; i++) {
+      await page.keyboard.press('ArrowLeft');
+    }
+    await page.waitForTimeout(200);
+
+    // Press Backspace at the beginning of "Outer item"
+    await page.keyboard.press('Backspace');
+
+    // "Outer item" text merges into "First item".
+    // "Nested A" is promoted one level (to "First item" level), "Deep A1" stays under it.
+    // No text should be lost or duplicated, and item count must stay 3.
+    const listItems = editor.locator('li');
+    await expect(listItems).toHaveCount(3);
+    await expect(editor).toContainText('First itemOuter item');
+    await expect(editor).toContainText('Nested A');
+    await expect(editor).toContainText('Deep A1');
+    // Drift guard: no stray/duplicated text fragments.
+    await expect(editor).not.toContainText('Outer itemOuter');
+    await expect(editor).not.toContainText('Nested ANested');
+  });
+
+  test('List editing: Backspace on item with mixed nested children (sublist + second paragraph) preserves all content', async ({ page }) => {
+    const title = `TEST-ListMergeMixedChildren-${Date.now()}`;
+    const pageId = await createTestPage(page, title);
+    createdPageIds.push(pageId);
+
+    await ensureSidebarClosed(page);
+    const editor = page.locator('.tiptap:visible');
+    await editor.focus();
+
+    // Build an "Outer item" whose children are [paragraph, sublist, paragraph]:
+    // - First item
+    // - Outer item
+    //   - Nested A
+    //   second para            <- shift+enter keeps it inside the same list item
+    await page.keyboard.press('Control+Shift+8');
+    await page.keyboard.type('First item');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Outer item');
+    await page.keyboard.press('Enter');
+
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Nested A');
+    await page.waitForTimeout(200);
+
+    // Move up into "Outer item" and append a hard-break paragraph after the sublist
+    // via going to end of "Nested A" then outdent + new line is fragile, so instead
+    // place a second paragraph in the outer item using Shift+Enter at its end.
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('End');
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.type('second para');
+    await page.waitForTimeout(300);
+
+    // Move cursor to the very start of "Outer item"
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(200);
+
+    // Press Backspace at the beginning of "Outer item"
+    await page.keyboard.press('Backspace');
+    // All textual content must survive the merge with correct offsets (no drift).
+    await expect(editor).toContainText('First item');
+    await expect(editor).toContainText('Outer item');
+    await expect(editor).toContainText('Nested A');
+    await expect(editor).toContainText('second para');
+  });
+
+  test('List editing: Backspace on multi-paragraph list item does not delete the first paragraph', async ({ page }) => {
+    // Forward browser console logs to node terminal
+    page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
+
+    const title = `TEST-ListMultiParaLoss-${Date.now()}`;
+    const pageId = await createTestPage(page, title);
+    createdPageIds.push(pageId);
+
+    await ensureSidebarClosed(page);
+    const editor = page.locator('.tiptap:visible');
+    await editor.focus();
+
+    // Inject a list item containing two distinct paragraph blocks
+    await page.evaluate(() => {
+      window.editor.commands.setContent({
+        type: 'doc',
+        content: [
+          {
+            type: 'bulletList',
+            content: [
+              {
+                type: 'listItem',
+                content: [
+                  {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Paragraph 1' }]
+                  },
+                  {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Paragraph 2' }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      });
+    });
+
+    // Programmatically set cursor to the start of "Paragraph 2" to avoid keyboard navigation flakiness
+    await page.evaluate(() => {
+      let targetPos = 0;
+      window.editor.state.doc.descendants((node, pos) => {
+        if (node.isText && node.text === 'Paragraph 2') {
+          targetPos = pos;
+          return false;
+        }
+      });
+      window.editor.commands.setTextSelection(targetPos);
+    });
+
+    // Press Backspace at the start of Paragraph 2
+    await page.keyboard.press('Backspace');
+
+    // Expected: Paragraph 1 must still exist in the editor.
+    // (This fails currently because the code deletes the whole listItem, losing "Paragraph 1" entirely).
+    const textContent = await editor.textContent();
+    expect(textContent).toContain('Paragraph 1');
+  });
+
+  test('List editing: Backspace on first list item inside a table cell does not merge content outside the table', async ({ page }) => {
+    const title = `TEST-ListTableCellBoundary-${Date.now()}`;
+    const pageId = await createTestPage(page, title);
+    createdPageIds.push(pageId);
+
+    await ensureSidebarClosed(page);
+    const editor = page.locator('.tiptap:visible');
+    await editor.focus();
+
+    // Inject a paragraph outside, followed by a table with a bullet list inside a cell
+    await page.evaluate(() => {
+      window.editor.commands.setContent({
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Outside Paragraph' }]
+          },
+          {
+            type: 'table',
+            content: [
+              {
+                type: 'tableRow',
+                content: [
+                  {
+                    type: 'tableCell',
+                    content: [
+                      {
+                        type: 'bulletList',
+                        content: [
+                          {
+                            type: 'listItem',
+                            content: [
+                              {
+                                type: 'paragraph',
+                                content: [{ type: 'text', text: 'Inside List Item' }]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      });
+    });
+
+    // Move cursor into the list item inside the table cell
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    // Move to start of 'Inside List Item'
+    for (let i = 0; i < 'Inside List Item'.length; i++) {
+      await page.keyboard.press('ArrowLeft');
+    }
+
+    // Press Backspace at the start of the list item inside the table cell
+    await page.keyboard.press('Backspace');
+
+    // Expected: The text 'Inside List Item' should NOT be merged into 'Outside Paragraph' outside the table.
+    // The list item should either remain inside the table cell or be lifted, but not merge outside the table.
+    const textContent = await editor.textContent();
+    expect(textContent).not.toContain('Outside ParagraphInside List Item');
+  });
 });
+
 
