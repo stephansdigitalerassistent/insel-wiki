@@ -386,11 +386,15 @@ test.describe('Insel-Wiki Evolution Suite', () => {
     const editor = page.locator('.tiptap:visible');
     await editor.focus();
 
-    // Inject a list item containing two distinct paragraph blocks
+    // Inject an Intro paragraph followed by a list item containing two distinct paragraph blocks
     await page.evaluate(() => {
       window.editor.commands.setContent({
         type: 'doc',
         content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Intro' }]
+          },
           {
             type: 'bulletList',
             content: [

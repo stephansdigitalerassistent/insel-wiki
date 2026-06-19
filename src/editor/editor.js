@@ -425,7 +425,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                 selection.$from.node(depth - 1).type.name === 'listItem' || 
                 selection.$from.node(depth - 1).type.name === 'taskItem'
               );
-              if (isInsideList && selection.$from.index(depth) === 0) {
+              if (isInsideList && selection.$from.index(depth - 1) === 0) {
                 const listStart = selection.$from.before(depth - 1);
                 if (listStart > 0) {
                   const prevSelection = Selection.near(state.doc.resolve(listStart - 1), -1);
