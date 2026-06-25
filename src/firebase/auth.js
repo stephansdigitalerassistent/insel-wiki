@@ -10,7 +10,7 @@ import {
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocFromServer, serverTimestamp } from 'firebase/firestore';
 import { createAuthUser, changeUserPassword } from '../services/auth-service.js';
 import i18next, { translatePage } from '../i18n.js';
 
@@ -121,9 +121,15 @@ export async function login(email, password) {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // Check if active in Firestore
+    // Check if active in Firestore (force server fetch to bypass stale cache)
     const userRef = doc(db, 'users', user.uid);
-    const userSnap = await getDoc(userRef);
+    let userSnap;
+    try {
+      userSnap = await getDocFromServer(userRef);
+    } catch (e) {
+      console.warn('[Auth] Failed to fetch active status from server, falling back to cache:', e.message);
+      userSnap = await getDoc(userRef);
+    }
     
     if (!userSnap.exists() || userSnap.data().isActive !== true) {
       await signOut(auth); // Log out immediately if not active
@@ -173,9 +179,15 @@ export function initAuth() {
   return new Promise((resolve) => {
     onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Double check if still active
+        // Double check if still active (try server first to update any stale local cache)
         const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
+        let userSnap;
+        try {
+          userSnap = await getDocFromServer(userRef);
+        } catch (e) {
+          console.warn('[Auth] Failed to double-check active status from server, falling back to cache:', e.message);
+          userSnap = await getDoc(userRef);
+        }
         if (!userSnap.exists() || userSnap.data().isActive !== true) {
           console.warn('[Auth] User session found but user is not active in Firestore. Logging out.');
           await signOut(auth);
