@@ -35,6 +35,19 @@ jobs:
       - name: Deploy Rules and Functions
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          node -e '
+            try {
+              const fs = require("fs");
+              const content = fs.readFileSync(process.env.RUNNER_TEMP + "/firebase-sa.json", "utf8");
+              console.log("File length:", content.length);
+              const sa = JSON.parse(content);
+              console.log("Parsed JSON keys:", Object.keys(sa));
+              console.log("Project ID:", sa.project_id);
+              console.log("Client Email:", sa.client_email);
+            } catch (err) {
+              console.error("JSON parse error:", err.message);
+            }
+          '
           npx firebase deploy --only firestore:rules,storage,functions --project insel-wiki --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
