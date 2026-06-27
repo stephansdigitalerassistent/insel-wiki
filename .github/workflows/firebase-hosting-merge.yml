@@ -13,7 +13,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+      - name: Set MTU
+        run: |
+          sudo ip link set dev eth0 mtu 1400 || true
+          sudo ip link set dev ens5 mtu 1400 || true
       - run: npm ci --legacy-peer-deps && npm run build
         env:
           VITE_FIREBASE_API_KEY: "AIzaSyBIeAMBZePPoKmvsy-yBdhnNow9vxYX1EU"
