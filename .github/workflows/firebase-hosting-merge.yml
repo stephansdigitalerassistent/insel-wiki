@@ -34,7 +34,7 @@ jobs:
       # live first to keep search/history fresh.
       - name: Deploy to Firebase
         run: |
-          ACCESS_TOKEN=$(node get-token.js)
+          ACCESS_TOKEN=$(node get-token.cjs)
           FIREBASE_TOKEN=$ACCESS_TOKEN npx firebase deploy --project insel-wiki --non-interactive
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_INSEL_WIKI }}
