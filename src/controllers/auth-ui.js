@@ -248,12 +248,16 @@ async function handleRegister(e) {
   const subjectPlain = `Wiki Activation: ${email}`;
   activationRecipientEl.textContent = recipient;
   activationSubjectEl.textContent = subjectPlain;
-  activationMailtoBtn.href = `mailto:${recipient}?subject=${encodeURIComponent(subjectPlain)}`;
+  const mailtoUrl = `mailto:${recipient}?subject=${encodeURIComponent(subjectPlain)}`;
+  activationMailtoBtn.href = mailtoUrl;
 
   registerForm.classList.add('hidden');
   activationPanel.classList.remove('hidden');
   registerEmailInput.value = '';
   registerPasswordInput.value = '';
+
+  // Automatically open the mail client to generate the activation email
+  window.location.href = mailtoUrl;
 
   registerBtn.disabled = false;
   registerBtn.textContent = i18next.t('auth.register.submit');
