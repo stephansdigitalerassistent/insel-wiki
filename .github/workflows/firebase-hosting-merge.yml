@@ -36,17 +36,29 @@ jobs:
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
           node -e '
-            try {
-              const fs = require("fs");
-              const content = fs.readFileSync(process.env.RUNNER_TEMP + "/firebase-sa.json", "utf8");
-              console.log("File length:", content.length);
-              const sa = JSON.parse(content);
-              console.log("Parsed JSON keys:", Object.keys(sa));
-              console.log("Project ID:", sa.project_id);
-              console.log("Client Email:", sa.client_email);
-            } catch (err) {
-              console.error("JSON parse error:", err.message);
-            }
+            (async () => {
+              try {
+                const fs = require("fs");
+                const content = fs.readFileSync(process.env.RUNNER_TEMP + "/firebase-sa.json", "utf8");
+                console.log("File length:", content.length);
+                const sa = JSON.parse(content);
+                console.log("Parsed JSON keys:", Object.keys(sa));
+                console.log("Project ID:", sa.project_id);
+                console.log("Client Email:", sa.client_email);
+                
+                console.log("Attempting manual Google OAuth token exchange...");
+                const { GoogleAuth } = require("./node_modules/google-auth-library");
+                const auth = new GoogleAuth({
+                  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+                  scopes: ["https://www.googleapis.com/auth/cloud-platform"]
+                });
+                const client = await auth.getClient();
+                const token = await client.getAccessToken();
+                console.log("Manual token exchange succeeded! Token length:", token.token ? token.token.length : 0);
+              } catch (err) {
+                console.error("Diagnostic error:", err);
+              }
+            })();
           '
           npx firebase deploy --only firestore:rules,storage,functions --project insel-wiki --non-interactive
         env:
