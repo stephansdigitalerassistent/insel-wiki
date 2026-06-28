@@ -103,6 +103,7 @@
   },
   "editor": {
     "markdownToggle": "Modifier le Markdown brut",
+    "markdownPlaceholder": "Commencez à écrire en Markdown ici...",
     "titlePlaceholder": "Titre de la page...",
     "loadingPage": "Chargement de la page...",
     "deletePage": "Supprimer la page",

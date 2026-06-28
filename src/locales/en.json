@@ -103,6 +103,7 @@
   },
   "editor": {
     "markdownToggle": "Edit Raw Markdown",
+    "markdownPlaceholder": "Start typing in Markdown here...",
     "titlePlaceholder": "Page title...",
     "loadingPage": "Loading page...",
     "deletePage": "Delete page",

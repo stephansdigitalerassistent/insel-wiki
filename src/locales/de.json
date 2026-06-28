@@ -103,6 +103,7 @@
   },
   "editor": {
     "markdownToggle": "Raw MD bearbeiten",
+    "markdownPlaceholder": "Beginne hier in Markdown zu schreiben…",
     "titlePlaceholder": "Seitentitel…",
     "loadingPage": "Seite wird geladen...",
     "deletePage": "Seite löschen",

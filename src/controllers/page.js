@@ -49,6 +49,9 @@ function debounce(callback, delayMs) {
     clearTimeout(timer);
     timer = null;
   };
+  debounced.isPending = () => {
+    return !!timer;
+  };
   return debounced;
 }
 
@@ -84,6 +87,7 @@ function anySavePending() {
   if (pendingTitleSaves > 0) return true;
   const provider = getProvider();
   if (provider && provider.hasUnsavedChanges) return true;
+  if (debouncedSyncMarkdownToEditor && debouncedSyncMarkdownToEditor.isPending()) return true;
   return false;
 }
 
@@ -205,6 +209,7 @@ export function initPageController(opts) {
     markdownEditor.addEventListener('input', () => {
       if (currentPageId && canEdit()) {
         debouncedSyncMarkdownToEditor(markdownEditor.value);
+        recomputeSaveStatus();
       }
     });
   }
@@ -284,6 +289,8 @@ export async function loadPage(pageId) {
     markdownEditor.classList.add('hidden');
     if (editorEl) editorEl.style.display = 'block';
     if (markdownToggleBtn) markdownToggleBtn.classList.remove('active');
+  } else {
+    debouncedSyncMarkdownToEditor.cancel();
   }
 
   if (debouncedUpdateTitle) debouncedUpdateTitle.flush();
@@ -431,7 +438,9 @@ export async function loadPage(pageId) {
 
   if (!formatToolbar) {
     formatToolbar = createFormatToolbar(editorContainer);
-    if (!canEdit()) formatToolbar.style.display = 'none';
+  }
+  if (formatToolbar) {
+    formatToolbar.style.display = canEdit() ? 'flex' : 'none';
   }
 
   setEditable(canEdit());
@@ -466,6 +475,9 @@ export async function loadPage(pageId) {
       if (newBotStatus !== oldBotStatus && newBotStatus !== 'new') {
         console.log(`[Insel-Wiki] Bot status changed to ${newBotStatus}. Refreshing content.`);
         setContent(updatedPage.content);
+        if (isMarkdownMode && markdownEditor) {
+          markdownEditor.value = updatedPage.content || '';
+        }
       }
 
       updateBreadcrumb(pageId);
@@ -501,6 +513,8 @@ export function showEmptyState() {
     markdownEditor.classList.add('hidden');
     if (editorEl) editorEl.style.display = 'block';
     if (markdownToggleBtn) markdownToggleBtn.classList.remove('active');
+  } else {
+    debouncedSyncMarkdownToEditor.cancel();
   }
   snapshotCurrentPage();
   if (currentPresenceUnsub) { currentPresenceUnsub(); currentPresenceUnsub = null; }
@@ -743,6 +757,7 @@ function updateMarkdownView() {
     if (formatToolbar) formatToolbar.style.display = 'none';
   } else {
     // Switch back to WYSIWYG mode
+    debouncedSyncMarkdownToEditor.cancel();
     const markdown = markdownEditor.value;
     setContent(markdown);
     
