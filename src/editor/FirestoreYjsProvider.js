@@ -134,7 +134,7 @@ export class FirestoreYjsProvider {
         }
       });
 
-      await runTransaction(db, async (transaction) => {
+      const compacted = await runTransaction(db, async (transaction) => {
         const stateSnap = await transaction.get(this.stateDocRef);
         const existingData = stateSnap.data();
         
@@ -142,7 +142,7 @@ export class FirestoreYjsProvider {
         if (existingData?.updatedAt) {
           const lastCompacted = existingData.updatedAt.toDate();
           if (Date.now() - lastCompacted.getTime() < 10000) {
-            return; // Another client already compacted — skip
+            return false; // Another client already compacted — skip
           }
         }
         
@@ -151,7 +151,13 @@ export class FirestoreYjsProvider {
           state: Bytes.fromUint8Array(newState), 
           updatedAt: serverTimestamp() 
         });
+        return true;
       });
+
+      if (!compacted) {
+        console.log('[FirestoreYjs] Compaction skipped (recently compacted by another client).');
+        return;
+      }
       
       // 3. Delete ONLY the updates that were read and folded into the compacted state
       const deletePromises = [];

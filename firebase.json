@@ -26,6 +26,11 @@
         }
       },
       {
+        "source": "/api/spellcheck",
+        "function": "spellcheck",
+        "region": "europe-west1"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

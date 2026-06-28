@@ -1,10 +1,4 @@
-// SpellCheckerBot — AI-powered word-level spell checker using Gemini 3.1 Flash Lite
-// Silently corrects dyslexia-typical spelling errors as the user types.
-
-
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+import { auth } from '../firebase/config.js';
 
 // Characters that signal "the previous word is finished"
 const WORD_SEPARATORS = new Set([' ', '.', ',', '!', '?', ':', ';', '\n', ')', ']', '}', '–', '—', '"', '»', '(', '[', '{', '«', '<', '>']);
@@ -18,16 +12,6 @@ const DEBOUNCE_MS = 500;
 // Bot identity for the collaboration cursor
 const BOT_NAME = '🤖 Rechtschreib-Assistent';
 const BOT_COLOR = '#10b981'; // Emerald green
-
-// System prompt for Gemini — optimized for token efficiency & dyslexia corrections
-const SYSTEM_PROMPT = `Fix dyslexia typos (transpositions, omissions, duplicates, b/d/p/q/ei/ie swaps) for the Target word using Context.
-Output ONLY corrected Target word. No punctuation, quotes, or explanation.
-If correct, output as is.
-Keep original case unless you are very sure it needs changing (use carefully).
-Keep German umlauts (ä,ö,ü). Do NOT replace with ae/oe/ue.
-Use Swiss German (replace 'ß' with 'ss').
-Ignore medical terms, acronyms, names.
-Lang: DE/EN.`;
 
 export class SpellCheckerBot {
   constructor(editor, provider) {
@@ -44,11 +28,6 @@ export class SpellCheckerBot {
    * Start listening for word completions
    */
   start() {
-    if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
-      console.warn('[SpellCheckerBot] No VITE_GEMINI_API_KEY set — spell check disabled.');
-      return;
-    }
-
     console.log('[SpellCheckerBot] 🤖 Rechtschreib-Assistent aktiviert');
     this.editor.on('transaction', this._onTransaction);
   }
@@ -229,42 +208,38 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Call Gemini 3.1 Flash Lite API for word correction
+   * Call backend proxy spellcheck API for word correction
    */
   async _callGemini(word, contextBefore, contextAfter) {
-    const promptText = `Target: ${word}\nContext before: ${contextBefore}\nContext after: ${contextAfter}`;
+    let token = '';
+    try {
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+    } catch (e) {
+      console.warn('[SpellCheckerBot] Failed to get auth token:', e);
+    }
 
-    const response = await fetch(GEMINI_ENDPOINT, {
+    const response = await fetch('/api/spellcheck', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: SYSTEM_PROMPT }]
-        },
-        contents: [{
-          parts: [{ text: promptText }]
-        }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 30,
-          candidateCount: 1
-        }
+        word,
+        contextBefore,
+        contextAfter
       })
     });
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '');
-      throw new Error(`Gemini API ${response.status}: ${errorBody.substring(0, 200)}`);
+      throw new Error(`Spellcheck API ${response.status}: ${errorBody.substring(0, 200)}`);
     }
 
-    const geminiResponseData = await response.json();
-    const text = geminiResponseData?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!text) {
-      throw new Error('No text in Gemini response');
-    }
-
-    return text;
+    const data = await response.json();
+    return data.corrected;
   }
 
   /**

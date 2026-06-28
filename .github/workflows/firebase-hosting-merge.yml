@@ -33,9 +33,8 @@ jobs:
       - name: Install & test functions
         run: npm ci && npm test
         working-directory: functions
-      # Deploy rules and functions BEFORE hosting: the frontend no longer writes the
-      # markdown `content` field, so the server-side projection function must be
-      # live first to keep search/history fresh.
+      - name: Configure functions environment
+        run: echo "GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" > functions/.env
       - name: Deploy to Firebase
         run: |
           ACCESS_TOKEN=$(node get-token.cjs)
