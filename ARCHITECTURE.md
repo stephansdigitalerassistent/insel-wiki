@@ -42,7 +42,9 @@ Based on **Tiptap**, extended with medically relevant functions:
 - **Test Isolation**: All automated Playwright tests are strictly isolated. 
   - The `createPage` logic in `src/firebase/firestore.js` automatically redirects test-prefixed pages to the `page-tests` parent.
   - A comprehensive cleanup utility (`tests/helpers/firestore-cleanup.js`) handles the recursive deletion of test-generated documents and sub-collections (History, Comments, Presence) to maintain a clean production environment.
-- **Firestore Rules**: Granular access control ensuring that only verified `@insel.ch` users have write access.
+- **Firestore Rules**: Granular access control ensuring that only verified `@insel.ch` users (or the bot) have access.
+  - **Read access is restricted to `@insel.ch` users**, not merely any authenticated account. This is deliberate: the public Firebase web API key allows anyone to self-register an arbitrary email, and the client-side `@insel.ch` / `isActive` gates are bypassable via the Identity Toolkit REST API. Gating reads on `request.auth != null` alone would therefore expose all clinical wiki content (pages, history, comments, the user directory) to anyone willing to sign up. Reads on `pages/**` and `users/` require `isInsel() || isBot()`; writes additionally enforce the same domain. This is the correct posture for an internal hospital wiki — there is intentionally **no anonymous/public read tier**.
+  - **Storage**: object reads require authentication (not public), and avatar/editor uploads are bounded by size and restricted to `image/*` content types.
 
 ## 6. Repository & Maintenance
 

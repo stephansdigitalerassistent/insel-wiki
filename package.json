@@ -40,6 +40,7 @@
     "@tiptap/starter-kit": "^2.27.2",
     "@tiptap/suggestion": "^2.27.2",
     "diff-match-patch": "^1.0.5",
+    "dompurify": "^3.4.11",
     "firebase": "^12.13.0",
     "i18next": "^26.1.0",
     "i18next-browser-languagedetector": "^8.2.1",
