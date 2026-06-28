@@ -1,7 +1,9 @@
 // Authentication module
-// Flow: Non-logged-in users see read-only wiki + mailto link to request access.
+// Flow: Non-logged-in users see a login screen + mailto link to request access
+// (there is intentionally no anonymous/public read tier — Firestore rules gate
+// reads to @insel.ch users; see ARCHITECTURE.md §5).
 // @insel.ch users send their chosen password via email → admin or Cloud Function creates account.
-// Logged-in users can edit.
+// Logged-in @insel.ch users can read and edit.
 
 import { auth, db } from './config.js';
 import {

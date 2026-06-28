@@ -1,9 +1,15 @@
 // History panel component
 import { getHistory, formatTimestamp, getFullHistoryContent, computeDiffHtml } from '../firebase/firestore.js';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import i18next from '../i18n.js';
 
 let currentPageId = null;
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 /**
  * Load and render history for a page
@@ -56,7 +62,7 @@ export async function loadHistory(pageId, livePageData, getLiveContent) {
           if (!latestSnapshotContent) {
             previewEl.innerHTML = `
               <div style="padding: 8px; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 12px;">${i18next.t('history.noSnapshots')}</div>
-              ${marked.parse(currentContent || '')}
+              ${DOMPurify.sanitize(marked.parse(currentContent || ''))}
             `;
           } else {
             const diffHtml = computeDiffHtml(latestSnapshotContent, currentContent);
@@ -79,7 +85,7 @@ export async function loadHistory(pageId, livePageData, getLiveContent) {
       el.className = 'history-entry';
       el.innerHTML = `
         <div class="history-date">${formatTimestamp(entry.savedAt)}</div>
-        <div class="history-user">${entry.savedBy || i18next.t('history.unknownUser')}</div>
+        <div class="history-user">${escapeHtml(entry.savedBy || i18next.t('history.unknownUser'))}</div>
       `;
       el.addEventListener('click', async () => {
         // Highlight active entry
@@ -104,7 +110,7 @@ export async function loadHistory(pageId, livePageData, getLiveContent) {
             // First version or no previous: show full marked content
             previewEl.innerHTML = `
               <div style="padding: 8px; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 12px;">${i18next.t('history.firstVersion')}</div>
-              ${marked.parse(currentVersionContent || '')}
+              ${DOMPurify.sanitize(marked.parse(currentVersionContent || ''))}
             `;
           } else {
             // Show visual diff
