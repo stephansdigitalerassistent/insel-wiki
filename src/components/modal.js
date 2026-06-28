@@ -550,18 +550,41 @@ export function openAclModal(page) {
     const inputContainer = document.createElement('div');
     inputContainer.style.cssText = 'display:flex; gap: 0.5rem;';
 
+    const inputWrapper = document.createElement('div');
+    inputWrapper.style.cssText = 'position:relative; flex:1;';
+
     const emailInput = document.createElement('input');
     emailInput.type = 'email';
     emailInput.className = 'modal-input';
     emailInput.placeholder = 'vorname.name@insel.ch';
-    emailInput.style.flex = '1';
+    emailInput.style.cssText = 'width:100%; margin-bottom:0;';
+
+    const suggestionList = document.createElement('div');
+    suggestionList.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--glass-shadow);
+      z-index: 100;
+      max-height: 180px;
+      overflow-y: auto;
+      display: none;
+      margin-top: 4px;
+    `;
+
+    inputWrapper.appendChild(emailInput);
+    inputWrapper.appendChild(suggestionList);
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'btn btn-secondary';
     addBtn.textContent = 'Hinzufügen';
     
-    inputContainer.appendChild(emailInput);
+    inputContainer.appendChild(inputWrapper);
     inputContainer.appendChild(addBtn);
     emailInputGroup.appendChild(inputContainer);
 
@@ -622,6 +645,129 @@ export function openAclModal(page) {
     radioPublic.querySelector('input').addEventListener('change', handleRadioChange);
     radioRestricted.querySelector('input').addEventListener('change', handleRadioChange);
 
+    // Autocomplete Logic
+    let allUsers = [];
+    let selectedSuggestionIndex = -1;
+    let filteredUsersList = [];
+
+    import('../firebase/firestore.js').then(async (firestore) => {
+      allUsers = await firestore.getUsers();
+    }).catch(err => {
+      console.warn('[ACL Modal] Failed to load users for autocomplete:', err);
+    });
+
+    function renderSuggestions(filtered) {
+      filteredUsersList = filtered;
+      suggestionList.innerHTML = '';
+      if (filtered.length === 0) {
+        suggestionList.style.display = 'none';
+        selectedSuggestionIndex = -1;
+        return;
+      }
+      suggestionList.style.display = 'block';
+      filtered.forEach((u, index) => {
+        const item = document.createElement('div');
+        item.style.cssText = `
+          padding: 8px 12px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          border-bottom: 1px solid var(--border);
+          transition: background 0.15s ease;
+          color: var(--text-primary);
+        `;
+        if (index === filtered.length - 1) {
+          item.style.borderBottom = 'none';
+        }
+        if (index === selectedSuggestionIndex) {
+          item.style.background = 'var(--bg-hover)';
+        }
+
+        if (u.photoURL) {
+          const img = document.createElement('img');
+          img.src = u.photoURL;
+          img.style.cssText = 'width: 24px; height: 24px; border-radius: 50%; object-fit: cover;';
+          item.appendChild(img);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.style.cssText = `
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent-subtle);
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            flex-shrink: 0;
+          `;
+          placeholder.textContent = (u.displayName || u.email || 'U').charAt(0).toUpperCase();
+          item.appendChild(placeholder);
+        }
+
+        const info = document.createElement('div');
+        info.style.cssText = 'display: flex; flex-direction: column; text-align: left;';
+        
+        const nameEl = document.createElement('span');
+        nameEl.style.fontWeight = '500';
+        nameEl.textContent = u.displayName || u.email.split('@')[0];
+        
+        const emailEl = document.createElement('span');
+        emailEl.style.fontSize = '0.75rem';
+        emailEl.style.color = 'var(--text-muted)';
+        emailEl.textContent = u.email;
+
+        info.appendChild(nameEl);
+        info.appendChild(emailEl);
+        item.appendChild(info);
+
+        item.addEventListener('mouseenter', () => {
+          selectedSuggestionIndex = index;
+          Array.from(suggestionList.children).forEach((child, cIdx) => {
+            child.style.background = cIdx === selectedSuggestionIndex ? 'var(--bg-hover)' : '';
+          });
+        });
+
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          emailInput.value = u.email;
+          suggestionList.style.display = 'none';
+          emailInput.focus();
+        });
+
+        suggestionList.appendChild(item);
+      });
+    }
+
+    emailInput.addEventListener('input', () => {
+      const val = emailInput.value.trim().toLowerCase();
+      if (!val) {
+        renderSuggestions([]);
+        return;
+      }
+      const filtered = allUsers.filter(u => {
+        if (!u.email || u.isActive === false) return false;
+        if (allowedEmails.includes(u.email.toLowerCase())) return false;
+        const nameMatch = u.displayName && u.displayName.toLowerCase().includes(val);
+        const emailMatch = u.email.toLowerCase().includes(val);
+        return nameMatch || emailMatch;
+      });
+      selectedSuggestionIndex = filtered.length > 0 ? 0 : -1;
+      renderSuggestions(filtered.slice(0, 5));
+    });
+
+    const hideSuggestions = (e) => {
+      if (e.target !== emailInput && !suggestionList.contains(e.target)) {
+        suggestionList.style.display = 'none';
+        selectedSuggestionIndex = -1;
+      }
+    };
+    document.addEventListener('click', hideSuggestions);
+
     // Add email event
     const addEmail = () => {
       const email = emailInput.value.trim().toLowerCase();
@@ -632,17 +778,45 @@ export function openAclModal(page) {
       }
       if (allowedEmails.includes(email)) {
         emailInput.value = '';
+        renderSuggestions([]);
         return;
       }
       allowedEmails.push(email);
       emailInput.value = '';
+      renderSuggestions([]);
       renderEmails();
     };
     addBtn.addEventListener('click', addEmail);
+
     emailInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        addEmail();
+      if (suggestionList.style.display === 'block') {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedSuggestionIndex = (selectedSuggestionIndex + 1) % filteredUsersList.length;
+          renderSuggestions(filteredUsersList);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedSuggestionIndex = (selectedSuggestionIndex - 1 + filteredUsersList.length) % filteredUsersList.length;
+          renderSuggestions(filteredUsersList);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < filteredUsersList.length) {
+            emailInput.value = filteredUsersList[selectedSuggestionIndex].email;
+            suggestionList.style.display = 'none';
+            selectedSuggestionIndex = -1;
+          } else {
+            addEmail();
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          suggestionList.style.display = 'none';
+          selectedSuggestionIndex = -1;
+        }
+      } else {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addEmail();
+        }
       }
     });
 
@@ -671,6 +845,7 @@ export function openAclModal(page) {
     document.body.appendChild(overlay);
 
     const cleanup = () => {
+      document.removeEventListener('click', hideSuggestions);
       if (overlay.parentNode === document.body) {
         document.body.removeChild(overlay);
       }

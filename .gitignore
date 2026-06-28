@@ -22,3 +22,6 @@ playwright-report/
 # Burn pipeline transient sidecars (auto-dev/execute-burn coordination)
 .burn/output.json
 .burn/result.json
+
+# Scratch directory
+/scratch/
