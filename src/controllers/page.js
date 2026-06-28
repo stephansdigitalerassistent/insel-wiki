@@ -113,6 +113,14 @@ function recomputeSaveStatus() {
 let editorContainer, editorEl, pageTitleInput, saveStatus, breadcrumbEl;
 let collabCursorsEl, emptyState, lastEditedBadge, loadingOverlay;
 let historyBtn, printBtn, addChildBtn, deletePageBtn, toolbarNewPageBtn, copyLinkBtn;
+let markdownEditor, markdownToggleBtn;
+let isMarkdownMode = false;
+
+const debouncedSyncMarkdownToEditor = debounce((markdown) => {
+  if (currentPageId && canEdit()) {
+    setContent(markdown);
+  }
+}, 500);
 
 let navigateCallback = null;
 
@@ -178,6 +186,8 @@ export function initPageController(opts) {
   deletePageBtn = document.getElementById('delete-page-btn');
   toolbarNewPageBtn = document.getElementById('toolbar-new-page-btn');
   copyLinkBtn = document.getElementById('copy-link-btn');
+  markdownEditor = document.getElementById('markdown-editor');
+  markdownToggleBtn = document.getElementById('markdown-toggle-btn');
 
   navigateCallback = opts.navigateTo;
 
@@ -189,6 +199,15 @@ export function initPageController(opts) {
   if (historyBtn) historyBtn.addEventListener('click', handleHistoryToggle);
   if (printBtn) printBtn.addEventListener('click', () => window.print());
   if (copyLinkBtn) copyLinkBtn.addEventListener('click', handleCopyLink);
+  if (markdownToggleBtn) markdownToggleBtn.addEventListener('click', toggleMarkdownMode);
+
+  if (markdownEditor) {
+    markdownEditor.addEventListener('input', () => {
+      if (currentPageId && canEdit()) {
+        debouncedSyncMarkdownToEditor(markdownEditor.value);
+      }
+    });
+  }
 
   document.getElementById('close-history').addEventListener('click', closeHistoryPanel);
   document.getElementById('empty-new-page').addEventListener('click', () => handleNewPage());
@@ -207,6 +226,9 @@ export function initPageController(opts) {
     if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       if (currentPageId) {
+        if (isMarkdownMode && markdownEditor) {
+          debouncedSyncMarkdownToEditor.flush();
+        }
         const provider = getProvider();
         if (provider) {
           await provider.flushPending();
@@ -227,6 +249,9 @@ export function initPageController(opts) {
   // Firestore's IndexedDB persistence queues these writes if the network is
   // unavailable, and replays them on next load.
   const flushAll = () => {
+    if (isMarkdownMode && markdownEditor) {
+      debouncedSyncMarkdownToEditor.flush();
+    }
     debouncedUpdateTitle.flush();
     const provider = getProvider();
     if (provider) provider.flushPending();
@@ -252,6 +277,14 @@ export function getCurrentPageId() { return currentPageId; }
 export async function loadPage(pageId) {
   // Skip if we're already on this page
   if (pageId === currentPageId) return;
+
+  if (isMarkdownMode && markdownEditor) {
+    debouncedSyncMarkdownToEditor.flush();
+    isMarkdownMode = false;
+    markdownEditor.classList.add('hidden');
+    if (editorEl) editorEl.style.display = 'block';
+    if (markdownToggleBtn) markdownToggleBtn.classList.remove('active');
+  }
 
   if (debouncedUpdateTitle) debouncedUpdateTitle.flush();
 
@@ -403,6 +436,9 @@ export async function loadPage(pageId) {
 
   setEditable(canEdit());
   pageTitleInput.readOnly = !canEdit();
+  if (markdownToggleBtn) {
+    markdownToggleBtn.style.display = canEdit() ? 'inline-flex' : 'none';
+  }
 
   historySnapshotInterval = setInterval(() => snapshotCurrentPage(), SNAPSHOT_INTERVAL_MS);
 
@@ -459,6 +495,13 @@ export async function loadPage(pageId) {
 }
 
 export function showEmptyState() {
+  if (isMarkdownMode && markdownEditor) {
+    debouncedSyncMarkdownToEditor.flush();
+    isMarkdownMode = false;
+    markdownEditor.classList.add('hidden');
+    if (editorEl) editorEl.style.display = 'block';
+    if (markdownToggleBtn) markdownToggleBtn.classList.remove('active');
+  }
   snapshotCurrentPage();
   if (currentPresenceUnsub) { currentPresenceUnsub(); currentPresenceUnsub = null; }
   clearInterval(historySnapshotInterval);
@@ -677,3 +720,38 @@ export async function rejoinPresence(updatedUser) {
     });
   }
 }
+
+function toggleMarkdownMode() {
+  if (!currentPageId || !canEdit()) return;
+  isMarkdownMode = !isMarkdownMode;
+  updateMarkdownView();
+}
+
+function updateMarkdownView() {
+  if (!markdownEditor || !editorEl) return;
+  
+  if (isMarkdownMode) {
+    // Switch to Markdown mode
+    const markdown = getMarkdown();
+    markdownEditor.value = markdown;
+    
+    editorEl.style.display = 'none';
+    markdownEditor.classList.remove('hidden');
+    if (markdownToggleBtn) markdownToggleBtn.classList.add('active');
+    
+    // Hide format toolbar
+    if (formatToolbar) formatToolbar.style.display = 'none';
+  } else {
+    // Switch back to WYSIWYG mode
+    const markdown = markdownEditor.value;
+    setContent(markdown);
+    
+    markdownEditor.classList.add('hidden');
+    editorEl.style.display = 'block';
+    if (markdownToggleBtn) markdownToggleBtn.classList.remove('active');
+    
+    // Show format toolbar if user can edit
+    if (formatToolbar && canEdit()) formatToolbar.style.display = 'flex';
+  }
+}
+

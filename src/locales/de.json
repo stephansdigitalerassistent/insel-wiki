@@ -102,6 +102,7 @@
     "editAcls": "Zugriff verwalten"
   },
   "editor": {
+    "markdownToggle": "Raw MD bearbeiten",
     "titlePlaceholder": "Seitentitel…",
     "loadingPage": "Seite wird geladen...",
     "deletePage": "Seite löschen",

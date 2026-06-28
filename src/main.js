@@ -114,11 +114,15 @@ async function init() {
     navigateTo: navigateToPage
   });
 
-  // Sidebar toggle for mobile
+  // Sidebar toggle for mobile & desktop
   if (sidebarToggle) {
     sidebarToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      if (sidebarOverlay) sidebarOverlay.classList.toggle('show');
+      if (window.innerWidth <= 768) {
+        sidebar.classList.toggle('open');
+        if (sidebarOverlay) sidebarOverlay.classList.toggle('show');
+      } else {
+        sidebar.classList.toggle('collapsed');
+      }
     });
   }
   if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', closeSidebarOnMobile);

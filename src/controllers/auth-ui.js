@@ -174,6 +174,10 @@ export function handleAuthChange(user, { setEditable, formatToolbar, pageTitleIn
     if (formatToolbar) {
       formatToolbar.style.display = canEdit() ? 'flex' : 'none';
     }
+    const markdownToggleBtn = document.getElementById('markdown-toggle-btn');
+    if (markdownToggleBtn) {
+      markdownToggleBtn.style.display = canEdit() ? 'inline-flex' : 'none';
+    }
     pageTitleInput.readOnly = !canEdit();
   } else {
     authOverlay.classList.remove('hidden');

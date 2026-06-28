@@ -102,6 +102,7 @@
     "editAcls": "Gérer l'accès"
   },
   "editor": {
+    "markdownToggle": "Modifier le Markdown brut",
     "titlePlaceholder": "Titre de la page...",
     "loadingPage": "Chargement de la page...",
     "deletePage": "Supprimer la page",

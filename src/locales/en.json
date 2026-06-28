@@ -102,6 +102,7 @@
     "editAcls": "Manage Access"
   },
   "editor": {
+    "markdownToggle": "Edit Raw Markdown",
     "titlePlaceholder": "Page title...",
     "loadingPage": "Loading page...",
     "deletePage": "Delete page",

@@ -111,7 +111,7 @@ html, body {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-right: 1px solid var(--glass-border);
-  transition: transform var(--transition-slow);
+  transition: transform var(--transition-slow), width var(--transition-slow), min-width var(--transition-slow), opacity var(--transition-slow);
   z-index: 100;
 }
 
@@ -1463,3 +1463,35 @@ html, body {
   pointer-events: none;
   user-select: none;
 }
+
+/* --- Added for Markdown Mode & Sidebar Toggle --- */
+.btn-icon.active {
+  background: var(--accent-subtle);
+  color: var(--accent-hover);
+}
+
+.markdown-editor {
+  flex: 1;
+  padding: 12px 32px 48px;
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+}
+
+/* Sidebar collapse/toggle state for desktop */
+@media (min-width: 769px) {
+  .sidebar.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+    border-right: none;
+  }
+}
+
