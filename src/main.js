@@ -142,11 +142,6 @@ async function init() {
     window.location.hostname === 'localhost' || 
     window.location.hostname === '127.0.0.1'
   );
-  if (isTestEnv) {
-    ensurePageExists('page-tests', 'Tests').catch(err => {
-      console.warn('[Insel-Wiki] Failed to ensure root test page exists:', err);
-    });
-  }
 
   // Auth state changes → update UI
   onAuthChange((user) => {
@@ -156,6 +151,12 @@ async function init() {
       pageTitleInput: getPageTitleInput()
     });
     reevaluateSpellCheck();
+
+    if (user && isTestEnv) {
+      ensurePageExists('page-tests', 'Tests').catch(err => {
+        console.warn('[Insel-Wiki] Failed to ensure root test page exists:', err);
+      });
+    }
   });
 
   // Hash-based routing

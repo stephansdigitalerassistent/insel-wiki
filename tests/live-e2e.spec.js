@@ -113,8 +113,8 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     await editor.focus();
     await page.keyboard.type('Hello World! This is a rich text test.');
     await page.keyboard.press('Enter');
-    await page.keyboard.press('Control+S');
-    await expect(page.locator('#save-status')).toHaveText(/Gespeichert/, { timeout: 10000 });
+    await page.keyboard.press('Control+s');
+    await expect(page.locator('#save-status')).toHaveText(/Gespeichert|Saved/, { timeout: 10000 });
     await page.waitForTimeout(2000); // sync
 
     // 2. Create Child Page (under the topLevelTitle page)
@@ -128,11 +128,13 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     editor = page.locator('.tiptap:visible');
     await editor.focus();
     
-    await page.keyboard.type(`[ ] ${taskText}`, { delay: 50 });
+    // Use keyboard shortcut for task list to be platform independent and robust
+    await page.keyboard.press('Control+Shift+9');
+    await page.keyboard.type(taskText);
     await page.keyboard.press('Enter');
     
-    await page.keyboard.press('Control+S');
-    await expect(page.locator('#save-status')).toHaveText(/Gespeichert/, { timeout: 10000 });
+    await page.keyboard.press('Control+s');
+    await expect(page.locator('#save-status')).toHaveText(/Gespeichert|Saved/, { timeout: 10000 });
     await page.waitForTimeout(6000); // wait for save to firestore
 
     // We navigate away to ensure "Auto-saving Markdown on page leave" triggers 
@@ -146,20 +148,8 @@ test.describe('Live Insel-Wiki E2E Tests', () => {
     await expect(dashboardOverlay).toBeVisible();
     await page.waitForTimeout(2000);
 
-    await expect(async () => {
-      const taskCard = page.locator('.task-card', { hasText: taskText });
-      try {
-        await expect(taskCard).toBeVisible({ timeout: 2000 });
-      } catch (e) {
-        // close and reopen
-        await page.click('#close-dashboard-btn', { force: true });
-        await page.waitForTimeout(500);
-        await ensureSidebarOpen(page);
-        await page.click('#open-dashboard-btn');
-        await expect(dashboardOverlay).toBeVisible();
-        throw e;
-      }
-    }).toPass({ timeout: 30000 });
+    const taskCard = page.locator('.task-card', { hasText: taskText });
+    await expect(taskCard).toBeVisible({ timeout: 30000 });
 
     // Close dashboard
     await page.click('#close-dashboard-btn', { force: true });

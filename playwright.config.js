@@ -17,6 +17,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     serviceWorkers: 'block',
     actionTimeout: 15000,
+    locale: 'de-CH',
   },
 
   projects: [

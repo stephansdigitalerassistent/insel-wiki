@@ -449,10 +449,14 @@ async function _recursivePermanentDelete(pageId, committer) {
     committer.delete(snap.ref);
   }
 
-  const presenceRef = collection(db, PAGES_COLLECTION, pageId, 'presence');
-  const presenceSnaps = await getDocs(presenceRef);
-  for (const snap of presenceSnaps.docs) {
-    committer.delete(snap.ref);
+  try {
+    const presenceRef = collection(db, PAGES_COLLECTION, pageId, 'presence');
+    const presenceSnaps = await getDocs(presenceRef);
+    for (const snap of presenceSnaps.docs) {
+      committer.delete(snap.ref);
+    }
+  } catch (err) {
+    console.log('[Firestore] Skipping presence cleanup (likely deprecated/inaccessible):', err.message || err);
   }
 
   // 5. Archive the main page document

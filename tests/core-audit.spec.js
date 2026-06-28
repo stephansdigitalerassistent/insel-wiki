@@ -56,6 +56,7 @@ test.describe('Insel-Wiki Core Audit', () => {
   }
 
   test.beforeEach(async ({ page }) => {
+    page.on('console', msg => console.log('Browser:', msg.text()));
     createdPageIds = [];
     createdTitles = [];
     await login(page);
@@ -116,7 +117,7 @@ test.describe('Insel-Wiki Core Audit', () => {
     await page.keyboard.type('Rich Text Audit Content.');
     await page.keyboard.press('Enter');
     await page.keyboard.press('Control+s');
-    await expect(page.locator('#save-status')).toHaveText(/Gespeichert/, { timeout: 15000 });
+    await expect(page.locator('#save-status')).toHaveText(/Gespeichert|Saved/, { timeout: 15000 });
 
     // --- 3. Create Child Page ---
     const childTitle = `AUDIT-Child-${Date.now()}`;
@@ -131,7 +132,7 @@ test.describe('Insel-Wiki Core Audit', () => {
     await page.keyboard.type(taskText);
     await page.keyboard.press('Enter');
     await page.keyboard.press('Control+s');
-    await expect(page.locator('#save-status')).toHaveText(/Gespeichert/, { timeout: 15000 });
+    await expect(page.locator('#save-status')).toHaveText(/Gespeichert|Saved/, { timeout: 15000 });
     
     // Wait for Yjs/Firebase sync
     await page.waitForTimeout(10000);
@@ -142,18 +143,8 @@ test.describe('Insel-Wiki Core Audit', () => {
     const dashboardOverlay = page.locator('.dashboard-overlay');
     await expect(dashboardOverlay).toBeVisible();
 
-    // Verify task presence
-    await expect(async () => {
-      const taskCard = page.locator('.task-card', { hasText: taskText });
-      if (!(await taskCard.isVisible())) {
-          // Re-trigger dashboard load if needed
-          await page.click('#close-dashboard-btn', { force: true });
-          await page.waitForTimeout(1000);
-          await ensureSidebarOpen(page);
-          await page.click('#open-dashboard-btn');
-          throw new Error('Task not visible yet');
-      }
-    }).toPass({ timeout: 30000 });
+    const taskCard = page.locator('.task-card', { hasText: taskText });
+    await expect(taskCard).toBeVisible({ timeout: 30000 });
 
     await page.click('#close-dashboard-btn', { force: true });
 

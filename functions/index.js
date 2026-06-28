@@ -55,11 +55,6 @@ export const projectYjsToMarkdown = onDocumentWritten(
       .collection('yjs_updates')
       .orderBy('timestamp', 'asc');
 
-    const updatedAt = after.data()?.updatedAt;
-    if (updatedAt) {
-      queryRef = queryRef.where('timestamp', '>', updatedAt);
-    }
-
     const updatesSnap = await queryRef.limit(1000).get();
     const updateBlobs = updatesSnap.docs
       .map(d => d.data().update)

@@ -82,6 +82,19 @@ export async function login(page, user, pass) {
   });
   
   await expect(page.locator('#user-info span')).toBeVisible({ timeout: 30000 });
+  
+  // Force default language to German for stable test execution,
+  // preventing pollution from other tests that change the profile language.
+  await page.evaluate(() => {
+    if (window.i18next && window.i18next.language !== 'de') {
+      window.i18next.changeLanguage('de').then(() => {
+        if (typeof window.translatePage === 'function') {
+          window.translatePage();
+        }
+      });
+    }
+  });
+
   // Final wait for any remaining transitions
   await page.waitForTimeout(500);
 }

@@ -203,12 +203,17 @@ export function initPageController(opts) {
   // Ctrl+S — edits live in Yjs (source of truth); a manual save just flushes
   // the buffered Yjs updates. The markdown `content` field is projected
   // server-side, so there is nothing to write from the client here.
-  window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+  window.addEventListener('keydown', async (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       if (currentPageId) {
         const provider = getProvider();
-        if (provider) provider.flushPending();
+        if (provider) {
+          await provider.flushPending();
+          provider.compact().catch(err => {
+            console.warn('[PageController] Compact failed:', err);
+          });
+        }
       }
     }
   });
