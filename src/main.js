@@ -10,7 +10,7 @@ import { initComments } from './components/comments.js';
 import { initDashboard } from './components/dashboard.js';
 import { showToast, initGlobalErrorHandler } from './components/toast.js';
 import { initAuthUI, handleAuthChange } from './controllers/auth-ui.js';
-import { initPageController, loadPage, showEmptyState, getFormatToolbar, getPageTitleInput, rejoinPresence } from './controllers/page.js';
+import { initPageController, loadPage, showEmptyState, getFormatToolbar, getPageTitleInput, rejoinPresence, anySavePending, flushMarkdownEditor } from './controllers/page.js';
 import { confirmModal } from './components/modal.js';
 import { ensurePageExists } from './firebase/firestore.js';
 
@@ -46,8 +46,10 @@ async function handleRoute() {
     return;
   }
 
-  const provider = getProvider();
-  if (!skipCheck && provider && provider.hasUnsavedChanges) {
+  if (typeof flushMarkdownEditor === 'function') {
+    flushMarkdownEditor();
+  }
+  if (!skipCheck && typeof anySavePending === 'function' && anySavePending()) {
     const confirmed = await confirmModal(i18next.t('messages.unsavedChangesTitle'), i18next.t('messages.unsavedChangesMessage'));
     if (!confirmed) {
       isRevertingHash = true;
@@ -177,6 +179,16 @@ async function init() {
   // Init comments & dashboard
   initComments(appEl);
   initDashboard(appEl, navigateToPage);
+
+  // Reconcile sidebar classes on window resize
+  window.addEventListener('resize', () => {
+    if (window.innerWidth <= 768) {
+      if (sidebar) sidebar.classList.remove('collapsed');
+    } else {
+      if (sidebar) sidebar.classList.remove('open');
+      if (sidebarOverlay) sidebarOverlay.classList.remove('show');
+    }
+  });
 
   // Online/offline
   window.addEventListener('online', updateOnlineStatus);

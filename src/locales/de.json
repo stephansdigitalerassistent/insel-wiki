@@ -183,6 +183,8 @@
     "save": "Speichern"
   },
   "messages": {
+    "markdownWarningTitle": "Warnung: Komplexe Elemente",
+    "markdownWarningMessage": "Diese Seite enthält Tabellen, Kommentare oder Erwähnungen. Das Bearbeiten im Raw-Markdown-Modus kann diese Elemente beschädigen. Möchten Sie fortfahren?",
     "unsavedChangesTitle": "Seite verlassen?",
     "unsavedChangesMessage": "Es gibt noch ungespeicherte Änderungen (Synchronisation läuft). Möchten Sie die Seite wirklich verlassen?",
     "offlineMode": "Offline-Modus aktiv",

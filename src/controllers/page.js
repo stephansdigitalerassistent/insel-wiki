@@ -83,12 +83,18 @@ let saveErrored = false;
 let savedSettleTimer = null;
 let yjsStatusUnsub = null;
 
-function anySavePending() {
+export function anySavePending() {
   if (pendingTitleSaves > 0) return true;
   const provider = getProvider();
   if (provider && provider.hasUnsavedChanges) return true;
   if (debouncedSyncMarkdownToEditor && debouncedSyncMarkdownToEditor.isPending()) return true;
   return false;
+}
+
+export function flushMarkdownEditor() {
+  if (isMarkdownMode && markdownEditor) {
+    debouncedSyncMarkdownToEditor.flush();
+  }
 }
 
 function recomputeSaveStatus() {
@@ -119,6 +125,7 @@ let collabCursorsEl, emptyState, lastEditedBadge, loadingOverlay;
 let historyBtn, printBtn, addChildBtn, deletePageBtn, toolbarNewPageBtn, copyLinkBtn;
 let markdownEditor, markdownToggleBtn;
 let isMarkdownMode = false;
+let originalMarkdownValue = '';
 
 const debouncedSyncMarkdownToEditor = debounce((markdown) => {
   if (currentPageId && canEdit()) {
@@ -448,6 +455,9 @@ export async function loadPage(pageId) {
   if (markdownToggleBtn) {
     markdownToggleBtn.style.display = canEdit() ? 'inline-flex' : 'none';
   }
+  if (markdownEditor) {
+    markdownEditor.readOnly = !canEdit();
+  }
 
   historySnapshotInterval = setInterval(() => snapshotCurrentPage(), SNAPSHOT_INTERVAL_MS);
 
@@ -587,6 +597,9 @@ function setSaveStatus(status) {
 async function snapshotCurrentPage() {
   if (!currentPageId || !canEdit()) return;
   try {
+    if (isMarkdownMode && markdownEditor) {
+      debouncedSyncMarkdownToEditor.flush();
+    }
     const markdown = getMarkdown();
     if (!markdown || markdown.trim().length === 0) return;
     if (markdown === lastSnapshotContent) return;
@@ -735,10 +748,30 @@ export async function rejoinPresence(updatedUser) {
   }
 }
 
-function toggleMarkdownMode() {
+async function toggleMarkdownMode() {
   if (!currentPageId || !canEdit()) return;
+  
+  if (!isMarkdownMode) {
+    if (hasComplexElements()) {
+      const confirmed = await confirmModal(
+        i18next.t('messages.markdownWarningTitle') || 'Warnung: Komplexe Elemente',
+        i18next.t('messages.markdownWarningMessage') || 'Diese Seite enthält Tabellen, Kommentare oder Erwähnungen. Das Bearbeiten im Raw-Markdown-Modus kann diese Elemente beschädigen. Möchten Sie fortfahren?'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+  }
+
   isMarkdownMode = !isMarkdownMode;
   updateMarkdownView();
+}
+
+function hasComplexElements() {
+  const ed = getEditor();
+  if (!ed) return false;
+  const html = ed.getHTML() || '';
+  return html.includes('</table>') || html.includes('class="mention"') || html.includes('data-comment-id') || html.includes('data-type="mention"');
 }
 
 function updateMarkdownView() {
@@ -747,6 +780,7 @@ function updateMarkdownView() {
   if (isMarkdownMode) {
     // Switch to Markdown mode
     const markdown = getMarkdown();
+    originalMarkdownValue = markdown;
     markdownEditor.value = markdown;
     
     editorEl.style.display = 'none';
@@ -759,7 +793,9 @@ function updateMarkdownView() {
     // Switch back to WYSIWYG mode
     debouncedSyncMarkdownToEditor.cancel();
     const markdown = markdownEditor.value;
-    setContent(markdown);
+    if (markdown !== originalMarkdownValue) {
+      setContent(markdown);
+    }
     
     markdownEditor.classList.add('hidden');
     editorEl.style.display = 'block';

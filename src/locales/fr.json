@@ -183,6 +183,8 @@
     "save": "Enregistrer"
   },
   "messages": {
+    "markdownWarningTitle": "Avertissement : Éléments complexes",
+    "markdownWarningMessage": "Cette page contient des tableaux, des commentaires ou des mentions. L'édition en mode Markdown brut peut endommager ou faire perdre ces éléments. Voulez-vous continuer ?",
     "unsavedChangesTitle": "Quitter la page ?",
     "unsavedChangesMessage": "Il y a des modifications non enregistrées (synchronisation en cours). Voulez-vous vraiment quitter la page ?",
     "offlineMode": "Mode hors ligne actif",

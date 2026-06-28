@@ -183,6 +183,8 @@
     "save": "Save"
   },
   "messages": {
+    "markdownWarningTitle": "Warning: Complex Elements",
+    "markdownWarningMessage": "This page contains tables, comments, or mentions. Editing in raw Markdown mode may damage or lose these elements. Do you want to continue?",
     "unsavedChangesTitle": "Leave page?",
     "unsavedChangesMessage": "There are unsaved changes. Do you really want to leave?",
     "offlineMode": "Offline mode active",
