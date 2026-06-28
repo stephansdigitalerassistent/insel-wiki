@@ -1,5 +1,5 @@
 // Firestore CRUD operations for wiki pages
-import { db, auth } from './config.js';
+import { db, auth, isTestEnv } from './config.js';
 import {
   collection,
   doc,
@@ -48,7 +48,7 @@ export async function createPage(title, parentId = null, createdBy = '') {
   // If this is a test page (starts with typical test prefixes) and it's being
   // created at the top level, force it under the 'page-tests' root.
   const isTestPage = /^(test-|TEST|E2E|AUDIT|FixTest|VoiceTest|Test Page|Mentions Test|Comment Test|Checkbox Test)-?/i.test(title);
-  if (isTestPage && !parentId) {
+  if (isTestPage && !parentId && isTestEnv) {
     parentId = 'page-tests';
   }
 
@@ -84,7 +84,9 @@ export async function getPage(pageId) {
  * navigation can clobber the old page's title with the new page's.
  */
 export async function savePage(pageId, content, savedBy = '', savedByName = '', savedByPhoto = '') {
-  console.log('[Firestore] savePage called for', pageId, 'with content length:', content?.length, 'content starts with:', content?.substring(0, 50));
+  if (isTestEnv) {
+    console.log('[Firestore] savePage called for', pageId, 'with content length:', content?.length, 'content starts with:', content?.substring(0, 50));
+  }
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
   try {
     await updateDoc(pageRef, {
@@ -258,45 +260,45 @@ export async function updatePageTitle(pageId, title) {
 class BatchCommitter {
   constructor(databaseInstance) {
     this.db = databaseInstance;
-    this.batch = writeBatch(this.db);
+    this.batches = [writeBatch(this.db)];
     this.count = 0;
-    this.promises = [];
   }
 
   set(ref, data, options) {
+    const currentBatch = this.batches[this.batches.length - 1];
     if (options) {
-      this.batch.set(ref, data, options);
+      currentBatch.set(ref, data, options);
     } else {
-      this.batch.set(ref, data);
+      currentBatch.set(ref, data);
     }
     this._increment();
   }
 
   update(ref, data) {
-    this.batch.update(ref, data);
+    const currentBatch = this.batches[this.batches.length - 1];
+    currentBatch.update(ref, data);
     this._increment();
   }
 
   delete(ref) {
-    this.batch.delete(ref);
+    const currentBatch = this.batches[this.batches.length - 1];
+    currentBatch.delete(ref);
     this._increment();
   }
 
   _increment() {
     this.count++;
     if (this.count >= 400) {
-      const b = this.batch;
-      this.promises.push(b.commit());
-      this.batch = writeBatch(this.db);
+      this.batches.push(writeBatch(this.db));
       this.count = 0;
     }
   }
 
   async commit() {
-    if (this.count > 0) {
-      this.promises.push(this.batch.commit());
+    // Commit sequentially to stop on the first error and prevent further chunk pollution
+    for (const batch of this.batches) {
+      await batch.commit();
     }
-    await Promise.all(this.promises);
   }
 }
 
@@ -370,6 +372,19 @@ export async function permanentlyDeletePage(pageId) {
     console.log(`[Insel-Wiki] Page ${pageId} successfully moved to archive.`);
   } catch (err) {
     console.error('Error during permanent delete (archiving):', err);
+    try {
+      const pageRef = doc(db, PAGES_COLLECTION, pageId);
+      const pageSnap = await getDoc(pageRef);
+      if (pageSnap.exists()) {
+        await updateDoc(pageRef, {
+          archiveFailed: true,
+          archiveError: err.message || String(err),
+          updatedAt: serverTimestamp()
+        });
+      }
+    } catch (innerErr) {
+      console.error('Failed to write compensating archive failure state:', innerErr);
+    }
     throw err;
   }
 }

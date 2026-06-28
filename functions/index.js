@@ -49,10 +49,18 @@ export const projectYjsToMarkdown = onDocumentWritten(
 
     // Pull updates written since the last compaction so we don't lag the live
     // document between compaction events.
-    const updatesSnap = await db
-      .collection('pages').doc(pageId)
+    let queryRef = db
+      .collection('pages')
+      .doc(pageId)
       .collection('yjs_updates')
-      .get();
+      .orderBy('timestamp', 'asc');
+
+    const updatedAt = after.data()?.updatedAt;
+    if (updatedAt) {
+      queryRef = queryRef.where('timestamp', '>', updatedAt);
+    }
+
+    const updatesSnap = await queryRef.limit(1000).get();
     const updateBlobs = updatesSnap.docs
       .map(d => d.data().update)
       .filter(Boolean);

@@ -19,7 +19,7 @@ const app = initializeApp(firebaseConfig);
 // Modern persistence API — supports multi-tab out of the box
 // In Playwright tests, IndexedDB caching with Service Workers blocked can cause BloomFilter errors
 // and auth token sync issues (resulting in permission-denied). Use memory cache for tests.
-const isTestEnv = typeof navigator !== 'undefined' && (
+export const isTestEnv = typeof navigator !== 'undefined' && (
   navigator.webdriver || 
   window.__playwright_test__ || 
   window.location.hostname === 'localhost' || 
