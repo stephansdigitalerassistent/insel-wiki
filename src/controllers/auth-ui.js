@@ -178,6 +178,10 @@ export function handleAuthChange(user, { setEditable, formatToolbar, pageTitleIn
     if (markdownToggleBtn) {
       markdownToggleBtn.style.display = canEdit() ? 'inline-flex' : 'none';
     }
+    const markdownEditor = document.getElementById('markdown-editor');
+    if (markdownEditor) {
+      markdownEditor.readOnly = !canEdit();
+    }
     pageTitleInput.readOnly = !canEdit();
   } else {
     authOverlay.classList.remove('hidden');

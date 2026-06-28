@@ -1492,6 +1492,7 @@ html, body {
     opacity: 0;
     pointer-events: none;
     border-right: none;
+    overflow: hidden;
   }
 }
 

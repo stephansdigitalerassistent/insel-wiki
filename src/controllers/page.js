@@ -126,10 +126,12 @@ let historyBtn, printBtn, addChildBtn, deletePageBtn, toolbarNewPageBtn, copyLin
 let markdownEditor, markdownToggleBtn;
 let isMarkdownMode = false;
 let originalMarkdownValue = '';
+let lastSyncedMarkdown = '';
 
 const debouncedSyncMarkdownToEditor = debounce((markdown) => {
   if (currentPageId && canEdit()) {
     setContent(markdown);
+    lastSyncedMarkdown = markdown;
   }
 }, 500);
 
@@ -781,6 +783,7 @@ function updateMarkdownView() {
     // Switch to Markdown mode
     const markdown = getMarkdown();
     originalMarkdownValue = markdown;
+    lastSyncedMarkdown = markdown;
     markdownEditor.value = markdown;
     
     editorEl.style.display = 'none';
@@ -793,8 +796,9 @@ function updateMarkdownView() {
     // Switch back to WYSIWYG mode
     debouncedSyncMarkdownToEditor.cancel();
     const markdown = markdownEditor.value;
-    if (markdown !== originalMarkdownValue) {
+    if (markdown !== lastSyncedMarkdown) {
       setContent(markdown);
+      lastSyncedMarkdown = markdown;
     }
     
     markdownEditor.classList.add('hidden');

@@ -46,10 +46,8 @@ async function handleRoute() {
     return;
   }
 
-  if (typeof flushMarkdownEditor === 'function') {
-    flushMarkdownEditor();
-  }
-  if (!skipCheck && typeof anySavePending === 'function' && anySavePending()) {
+  flushMarkdownEditor();
+  if (!skipCheck && anySavePending()) {
     const confirmed = await confirmModal(i18next.t('messages.unsavedChangesTitle'), i18next.t('messages.unsavedChangesMessage'));
     if (!confirmed) {
       isRevertingHash = true;
