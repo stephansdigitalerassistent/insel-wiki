@@ -107,7 +107,7 @@ service cloud.firestore {
         && d.severity in ['error', 'warning', 'unhandled-rejection', 'uncaught']
         && (!('stack' in d) || d.stack == null || (d.stack is string && d.stack.size() <= 16000))
         && (!('source' in d) || d.source == null || (d.source is string && d.source.size() <= 200))
-        && (!('url' in d) || (d.url is string && d.url.size() <= 4000))
+        && (!('url' in d) || (d.url is string && d.url.size() <= 4000 && d.url.matches('^https?://(localhost|127\\.0\\.0\\.1|insel-wiki\\.web\\.app|insel-wiki\\.firebaseapp\\.com).*$')))
         && (!('userAgent' in d) || (d.userAgent is string && d.userAgent.size() <= 2000))
         && (!('appVersion' in d) || (d.appVersion is string && d.appVersion.size() <= 200))
         && (!('breadcrumbs' in d) || (d.breadcrumbs is list && d.breadcrumbs.size() <= 50))

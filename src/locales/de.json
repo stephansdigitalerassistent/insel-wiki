@@ -27,6 +27,10 @@
     "createButton": "+ Neue Seite erstellen"
   },
   "auth": {
+    "validation": {
+      "passwordLength": "Das Passwort muss mindestens 10 Zeichen lang sein.",
+      "passwordComplexity": "Das Passwort muss Grossbuchstaben, Kleinbuchstaben und Ziffern enthalten."
+    },
     "login": {
       "title": "Anmelden",
       "emailLabel": "E-Mail (@insel.ch)",
@@ -42,7 +46,7 @@
       "hint": "Geben Sie Ihre @insel.ch Adresse und ein gewünschtes Passwort ein. Es wird eine E-Mail vorbereitet — senden Sie diese von Ihrem @insel.ch Postfach ab.",
       "emailLabel": "E-Mail (@insel.ch)",
       "passwordLabel": "Gewünschtes Passwort",
-      "passwordPlaceholder": "Mindestens 6 Zeichen",
+      "passwordPlaceholder": "Mind. 10 Zeichen (A-Z, a-z, 0-9)",
       "submit": "Registrieren",
       "backToLogin": "Zurück zur Anmeldung"
     },
@@ -210,6 +214,6 @@
     "changePassword": "Passwort ändern",
     "oldPassword": "Aktuelles Passwort",
     "newPassword": "Neues Passwort",
-    "passwordHint": "Mind. 6 Zeichen"
+    "passwordHint": "Mind. 10 Zeichen (A-Z, a-z, 0-9)"
   }
 }

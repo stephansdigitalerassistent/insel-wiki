@@ -219,8 +219,9 @@ async function handleRegister(e) {
     return;
   }
 
-  if (password.length < 6) {
-    registerError.textContent = 'Das Passwort muss mindestens 6 Zeichen lang sein.';
+  const validation = validatePassword(password);
+  if (!validation.isValid) {
+    registerError.textContent = validation.error;
     registerError.classList.remove('hidden');
     registerBtn.disabled = false;
     registerBtn.textContent = i18next.t('auth.register.submit');

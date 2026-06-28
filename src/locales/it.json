@@ -27,6 +27,10 @@
     "createButton": "+ Crea nuova pagina"
   },
   "auth": {
+    "validation": {
+      "passwordLength": "La password deve essere lunga almeno 10 caratteri.",
+      "passwordComplexity": "La password deve contenere lettere maiuscole, minuscole e cifre."
+    },
     "login": {
       "title": "Accesso",
       "emailLabel": "Email (@insel.ch)",
@@ -42,7 +46,7 @@
       "hint": "Inserisci il tuo indirizzo @insel.ch e una password desiderata. Verrà preparata un'email — inviala dalla tua casella @insel.ch.",
       "emailLabel": "Email (@insel.ch)",
       "passwordLabel": "Password desiderata",
-      "passwordPlaceholder": "Minimo 6 caratteri",
+      "passwordPlaceholder": "Min. 10 caratteri (A-Z, a-z, 0-9)",
       "submit": "Registrati",
       "backToLogin": "Torna all'accesso"
     },
@@ -210,6 +214,6 @@
     "changePassword": "Cambia password",
     "oldPassword": "Password attuale",
     "newPassword": "Nuova password",
-    "passwordHint": "Min. 6 caratteri"
+    "passwordHint": "Min. 10 caratteri (A-Z, a-z, 0-9)"
   }
 }

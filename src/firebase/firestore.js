@@ -574,9 +574,14 @@ export function subscribeToComments(pageId, callback) {
  * Get all active users (for mentions)
  */
 export async function getUsers() {
-  const usersRef = collection(db, 'users');
-  const snapshot = await getDocs(usersRef);
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const usersRef = collection(db, 'users');
+    const snapshot = await getDocs(usersRef);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.warn('[Firestore] Failed to get users list (likely restricted):', err.message || err);
+    return [];
+  }
 }
 
 /**

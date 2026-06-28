@@ -27,6 +27,10 @@
     "createButton": "+ Créer une nouvelle page"
   },
   "auth": {
+    "validation": {
+      "passwordLength": "Le mot de passe doit comporter au moins 10 caractères.",
+      "passwordComplexity": "Le mot de passe doit contenir des lettres majuscules, minuscules et des chiffres."
+    },
     "login": {
       "title": "Connexion",
       "emailLabel": "E-mail (@insel.ch)",
@@ -42,7 +46,7 @@
       "hint": "Entrez votre adresse @insel.ch et un mot de passe. Un e-mail sera préparé — envoyez-le depuis votre boîte @insel.ch.",
       "emailLabel": "E-mail (@insel.ch)",
       "passwordLabel": "Mot de passe souhaité",
-      "passwordPlaceholder": "Minimum 6 caractères",
+      "passwordPlaceholder": "Min. 10 caractères (A-Z, a-z, 0-9)",
       "submit": "S'inscrire",
       "backToLogin": "Retour à la connexion"
     },
@@ -210,6 +214,6 @@
     "changePassword": "Modifier le mot de passe",
     "oldPassword": "Mot de passe actuel",
     "newPassword": "Nouveau mot de passe",
-    "passwordHint": "Min. 6 caractères"
+    "passwordHint": "Min. 10 caractères (A-Z, a-z, 0-9)"
   }
 }
