@@ -604,22 +604,55 @@ export function openAclModal(page) {
       }
       listEmails.forEach(email => {
         const item = document.createElement('div');
-        item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border); font-size:0.9rem;';
+        item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:8px; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border); font-size:0.9rem;';
         if (email === listEmails[listEmails.length - 1]) item.style.borderBottom = 'none';
 
-        const text = document.createElement('span');
-        text.textContent = email;
+        const u = allUsers.find(x => x.email && x.email.toLowerCase() === email);
+
+        const person = document.createElement('div');
+        person.style.cssText = 'display:flex; align-items:center; gap:8px; min-width:0;';
+
+        if (u && u.photoURL) {
+          const img = document.createElement('img');
+          img.src = u.photoURL;
+          img.style.cssText = 'width:24px; height:24px; border-radius:50%; object-fit:cover; flex-shrink:0;';
+          person.appendChild(img);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.style.cssText = 'width:24px; height:24px; border-radius:50%; background:var(--accent-subtle); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:600; flex-shrink:0;';
+          placeholder.textContent = ((u && u.displayName) || email || 'U').charAt(0).toUpperCase();
+          person.appendChild(placeholder);
+        }
+
+        const text = document.createElement('div');
+        text.style.cssText = 'display:flex; flex-direction:column; min-width:0;';
+        if (u && u.displayName) {
+          const nameEl = document.createElement('span');
+          nameEl.style.cssText = 'font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+          nameEl.textContent = u.displayName;
+          const emailEl = document.createElement('span');
+          emailEl.style.cssText = 'font-size:0.75rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+          emailEl.textContent = email;
+          text.appendChild(nameEl);
+          text.appendChild(emailEl);
+        } else {
+          const emailEl = document.createElement('span');
+          emailEl.style.cssText = 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+          emailEl.textContent = email;
+          text.appendChild(emailEl);
+        }
+        person.appendChild(text);
 
         const delBtn = document.createElement('button');
         delBtn.type = 'button';
-        delBtn.style.cssText = 'background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center; padding: 2px 6px;';
+        delBtn.style.cssText = 'background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center; padding: 2px 6px; flex-shrink:0;';
         delBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
         delBtn.addEventListener('click', () => {
           allowedEmails = allowedEmails.filter(e => e !== email);
           renderEmails();
         });
 
-        item.appendChild(text);
+        item.appendChild(person);
         item.appendChild(delBtn);
         emailList.appendChild(item);
       });
@@ -652,6 +685,8 @@ export function openAclModal(page) {
 
     import('../firebase/firestore.js').then(async (firestore) => {
       allUsers = await firestore.getUsers();
+      // Refresh the access list so already-listed emails pick up names/avatars.
+      renderEmails();
     }).catch(err => {
       console.warn('[ACL Modal] Failed to load users for autocomplete:', err);
     });
@@ -734,9 +769,7 @@ export function openAclModal(page) {
 
         item.addEventListener('click', (e) => {
           e.stopPropagation();
-          emailInput.value = u.email;
-          suggestionList.style.display = 'none';
-          emailInput.focus();
+          selectUser(u);
         });
 
         suggestionList.appendChild(item);
@@ -767,6 +800,19 @@ export function openAclModal(page) {
       }
     };
     document.addEventListener('click', hideSuggestions);
+
+    // Add a known user picked from the autocomplete list directly.
+    const selectUser = (u) => {
+      const email = (u.email || '').trim().toLowerCase();
+      if (!email) return;
+      if (!allowedEmails.includes(email)) {
+        allowedEmails.push(email);
+        renderEmails();
+      }
+      emailInput.value = '';
+      renderSuggestions([]);
+      emailInput.focus();
+    };
 
     // Add email event
     const addEmail = () => {
@@ -801,9 +847,7 @@ export function openAclModal(page) {
         } else if (e.key === 'Enter') {
           e.preventDefault();
           if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < filteredUsersList.length) {
-            emailInput.value = filteredUsersList[selectedSuggestionIndex].email;
-            suggestionList.style.display = 'none';
-            selectedSuggestionIndex = -1;
+            selectUser(filteredUsersList[selectedSuggestionIndex]);
           } else {
             addEmail();
           }
