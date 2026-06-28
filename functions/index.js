@@ -177,7 +177,7 @@ Lang: DE/EN.`;
       
     } catch (err) {
       logger.error('[spellcheck] Error verifying token or calling Gemini', err);
-      res.status(500).send(`Internal Server Error: ${err.message}`);
+      res.status(500).send('Internal Server Error');
     }
   }
 );
