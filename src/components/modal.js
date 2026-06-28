@@ -2,6 +2,7 @@ import { getAllPages } from './sidebar.js';
 import { slugify } from '../utils/string.js';
 import { getCurrentPageId } from '../controllers/page.js';
 import i18next from '../i18n.js';
+import { auth } from '../firebase/config.js';
 
 /**
  * Custom Promise-based modal for confirming actions.
@@ -493,5 +494,232 @@ export function newPageModal(canBeChild = false) {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) cancel();
     });
+  });
+}
+
+/**
+ * Modal to manage page-level access control list (ACL).
+ */
+export function openAclModal(page) {
+  return new Promise((resolve) => {
+    const pageId = page.id;
+    let allowedEmails = Array.isArray(page.allowedEmails) ? [...page.allowedEmails] : ['*'];
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-box acl-modal-box';
+    modal.style.maxWidth = '500px';
+
+    const titleEl = document.createElement('h3');
+    titleEl.className = 'modal-title';
+    titleEl.textContent = i18next.t('profile.aclTitle') || 'Zugriffsberechtigungen';
+
+    const descEl = document.createElement('p');
+    descEl.className = 'modal-message';
+    descEl.style.marginBottom = '1rem';
+    descEl.textContent = i18next.t('profile.aclDesc') || `Verwalten Sie, wer auf "${page.title}" und alle Unterseiten zugreifen darf.`;
+
+    // Type Selector (Public vs Restricted)
+    const typeGroup = document.createElement('div');
+    typeGroup.className = 'form-group';
+    typeGroup.style.marginBottom = '1.5rem';
+    typeGroup.innerHTML = `<label style="display:block; margin-bottom: 0.5rem; font-weight:600;">Sichtbarkeit</label>`;
+
+    const radioPublic = document.createElement('label');
+    radioPublic.style.cssText = 'display:inline-flex; align-items:center; margin-right: 1.5rem; cursor:pointer; font-size:0.9rem; margin-bottom: 0.5rem;';
+    radioPublic.innerHTML = `<input type="radio" name="acl-type" value="public" style="margin-right:0.5rem;" ${allowedEmails.includes('*') ? 'checked' : ''}> Öffentlich (Alle mit @insel.ch)`;
+
+    const radioRestricted = document.createElement('label');
+    radioRestricted.style.cssText = 'display:inline-flex; align-items:center; cursor:pointer; font-size:0.9rem; margin-bottom: 0.5rem;';
+    radioRestricted.innerHTML = `<input type="radio" name="acl-type" value="restricted" style="margin-right:0.5rem;" ${!allowedEmails.includes('*') ? 'checked' : ''}> Eingeschränkt (Nur bestimmte Personen)`;
+
+    typeGroup.appendChild(radioPublic);
+    typeGroup.appendChild(radioRestricted);
+
+    // Restricted Section (emails list & input)
+    const restrictedSection = document.createElement('div');
+    restrictedSection.style.display = allowedEmails.includes('*') ? 'none' : 'block';
+
+    const emailInputGroup = document.createElement('div');
+    emailInputGroup.className = 'form-group';
+    emailInputGroup.style.marginBottom = '1rem';
+    emailInputGroup.innerHTML = `<label style="display:block; margin-bottom: 0.25rem; font-weight:600;">E-Mail hinzufügen</label>`;
+
+    const inputContainer = document.createElement('div');
+    inputContainer.style.cssText = 'display:flex; gap: 0.5rem;';
+
+    const emailInput = document.createElement('input');
+    emailInput.type = 'email';
+    emailInput.className = 'modal-input';
+    emailInput.placeholder = 'vorname.name@insel.ch';
+    emailInput.style.flex = '1';
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-secondary';
+    addBtn.textContent = 'Hinzufügen';
+    
+    inputContainer.appendChild(emailInput);
+    inputContainer.appendChild(addBtn);
+    emailInputGroup.appendChild(inputContainer);
+
+    const listGroup = document.createElement('div');
+    listGroup.className = 'form-group';
+    listGroup.innerHTML = `<label style="display:block; margin-bottom: 0.5rem; font-weight:600;">Personen mit Zugriff</label>`;
+
+    const emailList = document.createElement('div');
+    emailList.style.cssText = 'max-height: 150px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem; background: var(--bg-root); margin-bottom: 1rem;';
+
+    function renderEmails() {
+      emailList.innerHTML = '';
+      const listEmails = allowedEmails.filter(e => e !== '*');
+      if (listEmails.length === 0) {
+        emailList.innerHTML = `<div style="color:var(--text-muted); font-size:0.85rem; font-style:italic; padding: 0.25rem;">Noch keine E-Mails hinzugefügt. Die Seite wird für alle gesperrt sein.</div>`;
+        return;
+      }
+      listEmails.forEach(email => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border); font-size:0.9rem;';
+        if (email === listEmails[listEmails.length - 1]) item.style.borderBottom = 'none';
+
+        const text = document.createElement('span');
+        text.textContent = email;
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.style.cssText = 'background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center; padding: 2px 6px;';
+        delBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+        delBtn.addEventListener('click', () => {
+          allowedEmails = allowedEmails.filter(e => e !== email);
+          renderEmails();
+        });
+
+        item.appendChild(text);
+        item.appendChild(delBtn);
+        emailList.appendChild(item);
+      });
+    }
+
+    listGroup.appendChild(emailList);
+    restrictedSection.appendChild(emailInputGroup);
+    restrictedSection.appendChild(listGroup);
+
+    // Event listeners for Radios
+    const handleRadioChange = (e) => {
+      if (e.target.value === 'public') {
+        restrictedSection.style.display = 'none';
+        if (!allowedEmails.includes('*')) {
+          allowedEmails.push('*');
+        }
+      } else {
+        restrictedSection.style.display = 'block';
+        allowedEmails = allowedEmails.filter(e => e !== '*');
+        renderEmails();
+      }
+    };
+    radioPublic.querySelector('input').addEventListener('change', handleRadioChange);
+    radioRestricted.querySelector('input').addEventListener('change', handleRadioChange);
+
+    // Add email event
+    const addEmail = () => {
+      const email = emailInput.value.trim().toLowerCase();
+      if (!email) return;
+      if (!email.endsWith('@insel.ch') && email !== 'stephansdigitalassistent+wiki@gmail.com' && email !== 'stephansdigitalassistent@gmail.com') {
+        alert('Bitte geben Sie eine gültige @insel.ch E-Mail-Adresse ein.');
+        return;
+      }
+      if (allowedEmails.includes(email)) {
+        emailInput.value = '';
+        return;
+      }
+      allowedEmails.push(email);
+      emailInput.value = '';
+      renderEmails();
+    };
+    addBtn.addEventListener('click', addEmail);
+    emailInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addEmail();
+      }
+    });
+
+    // Buttons
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+    actions.style.marginTop = '1.5rem';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = i18next.t('common.cancel');
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-primary';
+    saveBtn.textContent = i18next.t('common.save');
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+
+    modal.appendChild(titleEl);
+    modal.appendChild(descEl);
+    modal.appendChild(typeGroup);
+    modal.appendChild(restrictedSection);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const cleanup = () => {
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
+    };
+
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Wird gespeichert...';
+      try {
+        const isPublic = radioPublic.querySelector('input').checked;
+        const finalAcl = isPublic ? ['*'] : allowedEmails.filter(e => e !== '*');
+        
+        // Ensure at least the current user remains in the list if restricted
+        const currentUser = auth.currentUser;
+        if (!isPublic && currentUser && currentUser.email && !finalAcl.includes(currentUser.email.toLowerCase())) {
+          finalAcl.push(currentUser.email.toLowerCase());
+        }
+
+        import('../firebase/firestore.js').then(async (firestore) => {
+          await firestore.updatePageAcl(pageId, finalAcl);
+          cleanup();
+          resolve(true);
+        }).catch(err => {
+          console.error(err);
+          alert('Fehler beim Laden der Datenbank-Module.');
+          saveBtn.disabled = false;
+          saveBtn.textContent = i18next.t('common.save');
+        });
+      } catch (err) {
+        console.error(err);
+        alert('Fehler beim Speichern der Berechtigungen.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = i18next.t('common.save');
+      }
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      cleanup();
+      resolve(false);
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        resolve(false);
+      }
+    });
+    
+    // Initial render
+    renderEmails();
   });
 }

@@ -31,6 +31,11 @@
         "region": "europe-west1"
       },
       {
+        "source": "/api/search",
+        "function": "searchPages",
+        "region": "europe-west1"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

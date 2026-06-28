@@ -7,6 +7,7 @@ import {
 } from 'y-protocols/awareness';
 import { db } from '../firebase/config.js';
 import i18next from '../i18n.js';
+import { showToast } from '../components/toast.js';
 import { 
   collection, 
   addDoc, 
@@ -66,6 +67,21 @@ export class FirestoreYjsProvider {
     this._writeDebounceMs = 1000;
     this._pendingUpdates = [];
     this._writeTimer = null;
+
+    this.isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    this.hadLocalEditsWhileOffline = false;
+
+    this._onlineHandler = () => {
+      this.isOnline = true;
+      if (this._pendingUpdates.length > 0) {
+        this.flushPending();
+      }
+      this._emitStatus();
+    };
+    this._offlineHandler = () => {
+      this.isOnline = false;
+      this._emitStatus();
+    };
   }
 
   get hasUnsavedChanges() {
@@ -222,13 +238,19 @@ export class FirestoreYjsProvider {
         this.pendingWrites++;
         this._emitStatus();
       }
-      clearTimeout(this._writeTimer);
-      this._writeTimer = setTimeout(() => this.flushPending(), this._writeDebounceMs);
 
-      // Check if we should trigger background compaction
-      this.localUpdateCount++;
-      if (this.localUpdateCount >= this.compactionThreshold) {
-        this.compact();
+      if (this.isOnline) {
+        clearTimeout(this._writeTimer);
+        this._writeTimer = setTimeout(() => this.flushPending(), this._writeDebounceMs);
+
+        // Check if we should trigger background compaction
+        this.localUpdateCount++;
+        if (this.localUpdateCount >= this.compactionThreshold) {
+          this.compact();
+        }
+      } else {
+        this.hadLocalEditsWhileOffline = true;
+        this._emitStatus();
       }
     });
 
@@ -260,20 +282,31 @@ export class FirestoreYjsProvider {
     // Cleanup when browser tab closes
     this.handleUnload = () => this.destroy();
     window.addEventListener('beforeunload', this.handleUnload);
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', this._onlineHandler);
+      window.addEventListener('offline', this._offlineHandler);
+    }
   }
 
   _attachUpdatesListener(fromTime) {
     const qUpdates = query(this.updatesRef, where('timestamp', '>=', fromTime), orderBy('timestamp', 'asc'));
     this.unsubUpdates = onSnapshot(qUpdates, (snapshot) => {
+      let remoteUpdatesCount = 0;
       snapshot.docChanges().forEach(change => {
         if (change.type === 'added') {
           const updateData = change.doc.data();
           if (updateData.clientId !== this.clientId && updateData.update) {
             const updateArr = updateData.update.toUint8Array();
             Y.applyUpdate(this.ydoc, updateArr, this);
+            remoteUpdatesCount++;
           }
         }
       });
+      if (remoteUpdatesCount > 0 && this.hadLocalEditsWhileOffline) {
+        this.hadLocalEditsWhileOffline = false;
+        showToast(i18next.t('messages.conflictMerged') || 'Konflikt gelöst: Gleichzeitige Änderungen wurden automatisch zusammengeführt.', 'info');
+      }
     });
   }
 
@@ -365,6 +398,10 @@ export class FirestoreYjsProvider {
     if (this.unsubUpdates) this.unsubUpdates();
     if (this.unsubAwareness) this.unsubAwareness();
     window.removeEventListener('beforeunload', this.handleUnload);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', this._onlineHandler);
+      window.removeEventListener('offline', this._offlineHandler);
+    }
 
     // Remove awareness doc from Firestore
     try {

@@ -1,8 +1,8 @@
-// Sidebar component — hierarchical page tree with real-time updates
 import { subscribeToPages, createPage, getDeletedPages, restorePage, permanentlyDeletePage, updatePageHierarchy, deletePage, getPage } from '../firebase/firestore.js';
 import { canEdit, onAuthChange } from '../firebase/auth.js';
-import { promptModal, confirmModal } from './modal.js';
+import { promptModal, confirmModal, openAclModal } from './modal.js';
 import i18next from '../i18n.js';
+import { auth } from '../firebase/config.js';
 
 // --- Hover prefetch ---
 // Warm the localStorage page cache on hover so the click feels instant.
@@ -120,6 +120,68 @@ let draggedPageId = null;
 let activeMenu = null;
 const expandedFolders = new Set();
 
+let serverSearchResults = null;
+let searchDebounceTimer = null;
+let isSearching = false;
+
+async function fetchSearchResults(queryText) {
+  if (!queryText.trim()) {
+    serverSearchResults = null;
+    isSearching = false;
+    const treeContainer = document.getElementById('page-tree');
+    if (treeContainer) renderTree(treeContainer);
+    return;
+  }
+
+  isSearching = true;
+  
+  try {
+    const user = auth.currentUser;
+    const token = user ? await user.getIdToken() : '';
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ query: queryText })
+    });
+    if (!res.ok) throw new Error('Search failed');
+    const data = await res.json();
+    
+    if (searchFilter.trim().toLowerCase() !== queryText.trim().toLowerCase()) {
+      return;
+    }
+    serverSearchResults = data.results || [];
+  } catch (err) {
+    if (searchFilter.trim().toLowerCase() !== queryText.trim().toLowerCase()) {
+      return;
+    }
+    console.warn('[Sidebar Search] Server search failed, falling back to local:', err);
+    serverSearchResults = null;
+  } finally {
+    if (searchFilter.trim().toLowerCase() !== queryText.trim().toLowerCase()) {
+      return;
+    }
+    isSearching = false;
+    const treeContainer = document.getElementById('page-tree');
+    if (treeContainer) renderTree(treeContainer);
+  }
+}
+
+function debounceSearch(queryText) {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    if (navigator.onLine) {
+      fetchSearchResults(queryText);
+    } else {
+      serverSearchResults = null;
+      const treeContainer = document.getElementById('page-tree');
+      if (treeContainer) renderTree(treeContainer);
+    }
+  }, 300);
+}
+
 // --- Options popover menu (singleton) ---
 
 function dismissOnClick(e) {
@@ -180,6 +242,15 @@ function openOptionsMenu(anchorEl, { parentId, page }) {
       }
     });
     menu.appendChild(del);
+
+    const editAcls = document.createElement('button');
+    editAcls.className = 'sidebar-options-item';
+    editAcls.textContent = i18next.t('navigation.editAcls', 'Zugriff verwalten');
+    editAcls.addEventListener('click', async () => {
+      closeMenu();
+      await openAclModal(page);
+    });
+    menu.appendChild(editAcls);
 
     // Add Move Up/Down buttons if sort mode is manual
     if (currentSortMode === 'manual') {
@@ -378,7 +449,12 @@ export function initSidebar(treeContainer, onNavigate) {
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
       searchFilter = e.target.value.toLowerCase();
-      renderTree(treeContainer);
+      if (searchFilter) {
+        debounceSearch(searchFilter);
+      } else {
+        serverSearchResults = null;
+        renderTree(treeContainer);
+      }
     });
   }
 
@@ -462,13 +538,30 @@ export function getBreadcrumb(pageId) {
  * Render the hierarchical tree
  */
 function renderTree(container) {
-  const filteredPages = searchFilter
-    ? allPages.filter((p) => {
+  if (searchFilter && isSearching && (!serverSearchResults || serverSearchResults.length === 0)) {
+    const loading = document.createElement('div');
+    loading.style.cssText = 'padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;';
+    loading.textContent = i18next.t('common.loading') || 'Wird geladen...';
+    container.replaceChildren(loading);
+    return;
+  }
+
+  let filteredPages = [];
+  if (searchFilter) {
+    if (navigator.onLine && serverSearchResults !== null) {
+      filteredPages = serverSearchResults
+        .map(result => allPages.find(p => p.id === result.id))
+        .filter(Boolean);
+    } else {
+      filteredPages = allPages.filter((p) => {
         const inTitle = p.title && p.title.toLowerCase().includes(searchFilter);
         const inContent = p.content && p.content.toLowerCase().includes(searchFilter);
         return inTitle || inContent;
-      })
-    : allPages;
+      });
+    }
+  } else {
+    filteredPages = allPages;
+  }
 
   // Build tree from flat list
   let rootPages = searchFilter

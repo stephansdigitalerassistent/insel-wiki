@@ -52,6 +52,21 @@ export async function createPage(title, parentId = null, createdBy = '') {
     parentId = 'page-tests';
   }
 
+  let allowedEmails = ['*'];
+  if (parentId && parentId !== 'page-tests') {
+    try {
+      const parentSnap = await getDoc(doc(db, PAGES_COLLECTION, parentId));
+      if (parentSnap.exists()) {
+        const parentData = parentSnap.data();
+        if (parentData.allowedEmails) {
+          allowedEmails = parentData.allowedEmails;
+        }
+      }
+    } catch (e) {
+      console.warn('[Firestore] Failed to inherit parent ACL:', e);
+    }
+  }
+
   const pagesRef = collection(db, PAGES_COLLECTION);
   const docRef = await addDoc(pagesRef, {
     title,
@@ -61,7 +76,8 @@ export async function createPage(title, parentId = null, createdBy = '') {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy,
-    deleted: false
+    deleted: false,
+    allowedEmails
   });
   return docRef.id;
 }
@@ -487,12 +503,20 @@ export async function getHistory(pageId) {
  */
 export function subscribeToPages(callback) {
   const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(pagesRef, orderBy('order', 'asc'));
+  const user = auth.currentUser;
+  const userEmail = user ? user.email : '';
+  const q = query(pagesRef, where('allowedEmails', 'array-contains-any', [userEmail || 'guest', '*']));
   return onSnapshot(q, (snapshot) => {
     const pages = snapshot.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter((p) => !p.deleted);
+    pages.sort((a, b) => (a.order || 0) - (b.order || 0));
     callback(pages);
+  }, (err) => {
+    console.warn('[Firestore] subscribeToPages query error:', err);
+    // If the allowedEmails field doesn't exist on all docs yet, array-contains-any query might be bypassed or fail.
+    // Try to fall back to a public query or empty list
+    callback([]);
   });
 }
 
@@ -507,6 +531,9 @@ export function subscribeToPage(pageId, callback) {
     } else {
       callback(null);
     }
+  }, (err) => {
+    console.warn('[Firestore] subscribeToPage permission error or other failure:', err);
+    callback(null);
   });
 }
 
@@ -515,7 +542,9 @@ export function subscribeToPage(pageId, callback) {
  */
 export async function updatePageHierarchy(pageId, parentId, order) {
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
-  await updateDoc(pageRef, { parentId, order, updatedAt: serverTimestamp() });
+  const committer = new BatchCommitter(db);
+  committer.update(pageRef, { parentId, order, updatedAt: serverTimestamp() });
+  await committer.commit();
 }
 
 /**
@@ -600,7 +629,8 @@ export async function ensurePageExists(pageId, title = 'Tests', parentId = null)
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       createdBy: 'system',
-      deleted: false
+      deleted: false,
+      allowedEmails: ['*']
     });
     return true;
   }
@@ -647,6 +677,30 @@ export async function logClientError(message, stack = null, options = {}) {
   } catch (err) {
     // Use console.warn to avoid recursion loops with console.error
     console.warn('[Firestore] Failed to log client error to database:', err);
+  }
+}
+
+/**
+ * Recursively update allowedEmails for a page and its subtree in Firestore.
+ */
+export async function updatePageAcl(pageId, allowedEmails) {
+  const committer = new BatchCommitter(db);
+  await _recursiveUpdateAcl(pageId, allowedEmails, committer);
+  await committer.commit();
+}
+
+async function _recursiveUpdateAcl(pageId, allowedEmails, committer) {
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  committer.update(pageRef, {
+    allowedEmails,
+    updatedAt: serverTimestamp()
+  });
+
+  const pagesRef = collection(db, PAGES_COLLECTION);
+  const q = query(pagesRef, where('parentId', '==', pageId));
+  const snapshot = await getDocs(q);
+  for (const child of snapshot.docs) {
+    await _recursiveUpdateAcl(child.id, allowedEmails, committer);
   }
 }
 

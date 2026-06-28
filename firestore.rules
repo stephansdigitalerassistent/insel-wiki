@@ -12,6 +12,23 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email.matches('.*@insel[.]ch$');
     }
 
+    function isPageAccessible(resourceData) {
+      return isBot() || (
+        isInsel() && 
+        'allowedEmails' in resourceData && 
+        resourceData.allowedEmails != null && 
+        resourceData.allowedEmails.hasAny(['*', request.auth.token.email])
+      );
+    }
+
+    function getPageData(pageId) {
+      return get(/databases/$(database)/documents/pages/$(pageId)).data;
+    }
+
+    function canAccessPage(pageId) {
+      return isBot() || (isInsel() && isPageAccessible(getPageData(pageId)));
+    }
+
     match /registration_requests/{tokenId} {
       // Only the backend bot has access (registration data no longer stored here)
       allow read, write, delete: if isBot();
@@ -37,46 +54,48 @@ service cloud.firestore {
     }
 
     match /pages/{pageId} {
-      allow read: if isInsel() || isBot();
+      allow read: if isPageAccessible(resource.data);
       // Writes must come from an @insel.ch user, AND if the document carries
       // a `lastSavedBy` field it must equal the authenticated email — so it
       // cannot be spoofed to impersonate an admin and trigger the DevOps bot.
-      allow write: if isInsel()
+      allow write: if isInsel() && (resource == null || isPageAccessible(resource.data))
+        && 'allowedEmails' in request.resource.data
+        && request.resource.data.allowedEmails is list
+        && request.resource.data.allowedEmails.size() > 0
         && (resource == null ?
             (!('lastSavedBy' in request.resource.data) || request.resource.data.lastSavedBy == request.auth.token.email) :
             (!(request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSavedBy'])) || request.resource.data.lastSavedBy == request.auth.token.email)
            );
-      allow delete: if isInsel() || isBot();
+      allow delete: if (isInsel() && isPageAccessible(resource.data)) || isBot();
       
       match /history/{historyId} {
-        allow read: if isInsel() || isBot();
-        allow write: if isInsel();
-        allow delete: if isInsel() || isBot();
+        allow read: if canAccessPage(pageId);
+        allow write: if canAccessPage(pageId) && isInsel();
+        allow delete: if canAccessPage(pageId) && (isInsel() || isBot());
       }
 
-
       match /yjs_updates/{updateId} {
-        allow read: if isInsel() || isBot();
-        allow write: if isInsel();
-        allow delete: if isInsel() || isBot();
+        allow read: if canAccessPage(pageId);
+        allow write: if canAccessPage(pageId) && isInsel();
+        allow delete: if canAccessPage(pageId) && (isInsel() || isBot());
       }
 
       match /yjs_awareness/{clientId} {
-        allow read: if isInsel() || isBot();
-        allow write: if isInsel();
-        allow delete: if isInsel() || isBot();
+        allow read: if canAccessPage(pageId);
+        allow write: if canAccessPage(pageId) && isInsel();
+        allow delete: if canAccessPage(pageId) && (isInsel() || isBot());
       }
 
       match /yjs_state/{stateId} {
-        allow read: if isInsel() || isBot();
-        allow write: if isInsel();
-        allow delete: if isInsel() || isBot();
+        allow read: if canAccessPage(pageId);
+        allow write: if canAccessPage(pageId) && isInsel();
+        allow delete: if canAccessPage(pageId) && (isInsel() || isBot());
       }
 
       match /comments/{commentId} {
-        allow read: if isInsel() || isBot();
-        allow write: if isInsel();
-        allow delete: if isInsel() || isBot();
+        allow read: if canAccessPage(pageId);
+        allow write: if canAccessPage(pageId) && isInsel();
+        allow delete: if canAccessPage(pageId) && (isInsel() || isBot());
       }
     }
 

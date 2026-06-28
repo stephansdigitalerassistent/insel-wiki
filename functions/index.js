@@ -27,6 +27,33 @@ import { projectToMarkdown } from './lib/convert.js';
 initializeApp();
 const db = getFirestore();
 
+async function getEmbedding(text, apiKey) {
+  if (!text || !apiKey) return null;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'models/text-embedding-004',
+        content: {
+          parts: [{ text: text.slice(0, 8000) }]
+        }
+      })
+    });
+    if (!res.ok) {
+      const errorText = await res.text();
+      logger.error(`[embedding] API error: ${res.status}`, errorText);
+      return null;
+    }
+    const data = await res.json();
+    return data?.embedding?.values || null;
+  } catch (err) {
+    logger.error('[embedding] Failed to get embedding', err);
+    return null;
+  }
+}
+
 export const projectYjsToMarkdown = onDocumentWritten(
   {
     document: 'pages/{pageId}/yjs_state/{stateId}',
@@ -76,14 +103,29 @@ export const projectYjsToMarkdown = onDocumentWritten(
     // needless updatedAt churn on every compaction of an idle page.
     if (pageSnap.data()?.content === markdown) return;
 
-    // Write only content + a projection marker. Deliberately does NOT touch
-    // lastSavedBy/lastSavedByName/Photo, so the "last edited by" badge keeps
-    // showing the human author rather than the projector.
-    await pageRef.update({
+    // Get API Key and compute embedding
+    const apiKey = process.env.GEMINI_API_KEY;
+    let embedding = null;
+    if (apiKey) {
+      const title = pageSnap.data()?.title || '';
+      embedding = await getEmbedding(`${title}\n\n${markdown}`, apiKey);
+    }
+
+    const updateData = {
       content: markdown,
       contentProjectedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+
+    // Write content + a projection marker.
+    await pageRef.update(updateData);
+
+    if (embedding) {
+      await db.collection('page_embeddings').doc(pageId).set({
+        embedding,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
 
     logger.info(`[projection] ${pageId}: wrote ${markdown.length} chars`);
   }
@@ -180,6 +222,122 @@ Lang: DE/EN.`;
       
     } catch (err) {
       logger.error('[spellcheck] Error verifying token or calling Gemini', err);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+);
+
+export const searchPages = onRequest(
+  {
+    region: 'europe-west1',
+  },
+  async (req, res) => {
+    // 1. Verify Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).send('Unauthorized: Missing token');
+      return;
+    }
+    const token = authHeader.split('Bearer ')[1];
+    
+    try {
+      const decodedToken = await getAuth().verifyIdToken(token);
+      const email = decodedToken.email;
+      
+      // 2. Validate email domain (gate)
+      const isBot = email && (email === 'stephansdigitalassistent+wiki@gmail.com' || email === 'stephansdigitalassistent@gmail.com');
+      const isInsel = email && email.endsWith('@insel.ch');
+      
+      if (!isInsel && !isBot) {
+        res.status(403).send('Forbidden: Unauthorized email domain');
+        return;
+      }
+      
+      // 3. Process parameters
+      const searchQuery = req.body ? req.body.query : null;
+      if (!searchQuery || typeof searchQuery !== 'string') {
+        res.status(400).send('Bad Request: Missing query parameter');
+        return;
+      }
+      
+      const apiKey = process.env.GEMINI_API_KEY;
+      
+      // Fetch all non-deleted pages and embeddings in parallel
+      const [pagesSnap, embeddingsSnap] = await Promise.all([
+        db.collection('pages').where('deleted', '==', false).get(),
+        db.collection('page_embeddings').get()
+      ]);
+      
+      const embeddingsMap = new Map(
+        embeddingsSnap.docs.map(d => [d.id, d.data().embedding])
+      );
+
+      const pages = pagesSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Filter pages according to ACL/Access tiers
+      const userEmail = email;
+      const allowedPages = pages.filter(page => {
+        return isBot || !page.allowedEmails || 
+               page.allowedEmails.length === 0 || 
+               page.allowedEmails.includes('*') || 
+               page.allowedEmails.includes(userEmail);
+      });
+
+      // If we have an API key and query, try to do semantic search
+      let queryEmbedding = null;
+      if (apiKey) {
+        queryEmbedding = await getEmbedding(searchQuery, apiKey);
+      }
+
+      const results = [];
+      const queryLower = searchQuery.toLowerCase();
+
+      for (const page of allowedPages) {
+        let similarity = 0;
+        let isSemantic = false;
+
+        // Keyword match
+        const inTitle = page.title && page.title.toLowerCase().includes(queryLower);
+        const inContent = page.content && page.content.toLowerCase().includes(queryLower);
+        const keywordMatch = inTitle || inContent;
+
+        const pageEmbedding = embeddingsMap.get(page.id);
+        if (queryEmbedding && pageEmbedding && Array.isArray(pageEmbedding) && pageEmbedding.length === queryEmbedding.length) {
+          // Calculate cosine similarity
+          let dotProduct = 0;
+          let normA = 0;
+          let normB = 0;
+          for (let i = 0; i < queryEmbedding.length; i++) {
+            dotProduct += queryEmbedding[i] * pageEmbedding[i];
+            normA += queryEmbedding[i] * queryEmbedding[i];
+            normB += pageEmbedding[i] * pageEmbedding[i];
+          }
+          similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+          isSemantic = true;
+        }
+
+        // If it matches via keyword or has a high similarity score, include it
+        if (keywordMatch || (isSemantic && similarity > 0.45)) {
+          results.push({
+            id: page.id,
+            title: page.title || '',
+            score: keywordMatch ? (similarity + 0.5) : similarity, // boost keyword match slightly for relevance
+            isSemantic,
+            similarity
+          });
+        }
+      }
+
+      // Sort by score descending
+      results.sort((a, b) => b.score - a.score);
+
+      // Return top 20 results
+      res.json({ results: results.slice(0, 20) });
+    } catch (err) {
+      logger.error('[searchPages] Error searching pages', err);
       res.status(500).send('Internal Server Error');
     }
   }

@@ -98,7 +98,8 @@
     "noPages": "Pas encore de pages",
     "newSubpage": "Nouvelle sous-page",
     "moveUp": "Monter",
-    "moveDown": "Descendre"
+    "moveDown": "Descendre",
+    "editAcls": "Gérer l'accès"
   },
   "editor": {
     "titlePlaceholder": "Titre de la page...",
@@ -183,6 +184,9 @@
     "unsavedChangesTitle": "Quitter la page ?",
     "unsavedChangesMessage": "Il y a des modifications non enregistrées (synchronisation en cours). Voulez-vous vraiment quitter la page ?",
     "offlineMode": "Mode hors ligne actif",
+    "offlinePending": "Hors ligne ({{count}} en attente)",
+    "offlineSynced": "Hors ligne (Enregistré localement)",
+    "conflictMerged": "Conflit résolu: Les modifications simultanées ont été fusionnées automatiquement.",
     "clipboardCopied": "Copié dans le presse-papiers.",
     "clipboardError": "Impossible de copier — veuillez sélectionner manuellement.",
     "forgotInstructions": "Veuillez envoyer l'e-mail vide depuis votre adresse @insel.ch pour demander la réinitialisation.",

@@ -152,10 +152,12 @@ async function init() {
     });
     reevaluateSpellCheck();
 
-    if (user && isTestEnv) {
-      ensurePageExists('page-tests', 'Tests').catch(err => {
-        console.warn('[Insel-Wiki] Failed to ensure root test page exists:', err);
-      });
+    if (user) {
+      if (isTestEnv) {
+        ensurePageExists('page-tests', 'Tests').catch(err => {
+          console.warn('[Insel-Wiki] Failed to ensure root test page exists:', err);
+        });
+      }
     }
   });
 

@@ -218,6 +218,11 @@ export function initPageController(opts) {
     }
   });
 
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', recomputeSaveStatus);
+    window.addEventListener('offline', recomputeSaveStatus);
+  }
+
   // Flush pending writes whenever the tab is being closed or backgrounded.
   // Firestore's IndexedDB persistence queues these writes if the network is
   // unavailable, and replays them on next load.
@@ -490,7 +495,22 @@ function renderPresence(users) {
 
 function setSaveStatus(status) {
   if (!saveStatus) return;
-  saveStatus.classList.remove('saving', 'error');
+  saveStatus.classList.remove('saving', 'error', 'offline');
+  
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  if (!isOnline) {
+    saveStatus.classList.add('offline');
+    const provider = getProvider();
+    const queuedCount = (provider && provider._pendingUpdates ? provider._pendingUpdates.length : 0) + pendingTitleSaves;
+    if (queuedCount > 0) {
+      saveStatus.textContent = i18next.t('messages.offlinePending', { count: queuedCount }) || `Offline (${queuedCount} ausstehend)`;
+      saveStatus.classList.add('saving');
+    } else {
+      saveStatus.textContent = i18next.t('messages.offlineSynced') || 'Offline (Lokal gesichert)';
+    }
+    return;
+  }
+
   switch (status) {
     case 'saving':
       saveStatus.textContent = i18next.t('common.saving');

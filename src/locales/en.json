@@ -98,7 +98,8 @@
     "noPages": "No pages yet",
     "newSubpage": "New subpage",
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "editAcls": "Manage Access"
   },
   "editor": {
     "titlePlaceholder": "Page title...",
@@ -183,6 +184,9 @@
     "unsavedChangesTitle": "Leave page?",
     "unsavedChangesMessage": "There are unsaved changes. Do you really want to leave?",
     "offlineMode": "Offline mode active",
+    "offlinePending": "Offline ({{count}} pending)",
+    "offlineSynced": "Offline (Synced locally)",
+    "conflictMerged": "Conflict resolved: Concurrent changes were automatically merged.",
     "clipboardCopied": "Copied to clipboard.",
     "clipboardError": "Could not copy — please select manually.",
     "forgotInstructions": "Please send the empty email from your @insel.ch address to request a reset.",
