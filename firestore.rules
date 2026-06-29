@@ -22,12 +22,14 @@ service cloud.firestore {
       );
     }
 
-    function getPageData(pageId) {
-      return get(/databases/$(database)/documents/pages/$(pageId)).data;
-    }
-
     function canAccessPage(pageId) {
-      return isBot() || (isInsel() && isPageAccessible(getPageData(pageId)));
+      let path = /databases/$(database)/documents/pages/$(pageId);
+      return isBot() || (
+        isInsel() && (
+          !exists(path) ||
+          isPageAccessible(get(path).data)
+        )
+      );
     }
 
     match /registration_requests/{tokenId} {

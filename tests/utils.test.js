@@ -5,9 +5,9 @@
  * Simple test runner — no framework needed.
  */
 
-// We use dynamic import since these are ESM modules
 const { formatDefaultName, slugify } = await import('../src/utils/string.js');
 const { extractTasksFromContent: extractTasks } = await import('../src/utils/tasks.js');
+const { shouldLogError } = await import('../src/utils/error-filter.js');
 
 let passed = 0;
 let failed = 0;
@@ -156,6 +156,31 @@ test('ignores regular text without task markers', () => {
   const content = 'This is just regular text without any tasks.';
   const tasks = extractTasks(content);
   expect(tasks).toHaveLength(0);
+});
+
+// ──────────────────────────────────────────────
+console.log('\n🛡️  shouldLogError()');
+// ──────────────────────────────────────────────
+
+test('allows logging of normal/unexpected client errors', () => {
+  expect(shouldLogError('TypeError: Cannot read properties of null (reading "title")')).toBeTruthy();
+  expect(shouldLogError('Failed to fetch api endpoint')).toBeTruthy();
+});
+
+test('filters out expected future update time warning', () => {
+  expect(shouldLogError('@firebase/firestore: Firestore (12.14.0): Detected an update time that is in the future: 1782713782238 > 1782713782098')).toBeFalsy();
+});
+
+test('filters out expected permission-denied errors', () => {
+  expect(shouldLogError('FirebaseError: [code=permission-denied]: Missing or insufficient permissions.')).toBeFalsy();
+  expect(shouldLogError('Error loading trash: Missing or insufficient permissions.')).toBeFalsy();
+});
+
+test('filters out original ignored patterns', () => {
+  expect(shouldLogError('Failed to get document from cache')).toBeFalsy();
+  expect(shouldLogError('Firestore backend is unavailable')).toBeFalsy();
+  expect(shouldLogError('BloomFilter error occurred')).toBeFalsy();
+  expect(shouldLogError('[Firestore] Failed to log client error to database')).toBeFalsy();
 });
 
 // ──────────────────────────────────────────────

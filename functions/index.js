@@ -33,7 +33,10 @@ async function getEmbedding(text, apiKey) {
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Referer': 'https://insel-wiki.web.app/'
+      },
       body: JSON.stringify({
         model: 'models/text-embedding-004',
         content: {
@@ -187,7 +190,10 @@ Lang: DE/EN.`;
       
       const geminiRes = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Referer': 'https://insel-wiki.web.app/'
+        },
         body: JSON.stringify({
           system_instruction: {
             parts: [{ text: systemPrompt }]

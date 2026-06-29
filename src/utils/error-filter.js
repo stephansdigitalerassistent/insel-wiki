@@ -12,6 +12,9 @@ export const IGNORED_ERROR_PATTERNS = [
   'unavailable',
   'BloomFilter error',
   '[Firestore] Failed to log client error',
+  'Detected an update time that is in the future',
+  'permission-denied',
+  'Missing or insufficient permissions',
 ];
 
 /**
