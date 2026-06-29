@@ -322,59 +322,49 @@ class BatchCommitter {
  * Soft-delete a page and all its children recursively.
  */
 export async function deletePage(pageId) {
-  const committer = new BatchCommitter(db);
-  await _recursiveSoftDelete(pageId, committer);
-  await committer.commit();
-}
-
-async function _recursiveSoftDelete(pageId, committer) {
-  const pagesRef = collection(db, PAGES_COLLECTION);
-  const userEmail = auth?.currentUser?.email;
-  const q = userEmail 
-    ? query(pagesRef, where('parentId', '==', pageId), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
-    : query(pagesRef, where('parentId', '==', pageId));
-  const snapshot = await getDocs(q);
-  for (const child of snapshot.docs) {
-    await _recursiveSoftDelete(child.id, committer);
+  if (isTestEnv) {
+    return _clientDeletePage(pageId);
   }
-
-  const pageRef = doc(db, PAGES_COLLECTION, pageId);
-  committer.update(pageRef, {
-    deleted: true,
-    deletedAt: serverTimestamp()
+  let token = '';
+  if (auth.currentUser) {
+    token = await auth.currentUser.getIdToken();
+  }
+  const response = await fetch('/api/deletePage', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ pageId })
   });
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    throw new Error(`Failed to delete page: ${errorBody || response.statusText}`);
+  }
 }
 
-/**
- * Restore a soft-deleted page and all its children.
- */
 export async function restorePage(pageId) {
-  const committer = new BatchCommitter(db);
-  await _recursiveRestore(pageId, committer);
-  await committer.commit();
-}
-
-async function _recursiveRestore(pageId, committer) {
-  const pageRef = doc(db, PAGES_COLLECTION, pageId);
-  committer.update(pageRef, {
-    deleted: false,
-    deletedAt: null
+  if (isTestEnv) {
+    return _clientRestorePage(pageId);
+  }
+  let token = '';
+  if (auth.currentUser) {
+    token = await auth.currentUser.getIdToken();
+  }
+  const response = await fetch('/api/restorePage', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ pageId })
   });
-
-  const pagesRef = collection(db, PAGES_COLLECTION);
-  const userEmail = auth?.currentUser?.email;
-  const q = userEmail
-    ? query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
-    : query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true));
-  const snapshot = await getDocs(q);
-  for (const child of snapshot.docs) {
-    await _recursiveRestore(child.id, committer);
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    throw new Error(`Failed to restore page: ${errorBody || response.statusText}`);
   }
 }
 
-/**
- * Get all soft-deleted pages (for the trash view).
- */
 export async function getDeletedPages() {
   const pagesRef = collection(db, PAGES_COLLECTION);
   const userEmail = auth?.currentUser?.email;
@@ -385,15 +375,27 @@ export async function getDeletedPages() {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/**
- * Move a page and all its children + history to the archive collection,
- * then remove it from the active pages collection.
- */
 export async function permanentlyDeletePage(pageId) {
+  if (isTestEnv) {
+    return _clientPermanentlyDeletePage(pageId);
+  }
   try {
-    const committer = new BatchCommitter(db);
-    await _recursivePermanentDelete(pageId, committer);
-    await committer.commit();
+    let token = '';
+    if (auth.currentUser) {
+      token = await auth.currentUser.getIdToken();
+    }
+    const response = await fetch('/api/permanentlyDeletePage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ pageId })
+    });
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '');
+      throw new Error(errorBody || response.statusText);
+    }
     console.log(`[Insel-Wiki] Page ${pageId} successfully moved to archive.`);
   } catch (err) {
     console.error('Error during permanent delete (archiving):', err);
@@ -412,91 +414,6 @@ export async function permanentlyDeletePage(pageId) {
     }
     throw err;
   }
-}
-
-async function _recursivePermanentDelete(pageId, committer) {
-  const pageRef = doc(db, PAGES_COLLECTION, pageId);
-  const pageSnap = await getDoc(pageRef);
-  
-  if (!pageSnap.exists()) return;
-  const pageData = pageSnap.data();
-
-  // 1. Archive children first (recursive)
-  const pagesRef = collection(db, PAGES_COLLECTION);
-  const userEmail = auth?.currentUser?.email;
-  const q = userEmail
-    ? query(pagesRef, where('parentId', '==', pageId), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
-    : query(pagesRef, where('parentId', '==', pageId));
-  const snapshot = await getDocs(q);
-  for (const child of snapshot.docs) {
-    await _recursivePermanentDelete(child.id, committer);
-  }
-
-  // 2. Archive history subcollection
-  const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
-  const historySnaps = await getDocs(historyRef);
-  const archivedHistoryRef = collection(db, ARCHIVE_COLLECTION, pageId, 'history');
-  
-  for (const snap of historySnaps.docs) {
-    committer.set(doc(archivedHistoryRef, snap.id), {
-      ...snap.data(),
-      archivedAt: serverTimestamp()
-    });
-    committer.delete(snap.ref);
-  }
-
-  // 3. Archive comments subcollection
-  const commentsRef = collection(db, PAGES_COLLECTION, pageId, 'comments');
-  const commentSnaps = await getDocs(commentsRef);
-  const archivedCommentsRef = collection(db, ARCHIVE_COLLECTION, pageId, 'comments');
-
-  for (const snap of commentSnaps.docs) {
-    committer.set(doc(archivedCommentsRef, snap.id), {
-      ...snap.data(),
-      archivedAt: serverTimestamp()
-    });
-    committer.delete(snap.ref);
-  }
-
-  // 4. Delete other dangling subcollections (Yjs state/updates/awareness, presence)
-  const yjsUpdatesRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_updates');
-  const yjsUpdatesSnaps = await getDocs(yjsUpdatesRef);
-  for (const snap of yjsUpdatesSnaps.docs) {
-    committer.delete(snap.ref);
-  }
-
-  const yjsAwarenessRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_awareness');
-  const yjsAwarenessSnaps = await getDocs(yjsAwarenessRef);
-  for (const snap of yjsAwarenessSnaps.docs) {
-    committer.delete(snap.ref);
-  }
-
-  const yjsStateRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_state');
-  const yjsStateSnaps = await getDocs(yjsStateRef);
-  for (const snap of yjsStateSnaps.docs) {
-    committer.delete(snap.ref);
-  }
-
-  try {
-    const presenceRef = collection(db, PAGES_COLLECTION, pageId, 'presence');
-    const presenceSnaps = await getDocs(presenceRef);
-    for (const snap of presenceSnaps.docs) {
-      committer.delete(snap.ref);
-    }
-  } catch (err) {
-    console.log('[Firestore] Skipping presence cleanup (likely deprecated/inaccessible):', err.message || err);
-  }
-
-  // 5. Archive the main page document
-  const archiveRef = doc(db, ARCHIVE_COLLECTION, pageId);
-  committer.set(archiveRef, {
-    ...pageData,
-    archivedAt: serverTimestamp(),
-    originalCollection: PAGES_COLLECTION
-  });
-
-  // 6. Finally delete the original page
-  committer.delete(pageRef);
 }
 
 /**
@@ -699,12 +616,163 @@ export async function logClientError(message, stack = null, options = {}) {
  * Recursively update allowedEmails for a page and its subtree in Firestore.
  */
 export async function updatePageAcl(pageId, allowedEmails) {
+  if (isTestEnv) {
+    return _clientUpdatePageAcl(pageId, allowedEmails);
+  }
+  let token = '';
+  if (auth.currentUser) {
+    token = await auth.currentUser.getIdToken();
+  }
+  const response = await fetch('/api/updatePageAcl', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ pageId, allowedEmails })
+  });
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    throw new Error(`Failed to update ACL: ${errorBody || response.statusText}`);
+  }
+}
+
+async function _clientDeletePage(pageId) {
   const committer = new BatchCommitter(db);
-  await _recursiveUpdateAcl(pageId, allowedEmails, committer);
+  await _clientRecursiveSoftDelete(pageId, committer);
   await committer.commit();
 }
 
-async function _recursiveUpdateAcl(pageId, allowedEmails, committer) {
+async function _clientRecursiveSoftDelete(pageId, committer) {
+  const pagesRef = collection(db, PAGES_COLLECTION);
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail
+    ? query(pagesRef, where('parentId', '==', pageId), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
+    : query(pagesRef, where('parentId', '==', pageId));
+  const snapshot = await getDocs(q);
+  for (const child of snapshot.docs) {
+    await _clientRecursiveSoftDelete(child.id, committer);
+  }
+
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  committer.update(pageRef, {
+    deleted: true,
+    deletedAt: serverTimestamp()
+  });
+}
+
+async function _clientRestorePage(pageId) {
+  const committer = new BatchCommitter(db);
+  await _clientRecursiveRestore(pageId, committer);
+  await committer.commit();
+}
+
+async function _clientRecursiveRestore(pageId, committer) {
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  committer.update(pageRef, {
+    deleted: false,
+    deletedAt: null
+  });
+
+  const pagesRef = collection(db, PAGES_COLLECTION);
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail
+    ? query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
+    : query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true));
+  const snapshot = await getDocs(q);
+  for (const child of snapshot.docs) {
+    await _clientRecursiveRestore(child.id, committer);
+  }
+}
+
+async function _clientPermanentlyDeletePage(pageId) {
+  const committer = new BatchCommitter(db);
+  await _clientRecursivePermanentDelete(pageId, committer);
+  await committer.commit();
+}
+
+async function _clientRecursivePermanentDelete(pageId, committer) {
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  const pageSnap = await getDoc(pageRef);
+  if (!pageSnap.exists()) return;
+  const pageData = pageSnap.data();
+
+  const pagesRef = collection(db, PAGES_COLLECTION);
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail
+    ? query(pagesRef, where('parentId', '==', pageId), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
+    : query(pagesRef, where('parentId', '==', pageId));
+  const snapshot = await getDocs(q);
+  for (const child of snapshot.docs) {
+    await _clientRecursivePermanentDelete(child.id, committer);
+  }
+
+  const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
+  const historySnaps = await getDocs(historyRef);
+  const archivedHistoryRef = collection(db, ARCHIVE_COLLECTION, pageId, 'history');
+  for (const snap of historySnaps.docs) {
+    committer.set(doc(archivedHistoryRef, snap.id), {
+      ...snap.data(),
+      archivedAt: serverTimestamp()
+    });
+    committer.delete(snap.ref);
+  }
+
+  const commentsRef = collection(db, PAGES_COLLECTION, pageId, 'comments');
+  const commentSnaps = await getDocs(commentsRef);
+  const archivedCommentsRef = collection(db, ARCHIVE_COLLECTION, pageId, 'comments');
+  for (const snap of commentSnaps.docs) {
+    committer.set(doc(archivedCommentsRef, snap.id), {
+      ...snap.data(),
+      archivedAt: serverTimestamp()
+    });
+    committer.delete(snap.ref);
+  }
+
+  const yjsUpdatesRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_updates');
+  const yjsUpdatesSnaps = await getDocs(yjsUpdatesRef);
+  for (const snap of yjsUpdatesSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  const yjsAwarenessRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_awareness');
+  const yjsAwarenessSnaps = await getDocs(yjsAwarenessRef);
+  for (const snap of yjsAwarenessSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  const yjsStateRef = collection(db, PAGES_COLLECTION, pageId, 'yjs_state');
+  const yjsStateSnaps = await getDocs(yjsStateRef);
+  for (const snap of yjsStateSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  try {
+    const presenceRef = collection(db, PAGES_COLLECTION, pageId, 'presence');
+    const presenceSnaps = await getDocs(presenceRef);
+    for (const snap of presenceSnaps.docs) {
+      committer.delete(snap.ref);
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  const archiveRef = doc(db, ARCHIVE_COLLECTION, pageId);
+  committer.set(archiveRef, {
+    ...pageData,
+    archivedAt: serverTimestamp(),
+    originalCollection: PAGES_COLLECTION
+  });
+  committer.delete(pageRef);
+}
+
+async function _clientUpdatePageAcl(pageId, allowedEmails) {
+  const committer = new BatchCommitter(db);
+  await _clientRecursiveUpdateAcl(pageId, allowedEmails, committer);
+  await committer.commit();
+}
+
+async function _clientRecursiveUpdateAcl(pageId, allowedEmails, committer) {
   const pageRef = doc(db, PAGES_COLLECTION, pageId);
   committer.update(pageRef, {
     allowedEmails,
@@ -718,7 +786,7 @@ async function _recursiveUpdateAcl(pageId, allowedEmails, committer) {
     : query(pagesRef, where('parentId', '==', pageId));
   const snapshot = await getDocs(q);
   for (const child of snapshot.docs) {
-    await _recursiveUpdateAcl(child.id, allowedEmails, committer);
+    await _clientRecursiveUpdateAcl(child.id, allowedEmails, committer);
   }
 }
 

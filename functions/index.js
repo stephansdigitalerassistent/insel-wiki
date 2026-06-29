@@ -348,3 +348,313 @@ export const searchPages = onRequest(
     }
   }
 );
+
+class BatchCommitter {
+  constructor(db) {
+    this.db = db;
+    this.batches = [db.batch()];
+    this.count = 0;
+  }
+
+  set(ref, data, options) {
+    const currentBatch = this.batches[this.batches.length - 1];
+    if (options) {
+      currentBatch.set(ref, data, options);
+    } else {
+      currentBatch.set(ref, data);
+    }
+    this._increment();
+  }
+
+  update(ref, data) {
+    const currentBatch = this.batches[this.batches.length - 1];
+    currentBatch.update(ref, data);
+    this._increment();
+  }
+
+  delete(ref) {
+    const currentBatch = this.batches[this.batches.length - 1];
+    currentBatch.delete(ref);
+    this._increment();
+  }
+
+  _increment() {
+    this.count++;
+    if (this.count >= 400) {
+      this.batches.push(this.db.batch());
+      this.count = 0;
+    }
+  }
+
+  async commit() {
+    for (const batch of this.batches) {
+      await batch.commit();
+    }
+  }
+}
+
+async function checkAuthAndPageAccess(req, res, pageId) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).send('Unauthorized: Missing token');
+    return null;
+  }
+  const token = authHeader.split('Bearer ')[1];
+  
+  try {
+    const decodedToken = await getAuth().verifyIdToken(token);
+    const email = decodedToken.email;
+    
+    const isBot = email && (email === 'stephansdigitalassistent+wiki@gmail.com' || email === 'stephansdigitalassistent@gmail.com');
+    const isInsel = email && email.endsWith('@insel.ch');
+    
+    if (!isInsel && !isBot) {
+      res.status(403).send('Forbidden: Unauthorized email domain');
+      return null;
+    }
+    
+    if (isBot) {
+      return { email, isBot: true };
+    }
+    
+    const userSnap = await db.collection('users').doc(decodedToken.uid).get();
+    if (!userSnap.exists || userSnap.data().isActive !== true) {
+      res.status(403).send('Forbidden: User is not active');
+      return null;
+    }
+
+    if (pageId) {
+      const pageSnap = await db.collection('pages').doc(pageId).get();
+      if (!pageSnap.exists) {
+        res.status(404).send('Not Found: Page does not exist');
+        return null;
+      }
+      const pageData = pageSnap.data();
+      const allowedEmails = pageData.allowedEmails || ['*'];
+      const isAllowed = allowedEmails.includes('*') || allowedEmails.includes(email);
+      if (!isAllowed) {
+        res.status(403).send('Forbidden: Insufficient permissions for this page');
+        return null;
+      }
+    }
+    
+    return { email, isBot: false };
+  } catch (err) {
+    logger.error('[auth] Verification failed', err);
+    res.status(401).send('Unauthorized');
+    return null;
+  }
+}
+
+export const deletePagePrivileged = onRequest(
+  { region: 'europe-west1' },
+  async (req, res) => {
+    const { pageId } = req.body;
+    if (!pageId) {
+      res.status(400).send('Bad Request: Missing pageId');
+      return;
+    }
+    
+    const authUser = await checkAuthAndPageAccess(req, res, pageId);
+    if (!authUser) return;
+    
+    try {
+      const committer = new BatchCommitter(db);
+      await _recursiveSoftDelete(pageId, committer);
+      await committer.commit();
+      res.json({ success: true });
+    } catch (err) {
+      logger.error(`[deletePagePrivileged] Failed for page ${pageId}`, err);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+);
+
+async function _recursiveSoftDelete(pageId, committer) {
+  const snapshot = await db.collection('pages').where('parentId', '==', pageId).get();
+  for (const child of snapshot.docs) {
+    await _recursiveSoftDelete(child.id, committer);
+  }
+  
+  const pageRef = db.collection('pages').doc(pageId);
+  committer.update(pageRef, {
+    deleted: true,
+    deletedAt: FieldValue.serverTimestamp()
+  });
+}
+
+export const restorePagePrivileged = onRequest(
+  { region: 'europe-west1' },
+  async (req, res) => {
+    const { pageId } = req.body;
+    if (!pageId) {
+      res.status(400).send('Bad Request: Missing pageId');
+      return;
+    }
+    
+    const authUser = await checkAuthAndPageAccess(req, res, pageId);
+    if (!authUser) return;
+    
+    try {
+      const committer = new BatchCommitter(db);
+      await _recursiveRestore(pageId, committer);
+      await committer.commit();
+      res.json({ success: true });
+    } catch (err) {
+      logger.error(`[restorePagePrivileged] Failed for page ${pageId}`, err);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+);
+
+async function _recursiveRestore(pageId, committer) {
+  const pageRef = db.collection('pages').doc(pageId);
+  committer.update(pageRef, {
+    deleted: false,
+    deletedAt: null
+  });
+  
+  const snapshot = await db.collection('pages')
+    .where('parentId', '==', pageId)
+    .where('deleted', '==', true)
+    .get();
+  for (const child of snapshot.docs) {
+    await _recursiveRestore(child.id, committer);
+  }
+}
+
+export const updatePageAclPrivileged = onRequest(
+  { region: 'europe-west1' },
+  async (req, res) => {
+    const { pageId, allowedEmails } = req.body;
+    if (!pageId || !allowedEmails || !Array.isArray(allowedEmails)) {
+      res.status(400).send('Bad Request: Missing or invalid parameters');
+      return;
+    }
+    
+    const authUser = await checkAuthAndPageAccess(req, res, pageId);
+    if (!authUser) return;
+    
+    try {
+      const committer = new BatchCommitter(db);
+      await _recursiveUpdateAcl(pageId, allowedEmails, committer);
+      await committer.commit();
+      res.json({ success: true });
+    } catch (err) {
+      logger.error(`[updatePageAclPrivileged] Failed for page ${pageId}`, err);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+);
+
+async function _recursiveUpdateAcl(pageId, allowedEmails, committer) {
+  const pageRef = db.collection('pages').doc(pageId);
+  committer.update(pageRef, {
+    allowedEmails,
+    updatedAt: FieldValue.serverTimestamp()
+  });
+
+  const snapshot = await db.collection('pages').where('parentId', '==', pageId).get();
+  for (const child of snapshot.docs) {
+    await _recursiveUpdateAcl(child.id, allowedEmails, committer);
+  }
+}
+
+export const permanentlyDeletePagePrivileged = onRequest(
+  { region: 'europe-west1' },
+  async (req, res) => {
+    const { pageId } = req.body;
+    if (!pageId) {
+      res.status(400).send('Bad Request: Missing pageId');
+      return;
+    }
+    
+    const authUser = await checkAuthAndPageAccess(req, res, pageId);
+    if (!authUser) return;
+    
+    try {
+      const committer = new BatchCommitter(db);
+      await _recursivePermanentDelete(pageId, committer);
+      await committer.commit();
+      res.json({ success: true });
+    } catch (err) {
+      logger.error(`[permanentlyDeletePagePrivileged] Failed for page ${pageId}`, err);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+);
+
+async function _recursivePermanentDelete(pageId, committer) {
+  const pageRef = db.collection('pages').doc(pageId);
+  const pageSnap = await pageRef.get();
+  if (!pageSnap.exists) return;
+  const pageData = pageSnap.data();
+
+  // 1. Archive children first (recursive)
+  const snapshot = await db.collection('pages').where('parentId', '==', pageId).get();
+  for (const child of snapshot.docs) {
+    await _recursivePermanentDelete(child.id, committer);
+  }
+
+  // 2. Archive history subcollection
+  const historyRef = pageRef.collection('history');
+  const historySnaps = await historyRef.get();
+  const archivedHistoryRef = db.collection('archive').doc(pageId).collection('history');
+  
+  for (const snap of historySnaps.docs) {
+    committer.set(archivedHistoryRef.doc(snap.id), {
+      ...snap.data(),
+      archivedAt: FieldValue.serverTimestamp()
+    });
+    committer.delete(snap.ref);
+  }
+
+  // 3. Archive comments subcollection
+  const commentsRef = pageRef.collection('comments');
+  const commentSnaps = await commentsRef.get();
+  const archivedCommentsRef = db.collection('archive').doc(pageId).collection('comments');
+
+  for (const snap of commentSnaps.docs) {
+    committer.set(archivedCommentsRef.doc(snap.id), {
+      ...snap.data(),
+      archivedAt: FieldValue.serverTimestamp()
+    });
+    committer.delete(snap.ref);
+  }
+
+  // 4. Delete other subcollections
+  const yjsUpdatesRef = pageRef.collection('yjs_updates');
+  const yjsUpdatesSnaps = await yjsUpdatesRef.get();
+  for (const snap of yjsUpdatesSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  const yjsAwarenessRef = pageRef.collection('yjs_awareness');
+  const yjsAwarenessSnaps = await yjsAwarenessRef.get();
+  for (const snap of yjsAwarenessSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  const yjsStateRef = pageRef.collection('yjs_state');
+  const yjsStateSnaps = await yjsStateRef.get();
+  for (const snap of yjsStateSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  const presenceRef = pageRef.collection('presence');
+  const presenceSnaps = await presenceRef.get();
+  for (const snap of presenceSnaps.docs) {
+    committer.delete(snap.ref);
+  }
+
+  // 5. Archive the main page document
+  const archiveRef = db.collection('archive').doc(pageId);
+  committer.set(archiveRef, {
+    ...pageData,
+    archivedAt: FieldValue.serverTimestamp(),
+    originalCollection: 'pages'
+  });
+
+  // 6. Delete the page document
+  committer.delete(pageRef);
+}

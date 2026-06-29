@@ -36,6 +36,26 @@
         "region": "europe-west1"
       },
       {
+        "source": "/api/deletePage",
+        "function": "deletePagePrivileged",
+        "region": "europe-west1"
+      },
+      {
+        "source": "/api/restorePage",
+        "function": "restorePagePrivileged",
+        "region": "europe-west1"
+      },
+      {
+        "source": "/api/permanentlyDeletePage",
+        "function": "permanentlyDeletePagePrivileged",
+        "region": "europe-west1"
+      },
+      {
+        "source": "/api/updatePageAcl",
+        "function": "updatePageAclPrivileged",
+        "region": "europe-west1"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
