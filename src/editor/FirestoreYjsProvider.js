@@ -307,6 +307,8 @@ export class FirestoreYjsProvider {
         this.hadLocalEditsWhileOffline = false;
         showToast(i18next.t('messages.conflictMerged') || 'Konflikt gelöst: Gleichzeitige Änderungen wurden automatisch zusammengeführt.', 'info');
       }
+    }, (err) => {
+      console.warn('[FirestoreYjsProvider] unsubUpdates permission error or other failure:', err);
     });
   }
 
@@ -323,6 +325,8 @@ export class FirestoreYjsProvider {
           }
         }
       });
+    }, (err) => {
+      console.warn('[FirestoreYjsProvider] unsubAwareness permission error or other failure:', err);
     });
   }
 

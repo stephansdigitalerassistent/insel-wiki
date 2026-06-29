@@ -1,27 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { login as sharedLogin } from './helpers/auth.js';
+import { ensureSidebarClosed } from './helpers/page-utils.js';
 
 const TEST_USER = 'test.user@insel.ch';
 const TEST_PASS = 'InselWikiTest2026!';
 
 async function login(page) {
   await sharedLogin(page, TEST_USER, TEST_PASS);
-}
-
-async function ensureSidebarClosed(page) {
-  const toggle = page.locator('#sidebar-toggle');
-  if (await toggle.isVisible()) {
-    const sidebar = page.locator('#sidebar');
-    if (await sidebar.evaluate(el => el.classList.contains('open'))) {
-      const overlay = page.locator('#sidebar-overlay');
-      if (await overlay.isVisible()) {
-        await overlay.click({ force: true });
-      } else {
-        await toggle.click({ force: true });
-      }
-      await expect(sidebar).not.toHaveClass(/open/, { timeout: 2000 });
-    }
-  }
 }
 
 test.describe('Date in Link Verification', () => {

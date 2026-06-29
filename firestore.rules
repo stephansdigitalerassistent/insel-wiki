@@ -15,6 +15,7 @@ service cloud.firestore {
     function isPageAccessible(resourceData) {
       return isBot() || (
         isInsel() && 
+        resourceData != null &&
         'allowedEmails' in resourceData && 
         resourceData.allowedEmails != null && 
         resourceData.allowedEmails.hasAny(['*', request.auth.token.email])
@@ -54,7 +55,7 @@ service cloud.firestore {
     }
 
     match /pages/{pageId} {
-      allow read: if isPageAccessible(resource.data);
+      allow read: if isBot() || (isInsel() && (resource == null || isPageAccessible(resource.data)));
       // Writes must come from an @insel.ch user, AND if the document carries
       // a `lastSavedBy` field it must equal the authenticated email — so it
       // cannot be spoofed to impersonate an admin and trigger the DevOps bot.

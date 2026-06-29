@@ -222,6 +222,8 @@
     "changePassword": "Modifier le mot de passe",
     "oldPassword": "Mot de passe actuel",
     "newPassword": "Nouveau mot de passe",
-    "passwordHint": "Min. 10 caractères (A-Z, a-z, 0-9)"
+    "passwordHint": "Min. 10 caractères (A-Z, a-z, 0-9)",
+    "aclTitle": "Autorisations d'accès",
+    "aclDesc": "Gérez qui peut accéder à \"{{title}}\" et à toutes ses sous-pages."
   }
 }

@@ -1,29 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { login as sharedLogin } from './helpers/auth.js';
+import { ensureSidebarOpen } from './helpers/page-utils.js';
 
 const TEST_USER = 'test.user@insel.ch';
 const TEST_PASS = 'InselWikiTest2026!';
 
 async function login(page) {
   await sharedLogin(page, TEST_USER, TEST_PASS);
-}
-
-async function ensureSidebarOpen(page) {
-  const toggle = page.locator('#sidebar-toggle');
-  const sidebar = page.locator('#sidebar');
-  
-  // Wait for initial load - 'domcontentloaded' is faster and usually enough
-  await page.waitForLoadState('domcontentloaded');
-
-  if (await toggle.isVisible()) {
-    await expect(async () => {
-      if (await sidebar.evaluate(el => !el.classList.contains('open'))) {
-        await toggle.click({ force: true });
-        await expect(sidebar).toHaveClass(/open/, { timeout: 3000 });
-      }
-    }).toPass({ timeout: 5000 });
-    await expect(sidebar).toHaveClass(/open/);
-  }
 }
 
 test.describe('Comprehensive Feature Tests', () => {

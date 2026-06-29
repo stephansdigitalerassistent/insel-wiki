@@ -519,7 +519,7 @@ export function openAclModal(page) {
     const descEl = document.createElement('p');
     descEl.className = 'modal-message';
     descEl.style.marginBottom = '1rem';
-    descEl.textContent = i18next.t('profile.aclDesc') || `Verwalten Sie, wer auf "${page.title}" und alle Unterseiten zugreifen darf.`;
+    descEl.textContent = i18next.t('profile.aclDesc', { title: page.title }) || `Verwalten Sie, wer auf "${page.title}" und alle Unterseiten zugreifen darf.`;
 
     // Type Selector (Public vs Restricted)
     const typeGroup = document.createElement('div');

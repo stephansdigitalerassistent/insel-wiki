@@ -7,12 +7,22 @@ export async function ensureSidebarOpen(page) {
   const toggle = page.locator('#sidebar-toggle');
   if (await toggle.isVisible()) {
     const sidebar = page.locator('#sidebar');
-    await expect(async () => {
-      if (await sidebar.evaluate(el => !el.classList.contains('open'))) {
-        await toggle.click({ force: true });
-        await expect(sidebar).toHaveClass(/open/, { timeout: 1000 });
-      }
-    }).toPass({ timeout: 5000 });
+    const isMobile = await page.evaluate(() => window.innerWidth <= 768);
+    if (isMobile) {
+      await expect(async () => {
+        if (await sidebar.evaluate(el => !el.classList.contains('open'))) {
+          await toggle.click({ force: true });
+          await expect(sidebar).toHaveClass(/open/, { timeout: 1000 });
+        }
+      }).toPass({ timeout: 5000 });
+    } else {
+      await expect(async () => {
+        if (await sidebar.evaluate(el => el.classList.contains('collapsed'))) {
+          await toggle.click({ force: true });
+          await expect(sidebar).not.toHaveClass(/collapsed/, { timeout: 1000 });
+        }
+      }).toPass({ timeout: 5000 });
+    }
     await page.waitForTimeout(500);
   }
 }
@@ -24,15 +34,18 @@ export async function ensureSidebarClosed(page) {
   const toggle = page.locator('#sidebar-toggle');
   if (await toggle.isVisible()) {
     const sidebar = page.locator('#sidebar');
-    if (await sidebar.evaluate(el => el.classList.contains('open'))) {
-      const overlay = page.locator('#sidebar-overlay');
-      if (await overlay.isVisible()) {
-        await overlay.click({ force: true });
-      } else {
-        await toggle.click({ force: true });
+    const isMobile = await page.evaluate(() => window.innerWidth <= 768);
+    if (isMobile) {
+      if (await sidebar.evaluate(el => el.classList.contains('open'))) {
+        const overlay = page.locator('#sidebar-overlay');
+        if (await overlay.isVisible()) {
+          await overlay.click({ force: true });
+        } else {
+          await toggle.click({ force: true });
+        }
+        await expect(sidebar).not.toHaveClass(/open/, { timeout: 1000 });
+        await page.waitForTimeout(500);
       }
-      await expect(sidebar).not.toHaveClass(/open/, { timeout: 1000 });
-      await page.waitForTimeout(500);
     }
   }
 }

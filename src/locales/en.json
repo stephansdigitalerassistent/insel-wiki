@@ -222,6 +222,8 @@
     "changePassword": "Change Password",
     "oldPassword": "Current Password",
     "newPassword": "New Password",
-    "passwordHint": "Min. 10 characters (A-Z, a-z, 0-9)"
+    "passwordHint": "Min. 10 characters (A-Z, a-z, 0-9)",
+    "aclTitle": "Access Permissions",
+    "aclDesc": "Manage who can access \"{{title}}\" and all its subpages."
   }
 }

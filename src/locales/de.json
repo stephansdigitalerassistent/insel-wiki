@@ -222,6 +222,8 @@
     "changePassword": "Passwort ändern",
     "oldPassword": "Aktuelles Passwort",
     "newPassword": "Neues Passwort",
-    "passwordHint": "Mind. 10 Zeichen (A-Z, a-z, 0-9)"
+    "passwordHint": "Mind. 10 Zeichen (A-Z, a-z, 0-9)",
+    "aclTitle": "Zugriffsberechtigungen",
+    "aclDesc": "Verwalten Sie, wer auf \"{{title}}\" und alle Unterseiten zugreifen darf."
   }
 }

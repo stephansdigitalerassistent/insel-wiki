@@ -329,7 +329,10 @@ export async function deletePage(pageId) {
 
 async function _recursiveSoftDelete(pageId, committer) {
   const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(pagesRef, where('parentId', '==', pageId));
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail 
+    ? query(pagesRef, where('parentId', '==', pageId), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
+    : query(pagesRef, where('parentId', '==', pageId));
   const snapshot = await getDocs(q);
   for (const child of snapshot.docs) {
     await _recursiveSoftDelete(child.id, committer);
@@ -359,7 +362,10 @@ async function _recursiveRestore(pageId, committer) {
   });
 
   const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true));
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail
+    ? query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
+    : query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', true));
   const snapshot = await getDocs(q);
   for (const child of snapshot.docs) {
     await _recursiveRestore(child.id, committer);
@@ -371,7 +377,10 @@ async function _recursiveRestore(pageId, committer) {
  */
 export async function getDeletedPages() {
   const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(pagesRef, where('deleted', '==', true), orderBy('deletedAt', 'desc'));
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail
+    ? query(pagesRef, where('deleted', '==', true), where('allowedEmails', 'array-contains-any', [userEmail, '*']), orderBy('deletedAt', 'desc'))
+    : query(pagesRef, where('deleted', '==', true), orderBy('deletedAt', 'desc'));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
@@ -414,7 +423,10 @@ async function _recursivePermanentDelete(pageId, committer) {
 
   // 1. Archive children first (recursive)
   const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(pagesRef, where('parentId', '==', pageId));
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail
+    ? query(pagesRef, where('parentId', '==', pageId), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
+    : query(pagesRef, where('parentId', '==', pageId));
   const snapshot = await getDocs(q);
   for (const child of snapshot.docs) {
     await _recursivePermanentDelete(child.id, committer);
@@ -552,7 +564,10 @@ export async function updatePageHierarchy(pageId, parentId, order) {
  */
 export async function getChildren(pageId) {
   const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', false), orderBy('order', 'asc'));
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail
+    ? query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', false), where('allowedEmails', 'array-contains-any', [userEmail, '*']), orderBy('order', 'asc'))
+    : query(pagesRef, where('parentId', '==', pageId), where('deleted', '==', false), orderBy('order', 'asc'));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
@@ -697,7 +712,10 @@ async function _recursiveUpdateAcl(pageId, allowedEmails, committer) {
   });
 
   const pagesRef = collection(db, PAGES_COLLECTION);
-  const q = query(pagesRef, where('parentId', '==', pageId));
+  const userEmail = auth?.currentUser?.email;
+  const q = userEmail
+    ? query(pagesRef, where('parentId', '==', pageId), where('allowedEmails', 'array-contains-any', [userEmail, '*']))
+    : query(pagesRef, where('parentId', '==', pageId));
   const snapshot = await getDocs(q);
   for (const child of snapshot.docs) {
     await _recursiveUpdateAcl(child.id, allowedEmails, committer);

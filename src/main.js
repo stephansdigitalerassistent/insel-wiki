@@ -2,7 +2,7 @@
 // Thin orchestrator that wires together all controllers and components.
 
 import i18next, { translatePage } from './i18n.js';
-import { initAuth, onAuthChange, canEdit } from './firebase/auth.js';
+import { initAuth, onAuthChange, canEdit, isLoggedIn } from './firebase/auth.js';
 import { setEditable, getProvider, reevaluateSpellCheck } from './editor/editor.js';
 import { slugify } from './utils/string.js';
 import { initSidebar } from './components/sidebar.js';
@@ -37,6 +37,12 @@ let ignoreNextHashCheck = false;
 let previousHash = window.location.hash;
 
 async function handleRoute() {
+  if (!isLoggedIn()) {
+    console.log('[Insel-Wiki] Skipping route handling: user not logged in.');
+    showEmptyState();
+    return;
+  }
+
   const skipCheck = ignoreNextHashCheck;
   ignoreNextHashCheck = false;
 
@@ -157,6 +163,7 @@ async function init() {
     reevaluateSpellCheck();
 
     if (user) {
+      handleRoute();
       if (isTestEnv) {
         ensurePageExists('page-tests', 'Tests').catch(err => {
           console.warn('[Insel-Wiki] Failed to ensure root test page exists:', err);
