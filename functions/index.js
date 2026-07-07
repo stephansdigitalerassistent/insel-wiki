@@ -58,6 +58,12 @@ async function getEmbedding(text, apiKey) {
   }
 }
 
+function checkAcl(pageData, user) {
+  if (user.isBot) return true;
+  const allowedEmails = (pageData.allowedEmails && pageData.allowedEmails.length > 0) ? pageData.allowedEmails : ['*'];
+  return allowedEmails.includes('*') || allowedEmails.includes(user.email);
+}
+
 export const projectYjsToMarkdown = onDocumentWritten(
   {
     document: 'pages/{pageId}/yjs_state/{stateId}',
@@ -284,12 +290,7 @@ export const searchPages = onRequest(
         ...doc.data()
       }));
 
-      // Filter pages according to ACL/Access tiers
-      const userEmail = email;
-      const allowedPages = pages.filter(page => {
-        const allowedEmails = page.allowedEmails || ['*'];
-        return isBot || allowedEmails.includes('*') || allowedEmails.includes(userEmail);
-      });
+      const allowedPages = pages.filter(page => checkAcl(page, { email, isBot }));
 
       // If we have an API key and query, try to do semantic search
       let queryEmbedding = null;
@@ -348,11 +349,7 @@ export const searchPages = onRequest(
   }
 );
 
-function checkAcl(pageData, user) {
-  if (user.isBot) return true;
-  const allowedEmails = pageData.allowedEmails || ['*'];
-  return allowedEmails.includes('*') || allowedEmails.includes(user.email);
-}
+
 
 async function checkAuthAndPageAccess(req, res, pageId) {
   const authHeader = req.headers.authorization;
@@ -400,9 +397,7 @@ async function checkAuthAndPageAccess(req, res, pageId) {
         return null;
       }
       const pageData = pageSnap.data();
-      const allowedEmails = pageData.allowedEmails || ['*'];
-      const isAllowed = allowedEmails.includes('*') || allowedEmails.includes(email);
-      if (!isAllowed) {
+      if (!checkAcl(pageData, { email, isBot })) {
         res.status(403).send('Forbidden: Insufficient permissions for this page');
         return null;
       }
@@ -511,7 +506,7 @@ export const updatePageAclPrivileged = onRequest(
   { region: 'europe-west1', timeoutSeconds: 300 },
   async (req, res) => {
     const { pageId, allowedEmails } = req.body;
-    if (!pageId || !allowedEmails || !Array.isArray(allowedEmails)) {
+    if (!pageId || !allowedEmails || !Array.isArray(allowedEmails) || allowedEmails.length === 0) {
       res.status(400).send('Bad Request: Missing or invalid parameters');
       return;
     }
