@@ -1,5 +1,6 @@
 // Firestore CRUD operations for wiki pages
 import { db, auth, isTestEnv } from './config.js';
+import { BatchCommitter as BaseBatchCommitter } from '../../functions/lib/batch-committer.js';
 import {
   collection,
   doc,
@@ -273,49 +274,33 @@ export async function updatePageTitle(pageId, title) {
  * If a write in a later chunk fails, updates/deletes in earlier chunks will already have been committed. 
  * For instance, in permanentlyDeletePage, a mid-way failure could leave a page partially archived/deleted.
  */
-class BatchCommitter {
+class BatchCommitter extends BaseBatchCommitter {
   constructor(databaseInstance) {
-    this.db = databaseInstance;
-    this.batches = [writeBatch(this.db)];
-    this.count = 0;
+    super(databaseInstance, () => writeBatch(databaseInstance));
   }
+}
 
-  set(ref, data, options) {
-    const currentBatch = this.batches[this.batches.length - 1];
-    if (options) {
-      currentBatch.set(ref, data, options);
-    } else {
-      currentBatch.set(ref, data);
-    }
-    this._increment();
+async function callPrivilegedEndpoint(url, body, errorPrefix) {
+  let token = '';
+  if (auth.currentUser) {
+    token = await auth.currentUser.getIdToken();
   }
-
-  update(ref, data) {
-    const currentBatch = this.batches[this.batches.length - 1];
-    currentBatch.update(ref, data);
-    this._increment();
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    const errMsg = errorBody || response.statusText;
+    const err = new Error(errorPrefix ? `${errorPrefix}: ${errMsg}` : errMsg);
+    err.status = response.status;
+    throw err;
   }
-
-  delete(ref) {
-    const currentBatch = this.batches[this.batches.length - 1];
-    currentBatch.delete(ref);
-    this._increment();
-  }
-
-  _increment() {
-    this.count++;
-    if (this.count >= 400) {
-      this.batches.push(writeBatch(this.db));
-      this.count = 0;
-    }
-  }
-
-  async commit() {
-    // Commit sequentially to stop on the first error and prevent further chunk pollution
-    for (const batch of this.batches) {
-      await batch.commit();
-    }
-  }
+  return response;
 }
 
 /**
@@ -325,44 +310,14 @@ export async function deletePage(pageId) {
   if (isTestEnv) {
     return _clientDeletePage(pageId);
   }
-  let token = '';
-  if (auth.currentUser) {
-    token = await auth.currentUser.getIdToken();
-  }
-  const response = await fetch('/api/deletePage', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({ pageId })
-  });
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => '');
-    throw new Error(`Failed to delete page: ${errorBody || response.statusText}`);
-  }
+  await callPrivilegedEndpoint('/api/deletePage', { pageId }, 'Failed to delete page');
 }
 
 export async function restorePage(pageId) {
   if (isTestEnv) {
     return _clientRestorePage(pageId);
   }
-  let token = '';
-  if (auth.currentUser) {
-    token = await auth.currentUser.getIdToken();
-  }
-  const response = await fetch('/api/restorePage', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({ pageId })
-  });
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => '');
-    throw new Error(`Failed to restore page: ${errorBody || response.statusText}`);
-  }
+  await callPrivilegedEndpoint('/api/restorePage', { pageId }, 'Failed to restore page');
 }
 
 export async function getDeletedPages() {
@@ -380,37 +335,25 @@ export async function permanentlyDeletePage(pageId) {
     return _clientPermanentlyDeletePage(pageId);
   }
   try {
-    let token = '';
-    if (auth.currentUser) {
-      token = await auth.currentUser.getIdToken();
-    }
-    const response = await fetch('/api/permanentlyDeletePage', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ pageId })
-    });
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => '');
-      throw new Error(errorBody || response.statusText);
-    }
+    await callPrivilegedEndpoint('/api/permanentlyDeletePage', { pageId });
     console.log(`[Insel-Wiki] Page ${pageId} successfully moved to archive.`);
   } catch (err) {
     console.error('Error during permanent delete (archiving):', err);
-    try {
-      const pageRef = doc(db, PAGES_COLLECTION, pageId);
-      const pageSnap = await getDoc(pageRef);
-      if (pageSnap.exists()) {
-        await updateDoc(pageRef, {
-          archiveFailed: true,
-          archiveError: err.message || String(err),
-          updatedAt: serverTimestamp()
-        });
+    // Only perform compensating write if it wasn't an auth/permission/forbidden/notfound error (status 401, 403, 404)
+    if (err.status !== 401 && err.status !== 403 && err.status !== 404) {
+      try {
+        const pageRef = doc(db, PAGES_COLLECTION, pageId);
+        const pageSnap = await getDoc(pageRef);
+        if (pageSnap.exists()) {
+          await updateDoc(pageRef, {
+            archiveFailed: true,
+            archiveError: err.message || String(err),
+            updatedAt: serverTimestamp()
+          });
+        }
+      } catch (innerErr) {
+        console.error('Failed to write compensating archive failure state:', innerErr);
       }
-    } catch (innerErr) {
-      console.error('Failed to write compensating archive failure state:', innerErr);
     }
     throw err;
   }
@@ -619,22 +562,7 @@ export async function updatePageAcl(pageId, allowedEmails) {
   if (isTestEnv) {
     return _clientUpdatePageAcl(pageId, allowedEmails);
   }
-  let token = '';
-  if (auth.currentUser) {
-    token = await auth.currentUser.getIdToken();
-  }
-  const response = await fetch('/api/updatePageAcl', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({ pageId, allowedEmails })
-  });
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => '');
-    throw new Error(`Failed to update ACL: ${errorBody || response.statusText}`);
-  }
+  await callPrivilegedEndpoint('/api/updatePageAcl', { pageId, allowedEmails }, 'Failed to update ACL');
 }
 
 async function _clientDeletePage(pageId) {

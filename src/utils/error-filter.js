@@ -15,6 +15,8 @@ export const IGNORED_ERROR_PATTERNS = [
   'Detected an update time that is in the future',
   'permission-denied',
   'Missing or insufficient permissions',
+  'Unauthorized',
+  'Forbidden',
 ];
 
 /**

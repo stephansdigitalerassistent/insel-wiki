@@ -908,16 +908,27 @@ export function openAclModal(page) {
           finalAcl.push(currentUser.email.toLowerCase());
         }
 
-        import('../firebase/firestore.js').then(async (firestore) => {
-          await firestore.updatePageAcl(pageId, finalAcl);
-          cleanup();
-          resolve(true);
-        }).catch(err => {
-          console.error(err);
+        let firestore;
+        try {
+          firestore = await import('../firebase/firestore.js');
+        } catch (importErr) {
+          console.error(importErr);
           alert('Fehler beim Laden der Datenbank-Module.');
           saveBtn.disabled = false;
           saveBtn.textContent = i18next.t('common.save');
-        });
+          return;
+        }
+
+        try {
+          await firestore.updatePageAcl(pageId, finalAcl);
+          cleanup();
+          resolve(true);
+        } catch (saveErr) {
+          console.error(saveErr);
+          alert(`Fehler beim Speichern der Berechtigungen: ${saveErr.message || saveErr}`);
+          saveBtn.disabled = false;
+          saveBtn.textContent = i18next.t('common.save');
+        }
       } catch (err) {
         console.error(err);
         alert('Fehler beim Speichern der Berechtigungen.');

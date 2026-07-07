@@ -23,6 +23,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { projectToMarkdown } from './lib/convert.js';
+import { BatchCommitter } from './lib/batch-committer.js';
 
 initializeApp();
 const db = getFirestore();
@@ -286,10 +287,8 @@ export const searchPages = onRequest(
       // Filter pages according to ACL/Access tiers
       const userEmail = email;
       const allowedPages = pages.filter(page => {
-        return isBot || !page.allowedEmails || 
-               page.allowedEmails.length === 0 || 
-               page.allowedEmails.includes('*') || 
-               page.allowedEmails.includes(userEmail);
+        const allowedEmails = page.allowedEmails || ['*'];
+        return isBot || allowedEmails.includes('*') || allowedEmails.includes(userEmail);
       });
 
       // If we have an API key and query, try to do semantic search
@@ -349,48 +348,10 @@ export const searchPages = onRequest(
   }
 );
 
-class BatchCommitter {
-  constructor(db) {
-    this.db = db;
-    this.batches = [db.batch()];
-    this.count = 0;
-  }
-
-  set(ref, data, options) {
-    const currentBatch = this.batches[this.batches.length - 1];
-    if (options) {
-      currentBatch.set(ref, data, options);
-    } else {
-      currentBatch.set(ref, data);
-    }
-    this._increment();
-  }
-
-  update(ref, data) {
-    const currentBatch = this.batches[this.batches.length - 1];
-    currentBatch.update(ref, data);
-    this._increment();
-  }
-
-  delete(ref) {
-    const currentBatch = this.batches[this.batches.length - 1];
-    currentBatch.delete(ref);
-    this._increment();
-  }
-
-  _increment() {
-    this.count++;
-    if (this.count >= 400) {
-      this.batches.push(this.db.batch());
-      this.count = 0;
-    }
-  }
-
-  async commit() {
-    for (const batch of this.batches) {
-      await batch.commit();
-    }
-  }
+function checkAcl(pageData, user) {
+  if (user.isBot) return true;
+  const allowedEmails = pageData.allowedEmails || ['*'];
+  return allowedEmails.includes('*') || allowedEmails.includes(user.email);
 }
 
 async function checkAuthAndPageAccess(req, res, pageId) {
@@ -414,7 +375,15 @@ async function checkAuthAndPageAccess(req, res, pageId) {
     }
     
     if (isBot) {
-      return { email, isBot: true };
+      let pageSnap = null;
+      if (pageId) {
+        pageSnap = await db.collection('pages').doc(pageId).get();
+        if (!pageSnap.exists) {
+          res.status(404).send('Not Found: Page does not exist');
+          return null;
+        }
+      }
+      return { user: { email, isBot: true }, pageSnap };
     }
     
     const userSnap = await db.collection('users').doc(decodedToken.uid).get();
@@ -423,8 +392,9 @@ async function checkAuthAndPageAccess(req, res, pageId) {
       return null;
     }
 
+    let pageSnap = null;
     if (pageId) {
-      const pageSnap = await db.collection('pages').doc(pageId).get();
+      pageSnap = await db.collection('pages').doc(pageId).get();
       if (!pageSnap.exists) {
         res.status(404).send('Not Found: Page does not exist');
         return null;
@@ -438,7 +408,7 @@ async function checkAuthAndPageAccess(req, res, pageId) {
       }
     }
     
-    return { email, isBot: false };
+    return { user: { email, isBot: false }, pageSnap };
   } catch (err) {
     logger.error('[auth] Verification failed', err);
     res.status(401).send('Unauthorized');
@@ -447,7 +417,7 @@ async function checkAuthAndPageAccess(req, res, pageId) {
 }
 
 export const deletePagePrivileged = onRequest(
-  { region: 'europe-west1' },
+  { region: 'europe-west1', timeoutSeconds: 300 },
   async (req, res) => {
     const { pageId } = req.body;
     if (!pageId) {
@@ -455,36 +425,43 @@ export const deletePagePrivileged = onRequest(
       return;
     }
     
-    const authUser = await checkAuthAndPageAccess(req, res, pageId);
-    if (!authUser) return;
+    const authResult = await checkAuthAndPageAccess(req, res, pageId);
+    if (!authResult) return;
+    const { user, pageSnap } = authResult;
     
     try {
       const committer = new BatchCommitter(db);
-      await _recursiveSoftDelete(pageId, committer);
+      await _recursiveSoftDelete(pageSnap, user, committer);
       await committer.commit();
       res.json({ success: true });
     } catch (err) {
       logger.error(`[deletePagePrivileged] Failed for page ${pageId}`, err);
-      res.status(500).send('Internal Server Error');
+      if (err.message && err.message.includes('Forbidden')) {
+        res.status(403).send(err.message);
+      } else {
+        res.status(500).send('Internal Server Error');
+      }
     }
   }
 );
 
-async function _recursiveSoftDelete(pageId, committer) {
-  const snapshot = await db.collection('pages').where('parentId', '==', pageId).get();
-  for (const child of snapshot.docs) {
-    await _recursiveSoftDelete(child.id, committer);
+async function _recursiveSoftDelete(pageSnap, user, committer) {
+  const pageData = pageSnap.data();
+  if (!checkAcl(pageData, user)) {
+    throw new Error(`Forbidden: Insufficient permissions for page ${pageSnap.id}`);
   }
+
+  const snapshot = await db.collection('pages').where('parentId', '==', pageSnap.id).get();
+  await Promise.all(snapshot.docs.map(child => _recursiveSoftDelete(child, user, committer)));
   
-  const pageRef = db.collection('pages').doc(pageId);
-  committer.update(pageRef, {
+  committer.update(pageSnap.ref, {
     deleted: true,
     deletedAt: FieldValue.serverTimestamp()
   });
 }
 
 export const restorePagePrivileged = onRequest(
-  { region: 'europe-west1' },
+  { region: 'europe-west1', timeoutSeconds: 300 },
   async (req, res) => {
     const { pageId } = req.body;
     if (!pageId) {
@@ -492,39 +469,46 @@ export const restorePagePrivileged = onRequest(
       return;
     }
     
-    const authUser = await checkAuthAndPageAccess(req, res, pageId);
-    if (!authUser) return;
+    const authResult = await checkAuthAndPageAccess(req, res, pageId);
+    if (!authResult) return;
+    const { user, pageSnap } = authResult;
     
     try {
       const committer = new BatchCommitter(db);
-      await _recursiveRestore(pageId, committer);
+      await _recursiveRestore(pageSnap, user, committer);
       await committer.commit();
       res.json({ success: true });
     } catch (err) {
       logger.error(`[restorePagePrivileged] Failed for page ${pageId}`, err);
-      res.status(500).send('Internal Server Error');
+      if (err.message && err.message.includes('Forbidden')) {
+        res.status(403).send(err.message);
+      } else {
+        res.status(500).send('Internal Server Error');
+      }
     }
   }
 );
 
-async function _recursiveRestore(pageId, committer) {
-  const pageRef = db.collection('pages').doc(pageId);
-  committer.update(pageRef, {
+async function _recursiveRestore(pageSnap, user, committer) {
+  const pageData = pageSnap.data();
+  if (!checkAcl(pageData, user)) {
+    throw new Error(`Forbidden: Insufficient permissions for page ${pageSnap.id}`);
+  }
+
+  committer.update(pageSnap.ref, {
     deleted: false,
     deletedAt: null
   });
   
   const snapshot = await db.collection('pages')
-    .where('parentId', '==', pageId)
+    .where('parentId', '==', pageSnap.id)
     .where('deleted', '==', true)
     .get();
-  for (const child of snapshot.docs) {
-    await _recursiveRestore(child.id, committer);
-  }
+  await Promise.all(snapshot.docs.map(child => _recursiveRestore(child, user, committer)));
 }
 
 export const updatePageAclPrivileged = onRequest(
-  { region: 'europe-west1' },
+  { region: 'europe-west1', timeoutSeconds: 300 },
   async (req, res) => {
     const { pageId, allowedEmails } = req.body;
     if (!pageId || !allowedEmails || !Array.isArray(allowedEmails)) {
@@ -532,36 +516,43 @@ export const updatePageAclPrivileged = onRequest(
       return;
     }
     
-    const authUser = await checkAuthAndPageAccess(req, res, pageId);
-    if (!authUser) return;
+    const authResult = await checkAuthAndPageAccess(req, res, pageId);
+    if (!authResult) return;
+    const { user, pageSnap } = authResult;
     
     try {
       const committer = new BatchCommitter(db);
-      await _recursiveUpdateAcl(pageId, allowedEmails, committer);
+      await _recursiveUpdateAcl(pageSnap, allowedEmails, user, committer);
       await committer.commit();
       res.json({ success: true });
     } catch (err) {
       logger.error(`[updatePageAclPrivileged] Failed for page ${pageId}`, err);
-      res.status(500).send('Internal Server Error');
+      if (err.message && err.message.includes('Forbidden')) {
+        res.status(403).send(err.message);
+      } else {
+        res.status(500).send('Internal Server Error');
+      }
     }
   }
 );
 
-async function _recursiveUpdateAcl(pageId, allowedEmails, committer) {
-  const pageRef = db.collection('pages').doc(pageId);
-  committer.update(pageRef, {
+async function _recursiveUpdateAcl(pageSnap, allowedEmails, user, committer) {
+  const pageData = pageSnap.data();
+  if (!checkAcl(pageData, user)) {
+    throw new Error(`Forbidden: Insufficient permissions for page ${pageSnap.id}`);
+  }
+
+  committer.update(pageSnap.ref, {
     allowedEmails,
     updatedAt: FieldValue.serverTimestamp()
   });
 
-  const snapshot = await db.collection('pages').where('parentId', '==', pageId).get();
-  for (const child of snapshot.docs) {
-    await _recursiveUpdateAcl(child.id, allowedEmails, committer);
-  }
+  const snapshot = await db.collection('pages').where('parentId', '==', pageSnap.id).get();
+  await Promise.all(snapshot.docs.map(child => _recursiveUpdateAcl(child, allowedEmails, user, committer)));
 }
 
 export const permanentlyDeletePagePrivileged = onRequest(
-  { region: 'europe-west1' },
+  { region: 'europe-west1', timeoutSeconds: 300 },
   async (req, res) => {
     const { pageId } = req.body;
     if (!pageId) {
@@ -569,38 +560,58 @@ export const permanentlyDeletePagePrivileged = onRequest(
       return;
     }
     
-    const authUser = await checkAuthAndPageAccess(req, res, pageId);
-    if (!authUser) return;
+    const authResult = await checkAuthAndPageAccess(req, res, pageId);
+    if (!authResult) return;
+    const { user, pageSnap } = authResult;
     
     try {
       const committer = new BatchCommitter(db);
-      await _recursivePermanentDelete(pageId, committer);
+      await _recursivePermanentDelete(pageSnap, user, committer);
       await committer.commit();
       res.json({ success: true });
     } catch (err) {
       logger.error(`[permanentlyDeletePagePrivileged] Failed for page ${pageId}`, err);
-      res.status(500).send('Internal Server Error');
+      if (err.message && err.message.includes('Forbidden')) {
+        res.status(403).send(err.message);
+      } else {
+        res.status(500).send('Internal Server Error');
+      }
     }
   }
 );
 
-async function _recursivePermanentDelete(pageId, committer) {
-  const pageRef = db.collection('pages').doc(pageId);
-  const pageSnap = await pageRef.get();
-  if (!pageSnap.exists) return;
+async function _recursivePermanentDelete(pageSnap, user, committer) {
   const pageData = pageSnap.data();
-
-  // 1. Archive children first (recursive)
-  const snapshot = await db.collection('pages').where('parentId', '==', pageId).get();
-  for (const child of snapshot.docs) {
-    await _recursivePermanentDelete(child.id, committer);
+  if (!checkAcl(pageData, user)) {
+    throw new Error(`Forbidden: Insufficient permissions for page ${pageSnap.id}`);
   }
 
-  // 2. Archive history subcollection
-  const historyRef = pageRef.collection('history');
-  const historySnaps = await historyRef.get();
+  const pageId = pageSnap.id;
+  const pageRef = pageSnap.ref;
+
+  // 1. Archive children first (recursive) in parallel
+  const snapshot = await db.collection('pages').where('parentId', '==', pageId).get();
+  await Promise.all(snapshot.docs.map(child => _recursivePermanentDelete(child, user, committer)));
+
+  // 2. Fetch subcollections in parallel
+  const [
+    historySnaps,
+    commentSnaps,
+    yjsUpdatesSnaps,
+    yjsAwarenessSnaps,
+    yjsStateSnaps,
+    presenceSnaps
+  ] = await Promise.all([
+    pageRef.collection('history').get(),
+    pageRef.collection('comments').get(),
+    pageRef.collection('yjs_updates').get(),
+    pageRef.collection('yjs_awareness').get(),
+    pageRef.collection('yjs_state').get(),
+    pageRef.collection('presence').get()
+  ]);
+
+  // 3. Process subcollection documents
   const archivedHistoryRef = db.collection('archive').doc(pageId).collection('history');
-  
   for (const snap of historySnaps.docs) {
     committer.set(archivedHistoryRef.doc(snap.id), {
       ...snap.data(),
@@ -609,11 +620,7 @@ async function _recursivePermanentDelete(pageId, committer) {
     committer.delete(snap.ref);
   }
 
-  // 3. Archive comments subcollection
-  const commentsRef = pageRef.collection('comments');
-  const commentSnaps = await commentsRef.get();
   const archivedCommentsRef = db.collection('archive').doc(pageId).collection('comments');
-
   for (const snap of commentSnaps.docs) {
     committer.set(archivedCommentsRef.doc(snap.id), {
       ...snap.data(),
@@ -622,32 +629,23 @@ async function _recursivePermanentDelete(pageId, committer) {
     committer.delete(snap.ref);
   }
 
-  // 4. Delete other subcollections
-  const yjsUpdatesRef = pageRef.collection('yjs_updates');
-  const yjsUpdatesSnaps = await yjsUpdatesRef.get();
   for (const snap of yjsUpdatesSnaps.docs) {
     committer.delete(snap.ref);
   }
 
-  const yjsAwarenessRef = pageRef.collection('yjs_awareness');
-  const yjsAwarenessSnaps = await yjsAwarenessRef.get();
   for (const snap of yjsAwarenessSnaps.docs) {
     committer.delete(snap.ref);
   }
 
-  const yjsStateRef = pageRef.collection('yjs_state');
-  const yjsStateSnaps = await yjsStateRef.get();
   for (const snap of yjsStateSnaps.docs) {
     committer.delete(snap.ref);
   }
 
-  const presenceRef = pageRef.collection('presence');
-  const presenceSnaps = await presenceRef.get();
   for (const snap of presenceSnaps.docs) {
     committer.delete(snap.ref);
   }
 
-  // 5. Archive the main page document
+  // 4. Archive the main page document
   const archiveRef = db.collection('archive').doc(pageId);
   committer.set(archiveRef, {
     ...pageData,
@@ -655,6 +653,6 @@ async function _recursivePermanentDelete(pageId, committer) {
     originalCollection: 'pages'
   });
 
-  // 6. Delete the page document
+  // 5. Delete the page document
   committer.delete(pageRef);
 }

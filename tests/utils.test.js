@@ -183,6 +183,11 @@ test('filters out original ignored patterns', () => {
   expect(shouldLogError('[Firestore] Failed to log client error to database')).toBeFalsy();
 });
 
+test('filters out new privileged endpoint errors', () => {
+  expect(shouldLogError('Failed to delete page: Unauthorized: Missing token')).toBeFalsy();
+  expect(shouldLogError('Failed to update ACL: Forbidden: Insufficient permissions for page')).toBeFalsy();
+});
+
 // ──────────────────────────────────────────────
 // Summary
 // ──────────────────────────────────────────────
