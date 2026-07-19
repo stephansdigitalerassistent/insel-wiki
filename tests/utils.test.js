@@ -116,6 +116,23 @@ test('ignores dates in YYYYMMDD format', () => {
   expect(slugify('Session 20240512 Info')).toBe('session-info');
 });
 
+test('ignores dates with slashes', () => {
+  expect(slugify('Meeting 2024/05/12')).toBe('meeting');
+  expect(slugify('Protokoll 12/05/2024')).toBe('protokoll');
+});
+
+test('ignores dates with underscores', () => {
+  expect(slugify('Meeting 2024_05_12')).toBe('meeting');
+  expect(slugify('Protokoll 12_05_2024')).toBe('protokoll');
+});
+
+test('does not strip date-like strings containing letters or excessive digits', () => {
+  expect(slugify('doc12345678')).toBe('doc12345678');
+  expect(slugify('202405128')).toBe('202405128');
+  expect(slugify('120240512')).toBe('120240512');
+  expect(slugify('1202405128')).toBe('1202405128');
+});
+
 // ──────────────────────────────────────────────
 console.log('\n☑️  extractTasks()');
 // ──────────────────────────────────────────────
