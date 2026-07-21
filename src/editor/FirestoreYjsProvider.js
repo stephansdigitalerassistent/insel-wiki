@@ -25,12 +25,83 @@ import {
   runTransaction
 } from 'firebase/firestore';
 
+/**
+ * @class FirestoreYjsProvider
+ * @classdesc
+ * FirestoreYjsProvider is a custom sync provider for Yjs that integrates with Cloud Firestore.
+ * It manages real-time collaboration, offline persistence buffering, and document compaction.
+ * 
+ * ### Sync Architecture
+ * - **Document State Source of Truth:** The document state is represented by a single compiled binary state document 
+ *   stored in the `yjs_state` subcollection (as a single document named `state`).
+ * - **Incremental Updates:** New changes typed by clients are written to the `yjs_updates` subcollection. 
+ *   Live snapshot listeners catch up with and apply these incremental updates to keep all collaborative clients in sync.
+ * - **Awareness Protocol:** Cursors, selections, and user metadata are synchronized through the `yjs_awareness` subcollection. 
+ *   Local updates are debounced and published to Firestore, and remote presence states are applied locally using `y-protocols/awareness`.
+ * 
+ * ### Custom Offline Buffering & Debouncing
+ * - **Write Coalescing:** To avoid hitting Firestore write limits and minimize billing cost, individual Yjs update events 
+ *   are debounced and buffered.
+ * - **Debounce Window:** Changes are grouped during a 1-second window (`_writeDebounceMs = 1000`). When typing stops or the 
+ *   buffer is flushed, these updates are merged using `Y.mergeUpdates` and written to Firestore as a single `addDoc` operation.
+ * - **Dirty State Tracking:** A `pendingWrites` counter and `hasUnsavedChanges` getter are provided to track unsaved edits, 
+ *   alerting the editor UI to show saving states and preventing loss of data.
+ * 
+ * ### Document Compaction
+ * - **Compaction Trigger:** As changes accumulate, the `yjs_updates` collection grows. When a client applies a number of local 
+ *   updates exceeding the `compactionThreshold` (default: 50), a compaction operation is triggered.
+ * - **Transaction-Based Merge:** Compaction compresses the current memory state of `Y.Doc` into a single binary blob, which is 
+ *   written to the `yjs_state` document. This is performed inside a Firestore transaction.
+ * - **Concurrency Guard:** The transaction inspects `updatedAt` on the existing state document. If another client has compacted 
+ *   within the last 10 seconds, the compaction is aborted to avoid redundant writes.
+ * - **Obsolete Cleanup:** Upon a successful transaction write, all incremental updates older than the compaction timestamp 
+ *   are fetched and deleted from the database.
+ * 
+ * @property {Y.Doc} ydoc The primary Yjs document instance.
+ * @property {Y.Doc} doc Explicitly exposed alias to the Yjs doc for Tiptap CollaborationCursor extension.
+ * @property {string} pageId The unique identifier of the page / document in Firestore.
+ * @property {Awareness} awareness The Yjs awareness instance used to coordinate client cursors and presence.
+ * @property {number} clientId Unique ID identifying this client within the Yjs session.
+ * @property {CollectionReference} updatesRef Firestore collection reference containing incremental update documents.
+ * @property {CollectionReference} awarenessRef Firestore collection reference containing active awareness/presence documents.
+ * @property {DocumentReference} stateDocRef Firestore document reference to the single compiled binary state.
+ * @property {Function|null} unsubUpdates Unsubscribe callback function for the live updates collection snapshot listener.
+ * @property {Function|null} unsubAwareness Unsubscribe callback function for the live awareness collection snapshot listener.
+ * @property {any|null} awarenessTimeout Timer ID for debouncing local awareness state updates.
+ * @property {Function|null} onLoadComplete Callback executed when the provider has completed initial state retrieval and application.
+ * @property {boolean} hasYjsState Flags if a compiled state document was successfully found and loaded from Firestore.
+ * @property {number} localUpdateCount Count of local Yjs update events since the last compaction check.
+ * @property {number} compactionThreshold Limit of local updates allowed before triggering a background compaction.
+ * @property {number} pendingWrites Active count of outstanding writes/flushes.
+ * @property {Set<Function>} _statusListeners Subscribed listener callbacks notified on unsaved changes / dirty status changes.
+ * @property {any|null} persistence Optional local persistence cache provider (e.g., `IndexeddbPersistence`).
+ * @property {boolean} _suspended Indicates if the provider has detached Firestore snapshot listeners and is in sleep mode.
+ * @property {number} _writeDebounceMs Duration in milliseconds to debounce local edits before flushing to Firestore.
+ * @property {Uint8Array[]} _pendingUpdates Buffer storing local Yjs updates that have not yet been flushed to Firestore.
+ * @property {any|null} _writeTimer Timer ID for debouncing the local edit write operation.
+ * @property {Function|null} handleUnload Cached event handler reference for beforeunload window events.
+ */
 export class FirestoreYjsProvider {
+  /**
+   * Creates an instance of FirestoreYjsProvider.
+   * 
+   * @param {string} pageId The unique identifier of the wiki page/document in Firestore.
+   * @param {Y.Doc} ydoc The shared Yjs document instance to sync.
+   * @param {Object} [user] Optional user profile metadata for collaborative presence.
+   * @param {string} [user.name] User display name.
+   * @param {string} [user.color] User color (hex format) representing cursor coloring.
+   * @param {string|null} [user.photoURL] Optional URL to user profile picture.
+   */
   constructor(pageId, ydoc, user) {
+    /** @type {Y.Doc} */
     this.ydoc = ydoc;
+    /** @type {Y.Doc} */
     this.doc = ydoc; // Explicitly expose `doc` for Tiptap CollaborationCursor extension
+    /** @type {string} */
     this.pageId = pageId;
+    /** @type {Awareness} */
     this.awareness = new Awareness(ydoc);
+    /** @type {number} */
     this.clientId = this.awareness.clientID;
     
     // Initialize awareness state for ourselves
@@ -41,31 +112,48 @@ export class FirestoreYjsProvider {
       photoURL: user?.photoURL || null
     });
 
+    /** @type {CollectionReference} */
     this.updatesRef = collection(db, 'pages', pageId, 'yjs_updates');
+    /** @type {CollectionReference} */
     this.awarenessRef = collection(db, 'pages', pageId, 'yjs_awareness');
+    /** @type {DocumentReference} */
     this.stateDocRef = doc(db, 'pages', pageId, 'yjs_state', 'state'); // Binary state single source
 
+    /** @type {Function|null} */
     this.unsubUpdates = null;
+    /** @type {Function|null} */
     this.unsubAwareness = null;
+    /** @type {any|null} */
     this.awarenessTimeout = null;
+    /** @type {Function|null} */
     this.onLoadComplete = null;
+    /** @type {boolean} */
     this.hasYjsState = false;
+    /** @type {number} */
     this.localUpdateCount = 0;
+    /** @type {number} */
     this.compactionThreshold = 50;
+    /** @type {number} */
     this.pendingWrites = 0;
+    /** @type {Set<Function>} */
     this._statusListeners = new Set();
     // Optional local cache (e.g. y-indexeddb). Updates re-applied from this
     // origin are local replays; we must not echo them back to Firestore or
     // every IDB rehydrate would create duplicate writes.
+    /** @type {any|null} */
     this.persistence = null;
     // suspended means: Firestore listeners are detached and our awareness doc
     // has been removed, but ydoc and the local persistence stay alive. Used by
     // the editor cache to park inactive pages without holding open watchers.
+    /** @type {boolean} */
     this._suspended = false;
     // Yjs writes are coalesced over a 1s window to cut Firestore write
     // volume. Buffered updates are merged into a single addDoc per flush.
+    /** @type {number} */
     this._writeDebounceMs = 1000;
+    /** @type {Uint8Array[]} */
     this._pendingUpdates = [];
+    /** @type {any|null} */
     this._writeTimer = null;
 
     this.isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -84,15 +172,32 @@ export class FirestoreYjsProvider {
     };
   }
 
+  /**
+   * Indicates if there are any local edits that have not yet been successfully saved to Firestore.
+   * 
+   * @type {boolean}
+   */
   get hasUnsavedChanges() {
     return this.pendingWrites > 0;
   }
 
+  /**
+   * Subscribes a callback to receive status changes when the provider's unsaved changes status changes.
+   * 
+   * @param {Function} cb Callback function invoked with the current hasUnsavedChanges boolean state.
+   * @returns {Function} A unsubscribe function to remove the registered callback.
+   */
   onStatusChange(cb) {
     this._statusListeners.add(cb);
     return () => this._statusListeners.delete(cb);
   }
 
+  /**
+   * Invokes all registered status change listeners with the current unsaved changes status.
+   * 
+   * @private
+   * @returns {void}
+   */
   _emitStatus() {
     for (const cb of this._statusListeners) {
       try { cb(this.hasUnsavedChanges); } catch {}
@@ -100,9 +205,10 @@ export class FirestoreYjsProvider {
   }
 
   /**
-   * Merge and write any buffered Yjs updates immediately. Returns the write
-   * promise; safe to fire-and-forget from unload handlers (Firestore queues
-   * the write in its IndexedDB cache).
+   * Merges and writes any buffered Yjs updates immediately to Firestore.
+   * This returns the write promise and is safe to fire-and-forget from unload handlers.
+   * 
+   * @returns {Promise<void>} A promise that resolves when the flush operation completes or skips.
    */
   flushPending() {
     clearTimeout(this._writeTimer);
@@ -120,19 +226,43 @@ export class FirestoreYjsProvider {
     });
   }
 
+  /**
+   * Configures a callback to run when the provider finishes loading its initial document state.
+   * 
+   * @param {Function} callback Callback function invoked with a boolean indicating if state was found and loaded.
+   * @returns {void}
+   */
   setLoadCallback(callback) {
     this.onLoadComplete = callback;
   }
 
+  /**
+   * Sets the local cache persistence layer, such as y-indexeddb.
+   * 
+   * @param {any} persistence The persistence provider instance to associate.
+   * @returns {void}
+   */
   setLocalPersistence(persistence) {
     this.persistence = persistence;
   }
 
+  /**
+   * Generates a random pastel/vibrant hex color code used to represent cursor presence in collaboration.
+   * 
+   * @returns {string} Hexadecimal color string.
+   */
   getRandomColor() {
     const colors = ['#f87171', '#fb923c', '#fbbf24', '#34d399', '#38bdf8', '#818cf8', '#c084fc', '#f472b6'];
     return colors[Math.floor(Math.random() * colors.length)];
   }
 
+  /**
+   * Compiles the current Yjs document state into a single compressed binary state document in Firestore
+   * and cleans up obsolete incremental update records. This compaction process uses a transaction to ensure
+   * only one client performs compaction if multiple clients trigger it concurrently.
+   * 
+   * @returns {Promise<void>} A promise that resolves when the compaction transaction and subsequent cleanup finish.
+   */
   async compact() {
     try {
       // 1. Fetch all pending updates currently in the database
@@ -189,6 +319,13 @@ export class FirestoreYjsProvider {
     }
   }
 
+  /**
+   * Initializes the provider by reading the compressed binary state and any pending incremental updates
+   * from Firestore, applying them to the local Yjs document, registering live listeners for new updates
+   * and awareness changes, and setting up beforeunload cleanup listeners.
+   * 
+   * @returns {Promise<void>} A promise that resolves once initial catch-up syncing and listener attachments are complete.
+   */
   async init() {
     try {
       // 1 & 2. Fetch Compressed State and pending updates in parallel
@@ -289,6 +426,13 @@ export class FirestoreYjsProvider {
     }
   }
 
+  /**
+   * Sets up a Firestore snapshot listener on the updates collection to fetch and apply new incremental updates.
+   * 
+   * @private
+   * @param {Date} fromTime Date threshold to watch for updates created after this timestamp.
+   * @returns {void}
+   */
   _attachUpdatesListener(fromTime) {
     const qUpdates = query(this.updatesRef, where('timestamp', '>=', fromTime), orderBy('timestamp', 'asc'));
     this.unsubUpdates = onSnapshot(qUpdates, (snapshot) => {
@@ -312,6 +456,12 @@ export class FirestoreYjsProvider {
     });
   }
 
+  /**
+   * Sets up a Firestore snapshot listener on the awareness presence collection to update local remote cursor locations.
+   * 
+   * @private
+   * @returns {void}
+   */
   _attachAwarenessListener() {
     this.unsubAwareness = onSnapshot(this.awarenessRef, (snapshot) => {
       snapshot.docChanges().forEach(change => {
@@ -330,6 +480,12 @@ export class FirestoreYjsProvider {
     });
   }
 
+  /**
+   * Encodes and writes the local client's current awareness state to the Firestore awareness collection.
+   * 
+   * @private
+   * @returns {Promise<void>} A promise that resolves when the presence state is written to Firestore.
+   */
   _publishOwnAwareness() {
     const state = encodeAwarenessUpdate(this.awareness, [this.clientId]);
     const myDocRef = doc(this.awarenessRef, this.clientId.toString());
@@ -340,10 +496,11 @@ export class FirestoreYjsProvider {
   }
 
   /**
-   * Detach Firestore listeners and remove our awareness doc, but keep ydoc
-   * and persistence alive. Used by the editor cache when parking a page so
-   * collaborators don't see this user "viewing" pages they've navigated away
-   * from, and so we don't pay for live snapshots on hidden editors.
+   * Temporarily detaches Firestore updates and awareness snapshot listeners and deletes the local
+   * client's awareness document from Firestore. Keeps the local Yjs document and optional local persistence
+   * alive. Used for parking inactive editors to optimize network and database watcher usage.
+   * 
+   * @returns {void}
    */
   suspend() {
     if (this._suspended) return;
@@ -365,9 +522,11 @@ export class FirestoreYjsProvider {
   }
 
   /**
-   * Re-attach Firestore listeners and republish awareness after suspend().
-   * Catches up on Yjs state via a state-doc + pending-updates re-fetch; CRDT
-   * applies are idempotent, so any updates we already had are no-ops.
+   * Resumes the provider from a suspended state by re-fetching the compiled state document and pending
+   * incremental updates to catch up with any remote changes, re-attaching the live Firestore database listeners,
+   * and republishing the local client's awareness document.
+   * 
+   * @returns {Promise<void>} A promise that resolves when catch-up and listener re-attachment are complete.
    */
   async resume() {
     if (!this._suspended) return;
@@ -395,6 +554,13 @@ export class FirestoreYjsProvider {
     this._attachAwarenessListener();
   }
 
+  /**
+   * Teardown logic that flushes any pending buffered updates to Firestore, detaches all snapshot
+   * listeners, removes window unload event listeners, and deletes the local client's awareness document
+   * from Firestore.
+   * 
+   * @returns {void}
+   */
   destroy() {
     // Flush buffered updates before tearing down so we don't lose the last
     // 0–1s of typing on navigation or tab close.
