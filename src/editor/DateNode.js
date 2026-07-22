@@ -1,14 +1,57 @@
 import { mergeAttributes, Node, InputRule, PasteRule, nodeInputRule, nodePasteRule } from '@tiptap/core';
 
-// Match dates in the format YYYY-MM-DD
+/**
+ * @module editor/DateNode
+ * @description
+ * Tiptap node that turns plain ISO dates into an interactive date pill inside the document.
+ *
+ * ### Node Shape
+ * - **Inline atom:** The node is `inline`, belongs to the `inline` group, and is an `atom` — it has
+ *   no editable child content, so the caret steps over it as a single unit instead of letting the
+ *   user break the date apart character by character.
+ * - **Single attribute:** The value lives in the `date` attribute as an ISO `YYYY-MM-DD` string,
+ *   defaulting to today. It is serialised to `<span data-type="date">`, which is also the parse
+ *   selector, so pills survive an HTML export/import round trip.
+ *
+ * ### Conversion Triggers
+ * - **Typing / pasting a date:** {@link DATE_REGEX} matches a bare `YYYY-MM-DD` token and replaces
+ *   it with a pill, both as an input rule (while typing) and as a paste rule.
+ * - **`//` shorthand:** Typing `//` at the start of a word inserts a pill pre-filled with today.
+ * - **Guarded contexts:** Both rules bail out when the match sits inside a `link` or `code` mark, or
+ *   inside a code block. A date in a URL or a code sample must stay literal text.
+ * - **Whitespace preservation:** The regex intentionally captures the surrounding spaces so it can
+ *   match at word boundaries; the handlers then shrink the replaced range back to the date itself,
+ *   leaving the user's spacing untouched.
+ *
+ * ### Node View
+ * The pill is rendered by a custom node view (see {@link addNodeView}) built from a styled `<span>`
+ * containing a 📅 icon and a native `<input type="date">`. Picking a new date dispatches an
+ * `updateAttributes` transaction, so the change flows through ProseMirror — and therefore through
+ * Yjs to collaborators and into the undo history — rather than mutating the DOM behind the editor's
+ * back. Styling is driven by CSS custom properties so the pill follows the active theme.
+ */
+
+/**
+ * Matches an ISO `YYYY-MM-DD` date delimited by whitespace or a string boundary.
+ * Capture group 1 is the bare date; the match itself may include the delimiting spaces.
+ * @type {RegExp}
+ */
 const DATE_REGEX = /(?:\s|^)(\d{4}-\d{2}-\d{2})(?:\s|$)/g;
 
+/**
+ * Tiptap node `dateNode` — an inline, atomic date pill with a native date picker.
+ * @type {import('@tiptap/core').Node}
+ */
 export const DateNode = Node.create({
   name: 'dateNode',
   group: 'inline',
   inline: true,
   atom: true,
 
+  /**
+   * @returns {Object<string, import('@tiptap/core').Attribute>} Attribute spec holding the ISO
+   *   `YYYY-MM-DD` value, defaulting to today's date.
+   */
   addAttributes() {
     return {
       date: {
@@ -17,6 +60,10 @@ export const DateNode = Node.create({
     };
   },
 
+  /**
+   * @returns {Array<import('@tiptap/core').ParseRule>} Rule matching `<span data-type="date">`, so
+   *   pills are restored when previously exported HTML is pasted or loaded.
+   */
   parseHTML() {
     return [
       {
@@ -25,10 +72,30 @@ export const DateNode = Node.create({
     ];
   },
 
+  /**
+   * Serialises the node to HTML (export, clipboard, non-editable rendering).
+   *
+   * @param {Object} props Tiptap render props.
+   * @param {Object} props.HTMLAttributes Attributes produced by {@link addAttributes}.
+   * @returns {Array} DOM output spec: `<span data-type="date">` with the ISO date as plain text, so
+   *   the value stays readable wherever the node view is not active.
+   */
   renderHTML({ HTMLAttributes }) {
     return ['span', mergeAttributes(HTMLAttributes, { 'data-type': 'date' }), HTMLAttributes.date];
   },
 
+  /**
+   * Builds the interactive pill rendered in place of the node inside the editor.
+   *
+   * The view is a themed `<span class="date-pill">` holding a 📅 icon and a native
+   * `<input type="date">`. Changing the input dispatches `updateAttributes` on the node's position
+   * so the edit travels through ProseMirror (and thus Yjs and the undo stack). The returned
+   * `update` hook keeps the input in sync with remote/undo-driven attribute changes and rejects
+   * nodes of a different type, prompting ProseMirror to rebuild the view.
+   *
+   * @returns {Function} Node view factory receiving `{ node, getPos, editor }` and returning
+   *   `{ dom, update }`.
+   */
   addNodeView() {
     return ({ node, getPos, editor }) => {
       const dom = document.createElement('span');
@@ -83,6 +150,14 @@ export const DateNode = Node.create({
     };
   },
 
+  /**
+   * Registers the two typing triggers that create a pill.
+   *
+   * @returns {import('@tiptap/core').InputRule[]} 1) A rule converting a typed `YYYY-MM-DD` token
+   *   (range trimmed back to the date so surrounding spaces survive); 2) a rule converting a `//`
+   *   shorthand at a word boundary into today's date. Both return `null` — leaving the text as
+   *   typed — when the match sits inside a link, inline code, or a code block.
+   */
   addInputRules() {
     return [
       new InputRule({
@@ -140,6 +215,13 @@ export const DateNode = Node.create({
     ];
   },
 
+  /**
+   * Registers the paste trigger that converts dates in pasted content.
+   *
+   * @returns {import('@tiptap/core').PasteRule[]} A single rule mirroring the typed-date input rule:
+   *   same {@link DATE_REGEX} match, same whitespace-preserving range adjustment, and the same
+   *   link/code guard so pasted URLs and code samples keep their literal dates.
+   */
   addPasteRules() {
     return [
       new PasteRule({
