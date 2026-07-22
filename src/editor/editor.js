@@ -64,7 +64,6 @@ import suggestion from './suggestions.js';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
-import { joinBackward } from '@tiptap/pm/commands';
 import { Selection } from '@tiptap/pm/state';
 
 import TurndownService from 'turndown';
