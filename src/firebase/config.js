@@ -4,14 +4,16 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
+const env = import.meta.env || process.env || {};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: env.VITE_FIREBASE_API_KEY || 'mock-api-key',
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'mock-auth-domain',
+  projectId: env.VITE_FIREBASE_PROJECT_ID || 'mock-project-id',
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || 'mock-storage-bucket',
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || 'mock-sender-id',
+  appId: env.VITE_FIREBASE_APP_ID || 'mock-app-id',
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || 'mock-measurement-id'
 };
 
 const app = initializeApp(firebaseConfig);
@@ -19,7 +21,7 @@ const app = initializeApp(firebaseConfig);
 // Modern persistence API — supports multi-tab out of the box
 // In Playwright tests, IndexedDB caching with Service Workers blocked can cause BloomFilter errors
 // and auth token sync issues (resulting in permission-denied). Use memory cache for tests.
-export const isTestEnv = typeof navigator !== 'undefined' && (
+export const isTestEnv = typeof window !== 'undefined' && typeof navigator !== 'undefined' && (
   navigator.webdriver || 
   window.__playwright_test__ || 
   window.location.hostname === 'localhost' || 
@@ -40,13 +42,22 @@ if (isTestEnv && typeof window !== 'undefined') {
   };
 }
 
-export const db = initializeFirestore(app, {
-  localCache: isTestEnv ? memoryLocalCache() : persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
-export const auth = getAuth(app);
-if (isTestEnv) {
+export const db = typeof window !== 'undefined'
+  ? initializeFirestore(app, {
+      localCache: isTestEnv ? memoryLocalCache() : persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+    })
+  : null;
+
+export const auth = typeof window !== 'undefined'
+  ? getAuth(app)
+  : { currentUser: null };
+
+if (isTestEnv && typeof window !== 'undefined') {
   setPersistence(auth, browserLocalPersistence).catch(err => {
     console.warn('[FirebaseConfig] Failed to set auth persistence:', err);
   });
 }
-export const storage = getStorage(app);
+
+export const storage = typeof window !== 'undefined'
+  ? getStorage(app)
+  : null;
