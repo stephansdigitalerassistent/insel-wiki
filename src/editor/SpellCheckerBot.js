@@ -49,17 +49,6 @@ const MIN_WORD_LENGTH = 3;
 const DEBOUNCE_MS = 500;
 
 /**
- * Bot identity for the collaboration cursor.
- * @type {string}
- */
-const BOT_NAME = '🤖 Rechtschreib-Assistent';
-/**
- * Collaboration cursor colour for the bot (emerald green), matching the correction flash.
- * @type {string}
- */
-const BOT_COLOR = '#10b981';
-
-/**
  * @class SpellCheckerBot
  * @classdesc
  * Attaches to a Tiptap editor and corrects completed words in place, using the debounce, cooldown,

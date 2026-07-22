@@ -1,4 +1,4 @@
-import { mergeAttributes, Node, InputRule, PasteRule, nodeInputRule, nodePasteRule } from '@tiptap/core';
+import { mergeAttributes, Node, InputRule, PasteRule } from '@tiptap/core';
 
 /**
  * @module editor/DateNode
