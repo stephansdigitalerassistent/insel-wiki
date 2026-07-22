@@ -148,6 +148,42 @@ test('DateNode first input rule handler skips conversion in code block', () => {
   expect(replacedWith).toBeFalsy();
 });
 
+test('DateNode first input rule handler skips conversion when code mark exists in range', () => {
+  const schema = getSchema([StarterKit, Link, DateNode]);
+  const mockContext = {
+    name: 'dateNode',
+    type: schema.nodes.dateNode
+  };
+  const inputRules = DateNode.config.addInputRules.call(mockContext);
+  const rule = inputRules[0];
+
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.text('12345678'),
+      schema.text(' 2024-05-08 ', [schema.mark('code')])
+    ])
+  ]);
+  const selection = TextSelection.create(doc, 21);
+  const editorState = EditorState.create({ schema, doc, selection });
+
+  let replacedWith = null;
+  const tr = editorState.tr;
+  const originalReplaceWith = tr.replaceWith.bind(tr);
+  tr.replaceWith = function(from, to, node) {
+    replacedWith = { from, to, node };
+    return originalReplaceWith(from, to, node);
+  };
+
+  const state = createChainableState({ state: editorState, transaction: tr });
+
+  const match = [' 2024-05-08 ', '2024-05-08'];
+  const range = { from: 10, to: 22 };
+
+  rule.handler({ state, range, match });
+
+  expect(replacedWith).toBeFalsy();
+});
+
 test('DateNode first input rule handler skips conversion when link mark exists in range', () => {
   const schema = getSchema([StarterKit, Link, DateNode]);
   const mockContext = {
