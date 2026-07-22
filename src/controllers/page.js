@@ -1,4 +1,50 @@
-// Page Controller — loading, saving, snapshots, link healing, and page actions
+/**
+ * @module controllers/page
+ * @description
+ * Page Controller managing page lifecycle, navigation, auto-saving, snapshots,
+ * local-first UI optimizations, and coordinating with the editor cache.
+ *
+ * ### Navigation & Editor Parking Contract
+ * This module is the primary consumer of {@link createEditor} and coordinates the client-side
+ * page navigation flow. Because the editor module maintaining an LRU cache keeps editor instances
+ * (including Tiptap, Yjs, and IndexedDB providers) alive for previously visited pages, navigation
+ * follows a cooperative lifecycle to achieve instantaneous transitions while minimizing Firestore
+ * bandwidth:
+ *
+ * 1. **Leave / Deactivation**:
+ *    - When moving away from `currentPageId`, we flush any pending debounced title updates
+ *      ({@link debouncedUpdateTitle}) or markdown edits ({@link debouncedSyncMarkdownToEditor}).
+ *    - We fire off a history snapshot ({@link snapshotCurrentPage}) to persist a checkpoint.
+ *    - We synchronously unsubscribe from active page updates (`currentPageUnsub`), presence updates
+ *      (`currentPresenceUnsub`), clear the automatic history snapshotting timer (`historySnapshotInterval`),
+ *      and empty active collab cursor avatars.
+ *
+ * 2. **Optimistic Pre-load**:
+ *    - We immediately update the active page ID (`currentPageId`), set the sidebar active state
+ *      (via {@link setActivePage}), and load the page metadata (title) from `localStorage`
+ *      (`cache_page_${pageId}`) to make header updates feel instant.
+ *    - If the editor is not yet loaded in the cache (verified via {@link hasCachedEditor}), we show a
+ *      skeleton loading overlay (`loadingOverlay`) to prevent flashing Tiptap placeholder text.
+ *    - A Firestore fetch for fresh page data is initiated in parallel.
+ *
+ * 3. **Editor Handshake**:
+ *    - We call {@link createEditor}, which handles editor retrieval/setup. Internally, `createEditor`
+ *      automatically invokes {@link parkActive} on the outgoing editor (suspending its Yjs provider and
+ *      hiding its DOM container) and either brings the incoming cached editor on-screen (via {@link activateEntry})
+ *      or initializes a new one.
+ *    - When the editor is ready, its callback runs, hiding the loading overlay and displaying the editor element.
+ *
+ * 4. **Post-load Hooking**:
+ *    - We subscribe to the new editor's Yjs provider status to track and show live collaborative save status,
+ *      and listen for presence/awareness updates (re-rendering collaborator avatars in the header).
+ *    - We schedule a deferred, non-blocking link healing routine ({@link selfHealLinks}) to resolve internal links.
+ *    - We re-subscribe to Firestore page updates to catch remote changes (e.g. from the DevOps-Bot).
+ *
+ * ### Save Status & Read-only Mode
+ * The save status aggregation consolidates rapid Yjs synchronization events and debounced title updates into
+ * a single user-facing indicator ("Speichern...", "Gespeichert", or "Offline"). Additionally, permissions are
+ * verified via `canEdit()` to lock/unlock fields (title inputs, formatting toolbars, markdown mode toggles).
+ */
 import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, hasCachedEditor } from '../editor/editor.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
@@ -13,20 +59,66 @@ import { marked } from 'marked';
 import i18next from '../i18n.js';
 
 // --- State ---
+
+/**
+ * The Firestore ID of the currently loaded page.
+ * @type {string|null}
+ */
 let currentPageId = null;
+
+/**
+ * Cached Firestore document data of the currently loaded page.
+ * @type {Object|null}
+ */
 let currentPageData = null;
+
+/**
+ * Unsubscribe function for the active Firestore page document listener.
+ * @type {Function|null}
+ */
 let currentPageUnsub = null;
+
+/**
+ * Unsubscribe function for the active page's Yjs provider presence/awareness listener.
+ * @type {Function|null}
+ */
 let currentPresenceUnsub = null;
+
+/**
+ * DOM reference to the global formatting toolbar container.
+ * @type {HTMLElement|null}
+ */
 let formatToolbar = null;
+
+/**
+ * Interval timer handle for scheduling automatic history snapshots.
+ * @type {*}
+ */
 let historySnapshotInterval = null;
+
+/**
+ * Frequency of automatic history snapshots.
+ * @const {number}
+ */
 const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
 
-// History optimization. Snapshots are gated purely by content comparison
-// against the last snapshot (see snapshotCurrentPage) now that the client no
-// longer has a markdown-save hook to flag dirtiness.
+/**
+ * Markdown source content of the last captured history snapshot, used to skip redundant saves.
+ * History optimization: Snapshots are gated purely by content comparison
+ * against the last snapshot (see {@link snapshotCurrentPage}) now that the client no
+ * longer has a markdown-save hook to flag dirtiness.
+ * @type {string}
+ */
 let lastSnapshotContent = '';
 
 // --- Utilities ---
+/**
+ * Debounces execution of a callback function.
+ *
+ * @param {Function} callback - Function to run.
+ * @param {number} delayMs - Delay in milliseconds.
+ * @returns {Function} Debounced function wrapper.
+ */
 function debounce(callback, delayMs) {
   let timer;
   let lastArgs;
@@ -55,6 +147,11 @@ function debounce(callback, delayMs) {
   return debounced;
 }
 
+/**
+ * Debounced Firestore title update to merge rapid user keypresses.
+ *
+ * @type {Function}
+ */
 const debouncedUpdateTitle = debounce(async (id, title) => {
   if (!id || !canEdit()) return;
   pendingTitleSaves++;
@@ -83,6 +180,12 @@ let saveErrored = false;
 let savedSettleTimer = null;
 let yjsStatusUnsub = null;
 
+/**
+ * Determines whether there are any pending content or title updates in-flight.
+ * Checks debounced local updates and the Yjs provider's unsaved buffers.
+ *
+ * @returns {boolean} True if any save is pending.
+ */
 export function anySavePending() {
   if (pendingTitleSaves > 0) return true;
   const provider = getProvider();
@@ -91,12 +194,23 @@ export function anySavePending() {
   return false;
 }
 
+/**
+ * Flushes any pending changes in the raw markdown text editor into the Tiptap editor instance.
+ *
+ * @returns {void}
+ */
 export function flushMarkdownEditor() {
   if (isMarkdownMode && markdownEditor) {
     debouncedSyncMarkdownToEditor.flush();
   }
 }
 
+/**
+ * Recomputes and updates the aggregate save status UI element.
+ * Coalesces in-flight title updates, active Yjs sync states, and offline status.
+ *
+ * @returns {void}
+ */
 function recomputeSaveStatus() {
   if (saveErrored) {
     clearTimeout(savedSettleTimer);
@@ -137,6 +251,13 @@ const debouncedSyncMarkdownToEditor = debounce((markdown) => {
 
 let navigateCallback = null;
 
+/**
+ * Navigates to a page by updating the location hash or calling a custom callback.
+ *
+ * @param {string} pageId - Target page ID.
+ * @param {string} [title] - Title used for slug-generation.
+ * @returns {void}
+ */
 export function navigateTo(pageId, title = '') {
   if (navigateCallback) {
     navigateCallback(pageId, title);
@@ -146,6 +267,13 @@ export function navigateTo(pageId, title = '') {
 }
 
 // --- Yjs Presence Helper ---
+/**
+ * Subscribes to awareness updates from the Yjs provider to track online users on the page.
+ *
+ * @param {Object} provider - The Yjs provider.
+ * @param {Function} callback - Triggered with the current list of online users.
+ * @returns {Function} Unsubscribe clean-up function.
+ */
 function subscribeToYjsPresence(provider, callback) {
   const handler = () => {
     const states = provider.awareness.getStates();
@@ -181,7 +309,11 @@ function subscribeToYjsPresence(provider, callback) {
 }
 
 /**
- * Initialize the page controller
+ * Initializes DOM references and hooks global events (unload, visibility changes, key shortcuts).
+ *
+ * @param {Object} opts - Setup options.
+ * @param {Function} opts.navigateTo - Router callback to execute navigation.
+ * @returns {void}
  */
 export function initPageController(opts) {
   editorContainer = document.getElementById('editor-container');
@@ -281,12 +413,34 @@ export function initPageController(opts) {
   });
 }
 
+/**
+ * Returns the formatting toolbar DOM element reference.
+ *
+ * @returns {HTMLElement|null} The formatting toolbar.
+ */
 export function getFormatToolbar() { return formatToolbar; }
+
+/**
+ * Returns the page title input DOM element reference.
+ *
+ * @returns {HTMLInputElement|null} The page title input.
+ */
 export function getPageTitleInput() { return pageTitleInput; }
+
+/**
+ * Returns the current page ID.
+ *
+ * @returns {string|null} The current page ID.
+ */
 export function getCurrentPageId() { return currentPageId; }
 
 /**
- * Load a page by ID
+ * Initiates the page-loading and editor coordination lifecycle.
+ * Coordinates with the editor cache to park/unpark editors, resolves optimistic metadata,
+ * and sets up local and remote update listeners.
+ *
+ * @param {string} pageId - Target page ID to load.
+ * @returns {Promise<void>}
  */
 export async function loadPage(pageId) {
   // Skip if we're already on this page
@@ -518,6 +672,12 @@ export async function loadPage(pageId) {
   }
 }
 
+/**
+ * Unloads the current page and displays the dashboard empty/new state.
+ * Performs teardown on listeners, destroys the editor, and updates UI containers.
+ *
+ * @returns {void}
+ */
 export function showEmptyState() {
   if (isMarkdownMode && markdownEditor) {
     debouncedSyncMarkdownToEditor.flush();
@@ -541,6 +701,13 @@ export function showEmptyState() {
 }
 
 // --- Presence ---
+
+/**
+ * Re-paints the collaboration avatar presence list in the header.
+ *
+ * @param {Array<Object>} users - The list of active users.
+ * @returns {void}
+ */
 function renderPresence(users) {
   if (!collabCursorsEl) return;
   collabCursorsEl.innerHTML = '';
@@ -562,6 +729,13 @@ function renderPresence(users) {
   });
 }
 
+/**
+ * Directly updates the save status indicator DOM element text and class list.
+ * Translates status tokens ("saving", "saved", "error", "offline") using the localization engine.
+ *
+ * @param {string} status - Save status state token.
+ * @returns {void}
+ */
 function setSaveStatus(status) {
   if (!saveStatus) return;
   saveStatus.classList.remove('saving', 'error', 'offline');
@@ -596,6 +770,13 @@ function setSaveStatus(status) {
 }
 
 // --- History Snapshot ---
+
+/**
+ * Evaluates the page content and captures a history snapshot if there are unsaved markdown changes
+ * compared to the last snapshot.
+ *
+ * @returns {Promise<void>}
+ */
 async function snapshotCurrentPage() {
   if (!currentPageId || !canEdit()) return;
   try {
@@ -614,6 +795,13 @@ async function snapshotCurrentPage() {
 }
 
 // --- Breadcrumb ---
+
+/**
+ * Builds the page's parent breadcrumb trail and updates the breadcrumb DOM.
+ *
+ * @param {string} pageId - Target page ID.
+ * @returns {void}
+ */
 function updateBreadcrumb(pageId) {
   const trail = getBreadcrumb(pageId);
   breadcrumbEl.innerHTML = '';
@@ -635,6 +823,13 @@ function updateBreadcrumb(pageId) {
 }
 
 // --- Page Actions ---
+
+/**
+ * Triggered on new page creation click. Prompts the user with a modal, creates the page
+ * in Firestore, inserts links to it if requested, and redirects the router.
+ *
+ * @returns {Promise<void>}
+ */
 async function handleNewPage() {
   if (!canEdit()) return;
   const modalData = await newPageModal(!!currentPageId);
@@ -668,6 +863,11 @@ async function handleNewPage() {
   }
 }
 
+/**
+ * Requests confirmation and deletes the current page in Firestore.
+ *
+ * @returns {Promise<void>}
+ */
 async function handleDeletePage() {
   if (!canEdit() || !currentPageId) return;
   if (currentPageId === 'page-entwicklung' || currentPageId === 'page-tests') {
@@ -686,6 +886,11 @@ async function handleDeletePage() {
   }
 }
 
+/**
+ * Opens or closes the revision history panel for the page.
+ *
+ * @returns {Promise<void>}
+ */
 async function handleHistoryToggle() {
   if (currentPageId) {
     toggleHistoryPanel();
@@ -693,6 +898,11 @@ async function handleHistoryToggle() {
   }
 }
 
+/**
+ * Copies the current page's direct URL to the clipboard.
+ *
+ * @returns {Promise<void>}
+ */
 async function handleCopyLink() {
   if (!currentPageId) return;
   const title = pageTitleInput.value.trim() || i18next.t('common.untitled');
@@ -737,6 +947,13 @@ function selfHealLinks(markdown) {
 /**
  * Rejoin presence after profile update
  */
+/**
+ * Re-submits user information to the active page's Yjs awareness states.
+ * Invoked on user profile updates.
+ *
+ * @param {Object} updatedUser - Profile details of the user.
+ * @returns {Promise<void>}
+ */
 export async function rejoinPresence(updatedUser) {
   const provider = getProvider();
   if (provider && provider.awareness) {
@@ -750,6 +967,11 @@ export async function rejoinPresence(updatedUser) {
   }
 }
 
+/**
+ * Switches the editor view mode between Tiptap WYSIWYG and Raw Markdown editor.
+ *
+ * @returns {Promise<void>}
+ */
 async function toggleMarkdownMode() {
   if (!currentPageId || !canEdit()) return;
   
@@ -769,6 +991,11 @@ async function toggleMarkdownMode() {
   updateMarkdownView();
 }
 
+/**
+ * Scans editor content for elements that could be broken by markdown editing (e.g. comments, tables, mentions).
+ *
+ * @returns {boolean} True if any complex elements exist.
+ */
 function hasComplexElements() {
   const ed = getEditor();
   if (!ed) return false;
@@ -776,6 +1003,12 @@ function hasComplexElements() {
   return html.includes('</table>') || html.includes('class="mention"') || html.includes('data-comment-id') || html.includes('data-type="mention"');
 }
 
+/**
+ * Syncs DOM visibility, updates formatting toolbar displays, and transfers content
+ * between WYSIWYG and Raw Markdown views when switching modes.
+ *
+ * @returns {void}
+ */
 function updateMarkdownView() {
   if (!markdownEditor || !editorEl) return;
   
