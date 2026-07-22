@@ -1,19 +1,88 @@
+/**
+ * @module editor/SpellCheckerBot
+ * @description
+ * Autonomous German spelling assistant that watches the editor and silently repairs finished words.
+ *
+ * ### Trigger Pipeline
+ * `transaction` → separator detection → word extraction → eligibility filter → debounce → backend
+ * call → guarded apply. Corrections only ever fire for a word the user has *completed*, i.e. one
+ * followed by a {@link WORD_SEPARATORS} character or a block/hard break, so the word being typed is
+ * never rewritten mid-keystroke.
+ *
+ * ### Loop Prevention & Safety
+ * - **Self-transaction guard:** Applied corrections carry the `isSpellCheckerCorrection` meta flag
+ *   and are ignored by the transaction handler, so the bot cannot re-trigger on its own edits.
+ * - **Cooldown set:** Each applied correction registers a `startPos:word` key in `recentlyCorrected`
+ *   for 15 s, so a user who deliberately types the word back is not overridden again.
+ * - **Stale-position check:** The backend round trip is asynchronous, so before writing the result
+ *   the bot re-reads the document at the recorded range and aborts unless the text is still exactly
+ *   the word it sent. A correction can therefore never land on text edited in the meantime.
+ * - **Focus preservation:** Corrections are dispatched straight to `editor.view` instead of a
+ *   focused command chain, so the caret and selection stay where the user put them.
+ *
+ * ### Scope Filter
+ * {@link SpellCheckerBot#_shouldCheck _shouldCheck()} skips code blocks, short words, URLs and
+ * paths, mentions and hashtags, pure numbers, all-caps abbreviations, and e-mail-like tokens — the
+ * categories where an LLM "correction" would be actively wrong.
+ *
+ * Correction itself runs server-side: {@link SpellCheckerBot#_callGemini _callGemini()} posts to the
+ * authenticated `/api/spellcheck` proxy so no model API key is ever exposed to the client.
+ */
 import { auth } from '../firebase/config.js';
 
-// Characters that signal "the previous word is finished"
+/**
+ * Characters that signal "the previous word is finished" and start a check.
+ * @type {Set<string>}
+ */
 const WORD_SEPARATORS = new Set([' ', '.', ',', '!', '?', ':', ';', '\n', ')', ']', '}', '–', '—', '"', '»', '(', '[', '{', '«', '<', '>']);
 
-// Minimum word length to consider for correction
+/**
+ * Minimum word length to consider for correction — shorter tokens are too ambiguous to fix safely.
+ * @type {number}
+ */
 const MIN_WORD_LENGTH = 3;
 
-// Debounce time after a word separator is typed (ms)
+/**
+ * Debounce applied after a word separator is typed (ms), so rapid typing settles before a request.
+ * @type {number}
+ */
 const DEBOUNCE_MS = 500;
 
-// Bot identity for the collaboration cursor
+/**
+ * Bot identity for the collaboration cursor.
+ * @type {string}
+ */
 const BOT_NAME = '🤖 Rechtschreib-Assistent';
-const BOT_COLOR = '#10b981'; // Emerald green
+/**
+ * Collaboration cursor colour for the bot (emerald green), matching the correction flash.
+ * @type {string}
+ */
+const BOT_COLOR = '#10b981';
 
+/**
+ * @class SpellCheckerBot
+ * @classdesc
+ * Attaches to a Tiptap editor and corrects completed words in place, using the debounce, cooldown,
+ * and stale-position guards described in the module header.
+ *
+ * @property {import('@tiptap/core').Editor} editor Editor being watched and corrected.
+ * @property {import('./FirestoreYjsProvider.js').FirestoreYjsProvider} provider Collaboration
+ *   provider the bot rides along with; supplies the page identity.
+ * @property {string} pageId Id of the page being edited, taken from the provider.
+ * @property {any|null} debounceTimer Timer id for the pending correction; a new separator restarts it.
+ * @property {Set<string>} recentlyCorrected `startPos:word` keys under a 15 s cooldown, preventing
+ *   the bot from fighting a user who reverts a correction.
+ * @property {boolean} isDestroyed Set on teardown; checked before and after every await so in-flight
+ *   corrections cannot touch a disposed editor.
+ */
 export class SpellCheckerBot {
+  /**
+   * Creates the bot. Nothing is observed until {@link SpellCheckerBot#start start()} is called.
+   *
+   * @param {import('@tiptap/core').Editor} editor Editor to watch.
+   * @param {import('./FirestoreYjsProvider.js').FirestoreYjsProvider} provider Active collaboration
+   *   provider, used for the page id.
+   */
   constructor(editor, provider) {
     this.editor = editor;
     this.provider = provider;
@@ -25,7 +94,9 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Start listening for word completions
+   * Starts listening for word completions by subscribing to the editor's `transaction` event.
+   *
+   * @returns {void}
    */
   start() {
     console.log('[SpellCheckerBot] 🤖 Rechtschreib-Assistent aktiviert');
@@ -33,7 +104,20 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Called on every editor transaction — detects finished words
+   * Runs on every editor transaction and decides whether a word was just finished.
+   *
+   * Bails out for transactions that did not change the document and for the bot's own corrections
+   * (`isSpellCheckerCorrection` meta), which is what keeps it from looping on itself. It inspects the
+   * character before the *post-transaction* caret; when that read comes back empty the caret has
+   * crossed a block boundary or hard break, which is treated as a newline separator and the scan
+   * walks back to the end of the preceding text block. Anything that is not a
+   * {@link WORD_SEPARATORS} character is ignored.
+   *
+   * Bound in the constructor so it can be removed again on destroy.
+   *
+   * @param {Object} props Tiptap transaction event payload.
+   * @param {import('@tiptap/pm/state').Transaction} props.transaction The dispatched transaction.
+   * @returns {void}
    */
   _onTransaction({ transaction }) {
     if (this.isDestroyed) return;
@@ -77,7 +161,19 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Extract the word that just ended at the given position (position of the separator)
+   * Extracts the word that just ended and schedules its correction.
+   *
+   * Skips code blocks entirely, then takes the last whitespace-delimited token before the separator
+   * and strips surrounding punctuation. The length of the *leading* punctuation is kept so the
+   * absolute document range can be computed for the cleaned word alone — otherwise a correction
+   * would overwrite the opening bracket or quote. Around that range up to 10 words of context on
+   * each side are collected (capped at 200 characters per side) to give the model enough to
+   * disambiguate. Words under cooldown are dropped; everything else is debounced by
+   * {@link DEBOUNCE_MS}, with each new separator restarting the timer so only the latest word is
+   * sent.
+   *
+   * @param {number} separatorPos Absolute document position of the separator that ended the word.
+   * @returns {void}
    */
   _extractAndQueueWord(separatorPos) {
     const { doc } = this.editor.state;
@@ -132,7 +228,14 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Determine if a word should be spell-checked
+   * Decides whether a cleaned word is eligible for correction.
+   *
+   * Rejects anything shorter than {@link MIN_WORD_LENGTH}, URLs and paths, mentions and hashtags,
+   * pure numbers, all-caps abbreviations of 2–5 letters, and e-mail/domain-like tokens. These are
+   * identifiers rather than prose, and "correcting" them would corrupt real content.
+   *
+   * @param {string} word Punctuation-stripped candidate word.
+   * @returns {boolean} `true` when the word should be sent for correction.
    */
   _shouldCheck(word) {
     if (!word || word.length < MIN_WORD_LENGTH) return false;
@@ -156,7 +259,22 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Send a word to Gemini for correction and apply the result
+   * Requests a correction for one word and applies it if it is still safe to do so.
+   *
+   * The model's answer is unquoted and trimmed, and a result identical to the input is discarded.
+   * Before writing, the recorded range is re-read and must still contain exactly the original word —
+   * this is what prevents a late response from clobbering text the user has since changed or deleted.
+   * The edit is dispatched directly on the view with the `isSpellCheckerCorrection` meta flag, so it
+   * neither steals focus nor re-triggers the bot. The position is then put under a 15 s cooldown and
+   * a flash is drawn at the new range. Network failures are logged and swallowed; aborts are silent.
+   *
+   * @param {string} word Original word as it appears in the document.
+   * @param {number} startPos Absolute start position of the word.
+   * @param {number} endPos Absolute end position of the word.
+   * @param {string} posKey Cooldown key (`startPos:word`) registered after a successful correction.
+   * @param {string} contextBefore Up to 10 preceding words, for disambiguation.
+   * @param {string} contextAfter Up to 10 following words, for disambiguation.
+   * @returns {Promise<void>} Always resolves — errors are handled internally.
    */
   async _correctWord(word, startPos, endPos, posKey, contextBefore, contextAfter) {
     if (this.isDestroyed) return;
@@ -208,7 +326,19 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Call backend proxy spellcheck API for word correction
+   * Posts the word and its context to the backend `/api/spellcheck` proxy.
+   *
+   * The proxy holds the model credentials server-side, so the client never sees an API key; the
+   * caller's Firebase ID token is attached as a bearer token. A missing token is not fatal — the
+   * request is still attempted and the backend decides.
+   *
+   * @param {string} word Word to correct.
+   * @param {string} contextBefore Preceding context.
+   * @param {string} contextAfter Following context.
+   * @returns {Promise<string>} The corrected word as returned by the backend (possibly still quoted
+   *   or padded — the caller normalises it).
+   * @throws {Error} If the proxy responds with a non-OK status; the message carries the status code
+   *   and a truncated body.
    */
   async _callGemini(word, contextBefore, contextAfter) {
     let token = '';
@@ -243,7 +373,16 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Apply a brief green flash animation at the correction site
+   * Draws a brief green flash over the corrected range so the change is noticeable but not intrusive.
+   *
+   * The flash is a fixed-position overlay appended to `document.body` — it never enters the editor
+   * document, so it cannot be synced, undone, or exported. It removes itself on `animationend`, with
+   * a 2 s timeout as a fallback for browsers that never fire the event. Failures are ignored: the
+   * flash is decoration, and the correction itself has already been applied.
+   *
+   * @param {number} from Absolute start position of the corrected text.
+   * @param {number} to Absolute end position of the corrected text.
+   * @returns {void}
    */
   _flashCorrection(from, to) {
     try {
@@ -272,7 +411,12 @@ export class SpellCheckerBot {
   }
 
   /**
-   * Stop the spell checker and clean up
+   * Stops the bot and releases everything it holds.
+   *
+   * Sets `isDestroyed` first so any in-flight correction aborts at its next checkpoint, then cancels
+   * the pending debounce, detaches the transaction listener, and clears the cooldown set.
+   *
+   * @returns {void}
    */
   destroy() {
     this.isDestroyed = true;
