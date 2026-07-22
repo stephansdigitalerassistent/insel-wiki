@@ -206,6 +206,128 @@ test('filters out new privileged endpoint errors', () => {
 });
 
 // ──────────────────────────────────────────────
+console.log('\n🤖 SpellCheckerBot Collaboration Awareness');
+// ──────────────────────────────────────────────
+
+const { SpellCheckerBot } = await import('../src/editor/SpellCheckerBot.js');
+
+test('SpellCheckerBot temporarily changes awareness user and restores it', async () => {
+  let localState = {
+    user: { name: 'Alice', color: '#123456' }
+  };
+
+  const mockProvider = {
+    pageId: 'test-page',
+    awareness: {
+      getLocalState: () => localState,
+      setLocalStateField: (field, value) => {
+        if (field === 'user') {
+          localState.user = value;
+        }
+      }
+    },
+    publishedCount: 0,
+    _publishOwnAwareness() {
+      this.publishedCount++;
+    }
+  };
+
+  let dispatchedTr = null;
+  const mockEditor = {
+    on: () => {},
+    off: () => {},
+    state: {
+      doc: {
+        content: { size: 100 },
+        textBetween: () => 'originalword'
+      },
+      tr: {
+        insertText: () => {},
+        setMeta: () => {}
+      }
+    },
+    view: {
+      dispatch: (tr) => {
+        dispatchedTr = tr;
+      }
+    }
+  };
+
+  const bot = new SpellCheckerBot(mockEditor, mockProvider);
+  
+  // Mock Gemini response
+  bot._callGemini = async () => 'correctedword';
+
+  // Trigger correction
+  await bot._correctWord('originalword', 0, 12, '0:originalword', '', '');
+
+  // Verify that the identity was set to SpellCheckerBot
+  expect(localState.user.name).toBe('SpellCheckerBot');
+  expect(localState.user.color).toBe('#10b981');
+  expect(mockProvider.publishedCount > 0).toBeTruthy();
+
+  // Verify that restoring user identity resets it back to Alice
+  bot._restoreUserIdentity();
+  expect(localState.user.name).toBe('Alice');
+  expect(localState.user.color).toBe('#123456');
+});
+
+test('SpellCheckerBot restores user identity immediately on subsequent user transaction', async () => {
+  let localState = {
+    user: { name: 'Alice', color: '#123456' }
+  };
+
+  const mockProvider = {
+    pageId: 'test-page',
+    awareness: {
+      getLocalState: () => localState,
+      setLocalStateField: (field, value) => {
+        if (field === 'user') {
+          localState.user = value;
+        }
+      }
+    },
+    _publishOwnAwareness() {}
+  };
+
+  const mockEditor = {
+    on: () => {},
+    off: () => {},
+    state: {
+      doc: {
+        content: { size: 100 },
+        textBetween: () => 'originalword'
+      },
+      tr: {
+        insertText: () => {},
+        setMeta: () => {}
+      }
+    },
+    view: {
+      dispatch: () => {}
+    }
+  };
+
+  const bot = new SpellCheckerBot(mockEditor, mockProvider);
+  bot._callGemini = async () => 'correctedword';
+
+  // Trigger correction
+  await bot._correctWord('originalword', 0, 12, '0:originalword', '', '');
+  expect(localState.user.name).toBe('SpellCheckerBot');
+
+  // Simulate a user transaction (without the spellchecker meta flag)
+  const userTr = {
+    getMeta: (key) => key === 'isSpellCheckerCorrection' ? false : undefined,
+    docChanged: false
+  };
+  bot._onTransaction({ transaction: userTr });
+
+  // Identity should be restored immediately
+  expect(localState.user.name).toBe('Alice');
+});
+
+
+// ──────────────────────────────────────────────
 // Summary
 // ──────────────────────────────────────────────
 console.log(`\n${'─'.repeat(40)}`);

@@ -79,6 +79,8 @@ export class SpellCheckerBot {
     this.debounceTimer = null;
     this.recentlyCorrected = new Set();
     this.isDestroyed = false;
+    this._originalUser = null;
+    this._restoreTimer = null;
     this._onTransaction = this._onTransaction.bind(this);
   }
 
@@ -110,6 +112,13 @@ export class SpellCheckerBot {
    */
   _onTransaction({ transaction }) {
     if (this.isDestroyed) return;
+
+    // If there is a pending bot identity restore, and the user did something else,
+    // restore the identity immediately.
+    if (this._originalUser && !transaction.getMeta('isSpellCheckerCorrection')) {
+      this._restoreUserIdentity();
+    }
+
     if (!transaction.docChanged) return;
     if (transaction.getMeta('isSpellCheckerCorrection')) return;
 
@@ -292,6 +301,32 @@ export class SpellCheckerBot {
 
       if (currentText !== word) return; // Word changed — skip
 
+      // Apply the correction with bot identity in awareness
+      const awareness = this.provider?.awareness;
+      if (awareness) {
+        if (this._originalUser) {
+          this._restoreUserIdentity();
+        }
+        
+        const originalUser = awareness.getLocalState()?.user;
+        if (originalUser && originalUser.name !== 'SpellCheckerBot') {
+          this._originalUser = originalUser;
+          awareness.setLocalStateField('user', {
+            name: 'SpellCheckerBot',
+            color: '#10b981' // Distinct bot color (emerald green)
+          });
+          if (typeof this.provider._publishOwnAwareness === 'function') {
+            try {
+              this.provider._publishOwnAwareness();
+            } catch (e) {}
+          }
+          
+          this._restoreTimer = setTimeout(() => {
+            this._restoreUserIdentity();
+          }, 1000);
+        }
+      }
+
       // Apply the correction without stealing focus from the user.
       const { tr } = this.editor.state;
       tr.insertText(cleanCorrected, startPos, endPos);
@@ -410,8 +445,35 @@ export class SpellCheckerBot {
   destroy() {
     this.isDestroyed = true;
     clearTimeout(this.debounceTimer);
+    this._restoreUserIdentity();
     this.editor.off('transaction', this._onTransaction);
     this.recentlyCorrected.clear();
     console.log('[SpellCheckerBot] 🤖 Rechtschreib-Assistent deaktiviert');
+  }
+
+  /**
+   * Restores the local user's original identity in the collaboration awareness state.
+   *
+   * @private
+   * @returns {void}
+   */
+  _restoreUserIdentity() {
+    clearTimeout(this._restoreTimer);
+    this._restoreTimer = null;
+    if (this._originalUser) {
+      const awareness = this.provider?.awareness;
+      if (awareness) {
+        const currentUser = awareness.getLocalState()?.user;
+        if (currentUser && currentUser.name === 'SpellCheckerBot') {
+          awareness.setLocalStateField('user', this._originalUser);
+          if (typeof this.provider._publishOwnAwareness === 'function') {
+            try {
+              this.provider._publishOwnAwareness();
+            } catch (e) {}
+          }
+        }
+      }
+      this._originalUser = null;
+    }
   }
 }
