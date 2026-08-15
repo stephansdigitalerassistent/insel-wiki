@@ -45,6 +45,8 @@
   /* Borders & Radius */
   --border: rgba(255, 255, 255, 0.06);
   --border-strong: rgba(255, 255, 255, 0.12);
+  --border-table: rgba(255, 255, 255, 0.24);
+  --border-table-header: rgba(255, 255, 255, 0.40);
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
@@ -690,24 +692,29 @@ html, body {
   max-width: 100%; border-radius: var(--radius-sm); margin: 0.5em 0;
 }
 
-.editor .tiptap .tableWrapper {
+.editor .tiptap .tableWrapper,
+.tableWrapper {
   overflow-x: auto;
   margin: 1.2em 0;
   max-width: 100%;
 }
 
-.editor .tiptap table {
+.editor .tiptap table,
+table {
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
   margin: 0;
   overflow: hidden;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-table);
 }
 
-.editor .tiptap td, .editor .tiptap th {
-  border: 1px solid var(--border-strong);
+.editor .tiptap td,
+.editor .tiptap th,
+table td,
+table th {
+  border: 1px solid var(--border-table);
   padding: 10px 14px;
   text-align: left;
   vertical-align: top;
@@ -716,16 +723,23 @@ html, body {
   min-width: 80px;
 }
 
-.editor .tiptap th {
+.editor .tiptap th,
+table th {
   background: var(--bg-elevated);
   font-weight: 600;
   color: var(--text-primary);
-  border-bottom: 2px solid var(--border-strong);
+  border-bottom: 2px solid var(--border-table-header);
 }
 
-.editor .tiptap td {
-  background: rgba(255, 255, 255, 0.01);
+.editor .tiptap td,
+table td {
+  background: rgba(255, 255, 255, 0.02);
   color: var(--text-primary);
+}
+
+.editor .tiptap tr:hover td,
+table tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .editor .tiptap .selectedCell:after {
