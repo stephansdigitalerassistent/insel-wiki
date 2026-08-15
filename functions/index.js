@@ -28,9 +28,20 @@ import { BatchCommitter } from './lib/batch-committer.js';
 initializeApp();
 const db = getFirestore();
 
+// The previous model, text-embedding-004, was retired and now 404s.
+// getEmbedding swallows that into a null, so semantic search degraded to
+// keyword-only silently — page_embeddings sat at 0 docs for 125 pages.
+//
+// 768 dimensions rather than gemini-embedding-001's 3072 default: searchPages
+// loads *every* page embedding on *every* query, so vector width is a direct
+// per-search cost. The cosine similarity normalises, so shorter vectors compare
+// fine.
+const EMBEDDING_MODEL = 'gemini-embedding-001';
+const EMBEDDING_DIMS = 768;
+
 async function getEmbedding(text, apiKey) {
   if (!text || !apiKey) return null;
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -39,10 +50,11 @@ async function getEmbedding(text, apiKey) {
         'Referer': 'https://insel-wiki.web.app/'
       },
       body: JSON.stringify({
-        model: 'models/text-embedding-004',
+        model: `models/${EMBEDDING_MODEL}`,
         content: {
           parts: [{ text: text.slice(0, 8000) }]
-        }
+        },
+        outputDimensionality: EMBEDDING_DIMS
       })
     });
     if (!res.ok) {
@@ -325,8 +337,14 @@ export const searchPages = onRequest(
           isSemantic = true;
         }
 
-        // If it matches via keyword or has a high similarity score, include it
-        if (keywordMatch || (isSemantic && similarity > 0.45)) {
+        // If it matches via keyword or has a high similarity score, include it.
+        //
+        // 0.65, not 0.45: that value was tuned for the retired
+        // text-embedding-004. Measured against gemini-embedding-001 (768d) on
+        // German wiki text, related queries score >= 0.706 while clearly
+        // unrelated ones still reach 0.569 — at 0.45 every query matched every
+        // page.
+        if (keywordMatch || (isSemantic && similarity > 0.65)) {
           results.push({
             id: page.id,
             title: page.title || '',
