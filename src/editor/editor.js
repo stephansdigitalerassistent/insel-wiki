@@ -71,7 +71,7 @@ import { marked } from 'marked';
 
 marked.setOptions({ gfm: true, breaks: true });
 
-import { promptModal, linkModal } from '../components/modal.js';
+import { promptModal, linkModal, tableModal } from '../components/modal.js';
 import { getAllPages } from '../components/sidebar.js';
 import { showToast } from '../components/toast.js';
 import { navigateTo } from '../controllers/page.js';
@@ -112,6 +112,7 @@ import i18next from '../i18n.js';
  *   driving the 🎤 toolbar button and the ghost-text overlay.
  * @property {Object|null} formatTippy tippy popup hosting the shared format bubble menu.
  * @property {Object|null} linkTippy tippy popup hosting the shared link bubble menu.
+ * @property {Object|null} tableTippy tippy popup hosting the shared table bubble menu.
  * @property {Function|null} detachSelectionListener Removes this entry's document-level
  *   `selectionchange` listener; called on destroy so parked/dead entries stop reacting.
  */
@@ -187,6 +188,48 @@ function getTurndown() {
         return node.innerHTML;
       }
     });
+    turndownInstance.addRule('tables', {
+      filter: 'table',
+      replacement: function (content, node) {
+        const rows = Array.from(node.querySelectorAll('tr'));
+        if (rows.length === 0) return '';
+
+        const tableLines = [];
+        let headerHandled = false;
+
+        rows.forEach((row, rowIndex) => {
+          const cells = Array.from(row.children).filter(
+            (cell) => cell.nodeName === 'TH' || cell.nodeName === 'TD'
+          );
+          if (cells.length === 0) return;
+
+          const isHeaderRow = cells.some((cell) => cell.nodeName === 'TH') || rowIndex === 0;
+
+          const cellTexts = cells.map((cell) => {
+            const text = cell.textContent.trim().replace(/\|/g, '\\|').replace(/\n+/g, ' ');
+            return text || ' ';
+          });
+
+          tableLines.push('| ' + cellTexts.join(' | ') + ' |');
+
+          if (isHeaderRow && !headerHandled) {
+            const delimiter = cells.map(() => '---').join(' | ');
+            tableLines.push('| ' + delimiter + ' |');
+            headerHandled = true;
+          }
+        });
+
+        if (!headerHandled && tableLines.length > 0) {
+          const firstRowCells = Array.from(rows[0].children).filter(
+            (cell) => cell.nodeName === 'TH' || cell.nodeName === 'TD'
+          );
+          const delimiter = firstRowCells.map(() => '---').join(' | ');
+          tableLines.splice(1, 0, '| ' + delimiter + ' |');
+        }
+
+        return '\n\n' + tableLines.join('\n') + '\n\n';
+      }
+    });
   }
   return turndownInstance;
 }
@@ -201,35 +244,306 @@ function getTurndown() {
  * @type {boolean}
  */
 let _bubbleMenuGlobalListenersInstalled = false;
+let sharedFormatTippy = null;
+let sharedLinkTippy = null;
+let sharedTableTippy = null;
 
 /**
- * Installs the once-per-session `mousedown`/`touchstart` handlers on the shared bubble menus.
+ * Anchor rect for shared bubble popups: where the current selection is on screen for the active editor.
  *
- * Their only job is to call `preventDefault()` for presses on a button inside the menu. Without it
- * the press would blur the editor, ProseMirror would drop the selection, and the formatting command
- * fired a moment later would have nothing to apply to. `touchstart` is registered non-passive
- * precisely because it must be able to cancel the default action.
- *
- * The listeners stay attached for the lifetime of the app — the menus are shared DOM, so binding
- * them per editor would stack duplicate handlers with every page visit.
+ * @returns {DOMRect} Viewport-relative rect of the selection or caret.
+ */
+function _activeSelectionBoundingRect() {
+  const active = _active();
+  if (!active || !active.editor) return new DOMRect(0, 0, 0, 0);
+  const { view, state } = active.editor;
+  const domSelection = window.getSelection();
+  if (domSelection && domSelection.rangeCount > 0 && !domSelection.isCollapsed) {
+    const rect = domSelection.getRangeAt(0).getBoundingClientRect();
+    if (rect && (rect.width > 0 || rect.height > 0)) return rect;
+  }
+  try {
+    const coords = view.coordsAtPos(state.selection.from);
+    if (coords) {
+      return new DOMRect(coords.left, coords.top, Math.max(2, (coords.right || coords.left) - coords.left), Math.max(14, coords.bottom - coords.top));
+    }
+  } catch (e) {}
+  return active.container ? active.container.getBoundingClientRect() : new DOMRect(0, 0, 0, 0);
+}
+
+function hideAllBubbleMenus() {
+  if (sharedFormatTippy) sharedFormatTippy.hide();
+  if (sharedLinkTippy) sharedLinkTippy.hide();
+  if (sharedTableTippy) sharedTableTippy.hide();
+}
+
+/**
+ * Decides which bubble popup (if either) should currently be visible for the active editor, and repositions it.
+ */
+function updateActiveBubbleMenus() {
+  const active = _active();
+  if (!active || !active.editor || active.editor.isDestroyed) {
+    hideAllBubbleMenus();
+    return;
+  }
+  const editor = active.editor;
+  const pane = active.container;
+  const { state, view } = editor;
+  const { selection } = state;
+  const linkMenuEl = document.getElementById('link-bubble-menu');
+  const formatMenuEl = document.getElementById('format-bubble-menu');
+  const tableMenuEl = document.getElementById('table-bubble-menu');
+
+  const isFocused = view.hasFocus() ||
+                   (document.activeElement && (
+                     pane?.contains(document.activeElement) ||
+                     view.dom?.contains(document.activeElement) ||
+                     formatMenuEl?.contains(document.activeElement) || 
+                     linkMenuEl?.contains(document.activeElement) ||
+                     tableMenuEl?.contains(document.activeElement)
+                   ));
+  const isLink = editor.isActive('link');
+  const isTable = editor.isActive('table') || editor.isActive('tableCell') || editor.isActive('tableHeader');
+  const isCellSelection = selection?.constructor?.name === 'CellSelection' || ('$headCell' in selection);
+
+  if (isLink) {
+    if (sharedFormatTippy) sharedFormatTippy.hide();
+    if (sharedTableTippy) sharedTableTippy.hide();
+    if (sharedLinkTippy) {
+      sharedLinkTippy.setProps({ getReferenceClientRect: _activeSelectionBoundingRect });
+      sharedLinkTippy.show();
+    }
+    return;
+  }
+
+  if (sharedLinkTippy) sharedLinkTippy.hide();
+
+  if (!isFocused) {
+    hideAllBubbleMenus();
+    return;
+  }
+
+  if (isTable || isCellSelection) {
+    if (!selection.empty && !isCellSelection) {
+      if (sharedTableTippy) sharedTableTippy.hide();
+      if (sharedFormatTippy) {
+        sharedFormatTippy.setProps({ getReferenceClientRect: _activeSelectionBoundingRect });
+        sharedFormatTippy.show();
+      }
+    } else {
+      if (sharedFormatTippy) sharedFormatTippy.hide();
+      if (sharedTableTippy) {
+        sharedTableTippy.setProps({ getReferenceClientRect: _activeSelectionBoundingRect });
+        sharedTableTippy.show();
+      }
+    }
+    return;
+  }
+
+  if (!selection.empty) {
+    if (sharedTableTippy) sharedTableTippy.hide();
+    if (sharedFormatTippy) {
+      sharedFormatTippy.setProps({ getReferenceClientRect: _activeSelectionBoundingRect });
+      sharedFormatTippy.show();
+    }
+  } else {
+    hideAllBubbleMenus();
+  }
+}
+
+/**
+ * Installs the once-per-session `mousedown`/`touchstart` handlers and singleton tippy popups on the shared bubble menus.
  *
  * @param {HTMLElement|null} linkMenuEl The `#link-bubble-menu` element, if present in the page.
  * @param {HTMLElement|null} formatMenuEl The `#format-bubble-menu` element, if present.
+ * @param {HTMLElement|null} tableMenuEl The `#table-bubble-menu` element, if present.
  * @returns {void} No-op on every call after the first.
  */
-function ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl) {
+function ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl, tableMenuEl) {
   if (_bubbleMenuGlobalListenersInstalled) return;
   _bubbleMenuGlobalListenersInstalled = true;
   const preventBlur = (e) => { if (e.target.closest('button')) e.preventDefault(); };
+
   if (linkMenuEl) {
     linkMenuEl.style.display = 'flex';
     linkMenuEl.addEventListener('mousedown', preventBlur);
     linkMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
+
+    sharedLinkTippy = tippy(document.body, {
+      content: linkMenuEl,
+      interactive: true,
+      trigger: 'manual',
+      placement: 'top',
+      appendTo: document.body,
+      zIndex: 1000,
+      getReferenceClientRect: _activeSelectionBoundingRect,
+      onShow(instance) {
+        const editor = _active()?.editor;
+        if (!editor) return;
+        const attrs = editor.getAttributes('link');
+        const urlEl = instance.popper.querySelector('#bubble-link-url');
+        if (urlEl && attrs.href) {
+          urlEl.href = attrs.href;
+          let displayText = attrs.href;
+          let isInternal = false;
+          if (attrs.href.startsWith('#/')) {
+            isInternal = true;
+            const parts = attrs.href.split('/');
+            const pid = parts[1];
+            const allPages = getAllPages();
+            const page = allPages.find(p => p.id === pid);
+            if (page) displayText = `📄 ${page.title}`;
+          }
+          urlEl.textContent = displayText;
+          if (isInternal) {
+            urlEl.removeAttribute('target');
+            urlEl.removeAttribute('rel');
+          } else {
+            urlEl.target = '_blank';
+            urlEl.rel = 'noopener noreferrer';
+          }
+        }
+      }
+    });
+
+    const handleLinkClick = async (e) => {
+      const editBtn = e.target.closest('#bubble-link-edit');
+      const unlinkBtn = e.target.closest('#bubble-link-unlink');
+      const urlLink = e.target.closest('#bubble-link-url');
+      const editor = _active()?.editor;
+      if (!editor) return;
+      if (editBtn || unlinkBtn || urlLink) e.stopPropagation();
+      if (editBtn) {
+        e.preventDefault();
+        const { href } = editor.getAttributes('link');
+        editor.chain().focus().extendMarkRange('link').run();
+        const { state } = editor;
+        const { from, to } = state.selection;
+        const selectedText = state.doc.textBetween(from, to, ' ');
+        const linkData = await linkModal(href || '', selectedText);
+        if (linkData) {
+          editor.chain().focus()
+            .extendMarkRange('link')
+            .insertContent({
+              type: 'text',
+              text: linkData.text,
+              marks: [{ type: 'link', attrs: { href: linkData.url } }]
+            })
+            .run();
+          if (sharedLinkTippy) sharedLinkTippy.hide();
+        }
+      } else if (unlinkBtn) {
+        e.preventDefault();
+        editor.chain().focus().unsetLink().run();
+        if (sharedLinkTippy) sharedLinkTippy.hide();
+      } else if (urlLink) {
+        const href = urlLink.getAttribute('href');
+        if (href) {
+          if (href.startsWith('#')) {
+            e.preventDefault();
+            const parts = href.replace('#/', '').replace('#', '').split('/');
+            navigateTo(parts[0]);
+            if (sharedLinkTippy) sharedLinkTippy.hide();
+          }
+        }
+      }
+    };
+
+    linkMenuEl.addEventListener('click', handleLinkClick);
   }
+
   if (formatMenuEl) {
     formatMenuEl.style.display = 'flex';
     formatMenuEl.addEventListener('mousedown', preventBlur);
     formatMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
+
+    sharedFormatTippy = tippy(document.body, {
+      content: formatMenuEl,
+      interactive: true,
+      trigger: 'manual',
+      placement: 'top',
+      appendTo: document.body,
+      zIndex: 1000,
+      getReferenceClientRect: _activeSelectionBoundingRect
+    });
+
+    const handleFormatClick = async (e) => {
+      const btn = e.target.closest('.format-bubble-action');
+      if (!btn) return;
+      const editor = _active()?.editor;
+      if (!editor) return;
+      e.preventDefault(); e.stopPropagation();
+      const action = btn.dataset.action;
+      const chain = editor.chain().focus();
+      switch (action) {
+        case 'bold': chain.toggleBold().run(); break;
+        case 'italic': chain.toggleItalic().run(); break;
+        case 'h1': chain.toggleHeading({ level: 1 }).run(); break;
+        case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
+        case 'bulletList': chain.toggleBulletList().run(); break;
+        case 'date': chain.insertContent({ type: 'dateNode' }).run(); break;
+        case 'link': {
+          if (editor.isActive('link')) editor.chain().focus().extendMarkRange('link').run();
+          const { from, to } = editor.state.selection;
+          const selectedText = editor.state.doc.textBetween(from, to, ' ');
+          const linkData = await linkModal('', selectedText);
+          if (linkData) {
+            editor.chain().focus()
+              .extendMarkRange('link')
+              .insertContent({
+                type: 'text',
+                text: linkData.text,
+                marks: [{ type: 'link', attrs: { href: linkData.url } }]
+              })
+              .run();
+          }
+          break;
+        }
+      }
+      setTimeout(() => { if (sharedFormatTippy) sharedFormatTippy.hide(); }, 100);
+    };
+
+    formatMenuEl.addEventListener('click', handleFormatClick);
+  }
+
+  if (tableMenuEl) {
+    tableMenuEl.style.display = 'flex';
+    tableMenuEl.addEventListener('mousedown', preventBlur);
+    tableMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
+
+    sharedTableTippy = tippy(document.body, {
+      content: tableMenuEl,
+      interactive: true,
+      trigger: 'manual',
+      placement: 'top',
+      appendTo: document.body,
+      zIndex: 1000,
+      getReferenceClientRect: _activeSelectionBoundingRect
+    });
+
+    const handleTableClick = (e) => {
+      const btn = e.target.closest('.table-bubble-action');
+      if (!btn) return;
+      const editor = _active()?.editor;
+      if (!editor) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const action = btn.dataset.action;
+      const chain = editor.chain().focus();
+      switch (action) {
+        case 'addRowAbove': chain.addRowBefore().run(); break;
+        case 'addRowBelow': chain.addRowAfter().run(); break;
+        case 'deleteRow': chain.deleteRow().run(); break;
+        case 'addColumnBefore': chain.addColumnBefore().run(); break;
+        case 'addColumnAfter': chain.addColumnAfter().run(); break;
+        case 'deleteColumn': chain.deleteColumn().run(); break;
+        case 'toggleHeaderRow': chain.toggleHeaderRow().run(); break;
+        case 'deleteTable': chain.deleteTable().run(); break;
+      }
+      setTimeout(() => { updateActiveBubbleMenus(); }, 50);
+    };
+
+    tableMenuEl.addEventListener('click', handleTableClick);
   }
 }
 
@@ -302,6 +616,7 @@ function destroyEntry(entry) {
   if (entry.voiceAssistant) { try { entry.voiceAssistant.destroy(); } catch (e) {} entry.voiceAssistant = null; }
   if (entry.formatTippy) { try { entry.formatTippy.destroy(); } catch (e) {} entry.formatTippy = null; }
   if (entry.linkTippy) { try { entry.linkTippy.destroy(); } catch (e) {} entry.linkTippy = null; }
+  if (entry.tableTippy) { try { entry.tableTippy.destroy(); } catch (e) {} entry.tableTippy = null; }
   if (entry.detachSelectionListener) { try { entry.detachSelectionListener(); } catch (e) {} }
   if (entry.editor && !entry.editor.isDestroyed) { try { entry.editor.destroy(); } catch (e) {} }
   if (entry.provider) { try { entry.provider.destroy(); } catch (e) {} }
@@ -359,14 +674,17 @@ function restoreSelection(entry) {
  *
  * Parking captures scroll offset and selection, hides the pane and both bubble popups, and suspends
  * the provider — which detaches the Firestore watchers and drops this user from the page's awareness
- * state. The Yjs doc and the IndexedDB persistence stay alive, so reactivation is instant; what is
- * given up is only the snapshot bandwidth and the misleading "is viewing this page" presence for a
- * page nobody is looking at.
+ * Suspends the currently active editor so another one can take over the viewport.
  *
- * Clears {@link currentPageId} (and `window.editor`), so from here until the next
- * {@link activateEntry} no page counts as active.
+ * Steps:
+ * 1. Measures and saves scroll position + text selection into the entry so reactivation can restore
+ *    the exact visual state.
+ * 2. Hides the container (`display: none`) and any floating bubble popups.
+ * 3. Calls `provider.suspend()` — detaches the Firestore page/awareness listeners so the user stops
+ *    appearing as "active" on this page, but keeps the Yjs doc and local IndexedDB open so switching
+ *    back is instantaneous.
  *
- * @returns {void} No-op when nothing is active.
+ * @returns {void}
  */
 function parkActive() {
   const entry = _active();
@@ -378,8 +696,8 @@ function parkActive() {
   persistSelection(entry);
 
   entry.container.style.display = 'none';
-  if (entry.formatTippy) entry.formatTippy.hide();
-  if (entry.linkTippy) entry.linkTippy.hide();
+  hideAllBubbleMenus();
+  if (entry.tableTippy) entry.tableTippy.hide();
 
   // The markdown `content` field is projected from Yjs server-side
   // (functions/projectYjsToMarkdown). Parking only needs to flush the Yjs
@@ -535,6 +853,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
     voiceAssistant: null,
     formatTippy: null,
     linkTippy: null,
+    tableTippy: null,
     detachSelectionListener: null,
   };
 
@@ -591,8 +910,9 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
 
   const linkMenuEl = document.getElementById('link-bubble-menu');
   const formatMenuEl = document.getElementById('format-bubble-menu');
+  const tableMenuEl = document.getElementById('table-bubble-menu');
   // Bubble menus are shared DOM. Wire global listeners exactly once.
-  ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl);
+  ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl, tableMenuEl);
 
   /**
    * Tiptap extension set for this editor.
@@ -970,283 +1290,30 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
    *
    * @returns {DOMRect} Viewport-relative rect of the selection or caret.
    */
-  function getSelectionBoundingRect() {
-    const { view, state } = editor;
-    const { selection } = state;
-    const domSelection = window.getSelection();
-    if (domSelection && domSelection.rangeCount > 0 && !domSelection.isCollapsed) {
-      return domSelection.getRangeAt(0).getBoundingClientRect();
-    }
-    const coords = view.coordsAtPos(selection.from);
-    return new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top);
-  }
 
-  /** @type {Object|null} Popup showing the format bubble menu over a non-empty selection. */
-  let formatTippy = null;
-  /** @type {Object|null} Popup showing the link bubble menu while the caret sits inside a link. */
-  let linkTippy = null;
 
-  if (formatMenuEl) {
-    formatTippy = tippy(pane, {
-      content: formatMenuEl,
-      interactive: true,
-      trigger: 'manual',
-      placement: 'top',
-      appendTo: document.body,
-      zIndex: 1000,
-      getReferenceClientRect: getSelectionBoundingRect
-    });
-
-    /**
-     * Applies a format bubble action (bold, italic, H1/H2, bullet list, date pill, link) to this
-     * editor.
-     *
-     * Bound to the *shared* menu element, so the `currentPageId !== pageId` guard is essential: one
-     * handler per live editor is attached to the same DOM node, and without the check a single
-     * click would fan out to every parked editor and dirty their documents.
-     *
-     * `pointerdown` rather than `click` keeps the interaction on the same gesture that already
-     * suppressed the blur, so the selection is still intact when the command runs. The trailing
-     * timeout hides the popup only after the command has been applied — hiding immediately would
-     * race the async link flow. The `link` case reuses the selected text as the default label and
-     * expands to the full mark first, so editing an existing link replaces it wholesale instead of
-     * nesting a second one.
-     *
-     * @param {PointerEvent} e Pointer event from the shared format menu.
-     * @returns {Promise<void>} Resolves once the command (and any modal) has completed.
-     */
-    const handleFormatClick = async (e) => {
-      const btn = e.target.closest('.format-bubble-action');
-      if (!btn) return;
-      // Shared bubble menu — only the active editor should react.
-      if (currentPageId !== pageId) return;
-      e.preventDefault(); e.stopPropagation();
-      const action = btn.dataset.action;
-      const chain = editor.chain().focus();
-      switch (action) {
-        case 'bold': chain.toggleBold().run(); break;
-        case 'italic': chain.toggleItalic().run(); break;
-        case 'h1': chain.toggleHeading({ level: 1 }).run(); break;
-        case 'h2': chain.toggleHeading({ level: 2 }).run(); break;
-        case 'bulletList': chain.toggleBulletList().run(); break;
-        case 'date': chain.insertContent({ type: 'dateNode' }).run(); break;
-        case 'link': {
-          if (editor.isActive('link')) editor.chain().focus().extendMarkRange('link').run();
-          const { from, to } = editor.state.selection;
-          const selectedText = editor.state.doc.textBetween(from, to, ' ');
-          const linkData = await linkModal('', selectedText);
-          if (linkData) {
-            editor.chain().focus()
-              .extendMarkRange('link')
-              .insertContent({
-                type: 'text',
-                text: linkData.text,
-                marks: [{ type: 'link', attrs: { href: linkData.url } }]
-              })
-              .run();
-          }
-          break;
-        }
-      }
-      setTimeout(() => { if (formatTippy) formatTippy.hide(); }, 100);
-    };
-
-    formatMenuEl.addEventListener('pointerdown', handleFormatClick);
-  }
-
-  if (linkMenuEl) {
-    linkTippy = tippy(pane, {
-      content: linkMenuEl,
-      interactive: true,
-      trigger: 'manual',
-      placement: 'top',
-      appendTo: document.body,
-      zIndex: 1000,
-      getReferenceClientRect: getSelectionBoundingRect,
-      /**
-       * Fills the link preview just before the popup appears.
-       *
-       * Internal `#/<pageId>/…` targets are resolved against the sidebar's page list and shown as
-       * `📄 <Title>` — a raw hash URL tells the reader nothing. Internal links also drop
-       * `target`/`rel` so they stay in the SPA, while external ones get
-       * `target="_blank" rel="noopener noreferrer"`. Attributes are cleared rather than overwritten
-       * because the same DOM element is reused for every link in every editor.
-       *
-       * @param {Object} instance The tippy instance being shown.
-       * @returns {void}
-       */
-      onShow(instance) {
-        const attrs = editor.getAttributes('link');
-        const urlEl = instance.popper.querySelector('#bubble-link-url');
-        if (urlEl && attrs.href) {
-          urlEl.href = attrs.href;
-          let displayText = attrs.href;
-          let isInternal = false;
-          if (attrs.href.startsWith('#/')) {
-            isInternal = true;
-            const parts = attrs.href.split('/');
-            const pid = parts[1];
-            const allPages = getAllPages();
-            const page = allPages.find(p => p.id === pid);
-            if (page) displayText = `📄 ${page.title}`;
-          }
-          urlEl.textContent = displayText;
-          if (isInternal) {
-            urlEl.removeAttribute('target');
-            urlEl.removeAttribute('rel');
-          } else {
-            urlEl.target = '_blank';
-            urlEl.rel = 'noopener noreferrer';
-          }
-        }
-      }
-    });
-
-    /**
-     * Handles the three link bubble actions: edit, unlink, and following the previewed URL.
-     *
-     * Carries the same `currentPageId !== pageId` guard as the format menu — the element is shared
-     * across editors. Propagation is stopped for recognised targets so the click does not reach the
-     * document-level handlers that would immediately dismiss the popup.
-     *
-     * Only internal (`#…`) previews are intercepted and routed through
-     * {@link module:controllers/page.navigateTo}; external hrefs are left to the browser's native
-     * `target="_blank"` handling.
-     *
-     * @param {MouseEvent} e Click event from the shared link menu.
-     * @returns {Promise<void>} Resolves once the edit modal (if any) has been handled.
-     */
-    const handleLinkClick = async (e) => {
-      const editBtn = e.target.closest('#bubble-link-edit');
-      const unlinkBtn = e.target.closest('#bubble-link-unlink');
-      const urlLink = e.target.closest('#bubble-link-url');
-      // Shared bubble menu — only the active editor should react.
-      if (currentPageId !== pageId) return;
-      if (editBtn || unlinkBtn || urlLink) e.stopPropagation();
-      if (editBtn) {
-        e.preventDefault();
-        const { href } = editor.getAttributes('link');
-        editor.chain().focus().extendMarkRange('link').run();
-        const { state } = editor;
-        const { from, to } = state.selection;
-        const selectedText = state.doc.textBetween(from, to, ' ');
-        const linkData = await linkModal(href || '', selectedText);
-        if (linkData) {
-          editor.chain().focus()
-            .extendMarkRange('link')
-            .insertContent({
-              type: 'text',
-              text: linkData.text,
-              marks: [{ type: 'link', attrs: { href: linkData.url } }]
-            })
-            .run();
-          if (linkTippy) linkTippy.hide();
-        }
-      } else if (unlinkBtn) {
-        e.preventDefault();
-        editor.chain().focus().unsetLink().run();
-        if (linkTippy) linkTippy.hide();
-      } else if (urlLink) {
-        const href = urlLink.getAttribute('href');
-        if (href) {
-          if (href.startsWith('#')) {
-            e.preventDefault();
-            const parts = href.replace('#/', '').replace('#', '').split('/');
-            navigateTo(parts[0]);
-            if (linkTippy) linkTippy.hide();
-          }
-        }
-      }
-    };
-
-    linkMenuEl.addEventListener('click', handleLinkClick);
-  }
-
-  /**
-   * Decides which bubble popup (if either) should currently be visible, and repositions it.
-   *
-   * Rules: the format menu shows for a focused, non-empty, non-link selection; the link menu shows
-   * whenever the caret is inside a link. They are mutually exclusive by construction — the format
-   * menu explicitly bows out on links so the two never overlap.
-   *
-   * "Focused" deliberately includes focus living inside one of the menus, otherwise interacting with
-   * a menu button would hide the very menu being used. The `currentPageId !== pageId` early return
-   * keeps parked editors from popping menus over the page the user is actually looking at.
-   *
-   * Runs on `selectionUpdate`, `transaction`, `focus`, and the document-level `selectionchange`
-   * event — the last one catches selection changes the editor itself does not report.
-   *
-   * @returns {void}
-   */
-  function updateBubbleMenus() {
-    if (!editor || editor.isDestroyed) return;
-    if (currentPageId !== pageId) return; // parked editor — bubbles must stay hidden
-    const { state, view } = editor;
-    const { selection } = state;
-    const isFocused = view.hasFocus() ||
-                     (document.activeElement && (formatMenuEl?.contains(document.activeElement) || linkMenuEl?.contains(document.activeElement)));
-    const isLink = editor.isActive('link');
-    if (formatTippy) {
-      if (isFocused && !selection.empty && !isLink) {
-        formatTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
-        formatTippy.show();
-      } else {
-        formatTippy.hide();
-      }
-    }
-    if (linkTippy) {
-      if (isLink) {
-        linkTippy.setProps({ getReferenceClientRect: getSelectionBoundingRect });
-        linkTippy.show();
-      } else {
-        linkTippy.hide();
-      }
-    }
-  }
-
-  editor.on('selectionUpdate', updateBubbleMenus);
-  editor.on('transaction', updateBubbleMenus);
-  editor.on('focus', updateBubbleMenus);
+  editor.on('selectionUpdate', updateActiveBubbleMenus);
+  editor.on('transaction', updateActiveBubbleMenus);
+  editor.on('focus', updateActiveBubbleMenus);
 
   // Toolbar state must follow whichever editor is currently active.
-  /**
-   * Repaints the shared format toolbar's active-button states from this editor.
-   *
-   * Guarded on the active page for the same reason as the bubble handlers: every cached editor
-   * fires transactions, but only the visible one may drive the single toolbar.
-   *
-   * @returns {void}
-   */
   const toolbarBindUpdate = () => {
     if (formatToolbarRef && currentPageId === pageId) updateToolbarState(formatToolbarRef, editor);
   };
   editor.on('selectionUpdate', toolbarBindUpdate);
   editor.on('transaction', toolbarBindUpdate);
 
-  /**
-   * Document-level `selectionchange` bridge — catches caret moves the editor does not emit an event
-   * for (native double-click word selection, drag-select release, mobile handles).
-   *
-   * Removed both by {@link CacheEntry.detachSelectionListener} on eviction and by the editor's own
-   * `destroy` hook, so no listener survives its editor.
-   *
-   * @returns {void}
-   */
-  const onSelectionChange = () => updateBubbleMenus();
+  const onSelectionChange = () => updateActiveBubbleMenus();
   document.addEventListener('selectionchange', onSelectionChange);
   entry.detachSelectionListener = () => document.removeEventListener('selectionchange', onSelectionChange);
 
-  // Hide both popups when focus really left the editing surface. The 250ms delay is what makes
-  // clicking a bubble button work at all: blur fires before the button receives focus, so an
-  // immediate hide would destroy the menu mid-click. After the delay we re-check where focus
-  // actually landed and keep the menus open if it is inside one of them.
   editor.on('blur', () => {
     setTimeout(() => {
       if (!pane.contains(document.activeElement) &&
           (!formatMenuEl || !formatMenuEl.contains(document.activeElement)) &&
-          (!linkMenuEl || !linkMenuEl.contains(document.activeElement))) {
-        if (formatTippy) formatTippy.hide();
-        if (linkTippy) linkTippy.hide();
+          (!linkMenuEl || !linkMenuEl.contains(document.activeElement)) &&
+          (!tableMenuEl || !tableMenuEl.contains(document.activeElement))) {
+        hideAllBubbleMenus();
       }
     }, 250);
   });
@@ -1254,9 +1321,6 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
   editor.on('destroy', () => {
     document.removeEventListener('selectionchange', onSelectionChange);
   });
-
-  entry.formatTippy = formatTippy;
-  entry.linkTippy = linkTippy;
 
   provider.init();
 
@@ -1578,6 +1642,7 @@ export function createFormatToolbar(container) {
     <div class="divider"></div>
     <button class="format-btn" data-action="blockquote" title="${i18next.t('editor.blockquote')} (Ctrl+Shift+B)">❝</button>
     <button class="format-btn" data-action="codeBlock" title="${i18next.t('editor.codeBlock')} (Ctrl+Alt+C)">▤</button>
+    <button class="format-btn" data-action="table" title="${i18next.t('editor.insertTable')}">⊞</button>
     <button class="format-btn" data-action="horizontalRule" title="${i18next.t('editor.horizontalRule')} (Ctrl+Enter)">—</button>
     <div class="divider"></div>
     <button class="format-btn" data-action="link" title="${i18next.t('editor.link')} (Ctrl+K)">🔗</button>
@@ -1606,6 +1671,17 @@ export function createFormatToolbar(container) {
       case 'taskList': chain.toggleTaskList().run(); break;
       case 'blockquote': chain.toggleBlockquote().run(); break;
       case 'codeBlock': chain.toggleCodeBlock().run(); break;
+      case 'table': {
+        const tableConfig = await tableModal();
+        if (tableConfig) {
+          chain.insertTable({
+            rows: tableConfig.rows,
+            cols: tableConfig.cols,
+            withHeaderRow: tableConfig.withHeaderRow,
+          }).run();
+        }
+        break;
+      }
       case 'horizontalRule': chain.setHorizontalRule().run(); break;
       case 'date': chain.insertContent({ type: 'dateNode' }).run(); break;
       case 'link': {
@@ -1685,6 +1761,7 @@ function updateToolbarState(toolbar, editor) {
       case 'taskList': isActive = editor.isActive('taskList'); break;
       case 'blockquote': isActive = editor.isActive('blockquote'); break;
       case 'codeBlock': isActive = editor.isActive('codeBlock'); break;
+      case 'table': isActive = editor.isActive('table'); break;
       case 'voice': {
         const entry = _active();
         isActive = entry && entry.voiceAssistant && entry.voiceAssistant.isRecording;

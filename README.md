@@ -10,6 +10,7 @@
   - **Inline Comments:** Conduct discussions directly at text locations.
   - **@Mentions:** Targeted mentions of colleagues from the hospital directory.
 - **Transparency:** "Last edited by" badges with avatar and timestamp for every page.
+- **Rich Table Editing:** Interactive table creation with custom dimensions, contextual row/column operations, header toggling, column resizing, and GFM markdown compatibility.
 - **Hierarchical Structure:** Organized page navigation with drag-and-drop sorting.
 - **Healthcare Design:** Optimized for high readability and focus, including dark mode and responsive mobile layout.
 - **Automated Quality Assurance:** Integrated E2E test suite with Playwright (Desktop & Mobile).

@@ -690,16 +690,66 @@ html, body {
   max-width: 100%; border-radius: var(--radius-sm); margin: 0.5em 0;
 }
 
+.editor .tiptap .tableWrapper {
+  overflow-x: auto;
+  margin: 1.2em 0;
+  max-width: 100%;
+}
+
 .editor .tiptap table {
-  border-collapse: collapse; width: 100%; margin: 0.8em 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
 }
 
 .editor .tiptap td, .editor .tiptap th {
-  border: 1px solid var(--border-strong); padding: 8px 12px; text-align: left;
+  border: 1px solid var(--border-strong);
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+  min-width: 80px;
 }
 
 .editor .tiptap th {
-  background: var(--bg-elevated); font-weight: 600;
+  background: var(--bg-elevated);
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.editor .tiptap td {
+  background: rgba(255, 255, 255, 0.01);
+  color: var(--text-primary);
+}
+
+.editor .tiptap .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: var(--accent-subtle);
+  pointer-events: none;
+}
+
+.editor .tiptap .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: var(--accent);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.editor .tiptap.resize-cursor {
+  cursor: col-resize;
 }
 
 /* Task list */
@@ -1140,6 +1190,34 @@ html, body {
 
 .bubble-btn:hover {
   background-color: var(--bg-hover); color: var(--text-primary);
+}
+
+.bubble-btn.btn-danger:hover {
+  background-color: rgba(248, 113, 113, 0.2);
+  color: var(--danger);
+}
+
+/* --- Table Modal --- */
+.table-modal-box {
+  max-width: 420px;
+}
+
+.table-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.table-modal-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.table-modal-form .checkbox-group label {
+  font-size: 0.9rem;
+  color: var(--text-primary);
 }
 
 /* --- Diff Styles --- */

@@ -133,7 +133,10 @@
     "image": "Immagine",
     "voice": "Input vocale (Dettatura)",
     "comment": "Aggiungi commento",
-    "imageUrlPrompt": "Inserisci URL immagine:",
+    "insertTable": "Inserisci tabella",
+    "tableRows": "Righe (1-20)",
+    "tableCols": "Colonne (1-10)",
+    "withHeaderRow": "Usa riga di intestazione",
     "voiceErrors": {
       "mic-denied": "Nessun accesso al microfono.",
       "unsupported": "L'input vocale non è supportato da questo browser.",
@@ -141,6 +144,16 @@
       "recorder": "Impossibile avviare la registrazione audio.",
       "backend": "Servizio di riconoscimento vocale non disponibile."
     }
+  },
+  "table": {
+    "addRowAbove": "Inserisci riga sopra",
+    "addRowBelow": "Inserisci riga sotto",
+    "deleteRow": "Elimina riga",
+    "addColumnBefore": "Inserisci colonna a sinistra",
+    "addColumnAfter": "Inserisci colonna a destra",
+    "deleteColumn": "Elimina colonna",
+    "toggleHeaderRow": "Attiva/disattiva riga di intestazione",
+    "deleteTable": "Elimina tabella"
   },
   "dashboard": {
     "title": "Panoramica attività",

@@ -953,3 +953,151 @@ export function openAclModal(page) {
     renderEmails();
   });
 }
+
+/**
+ * Custom Promise-based modal for inserting a new table with custom dimensions.
+ *
+ * @param {number} [defaultRows=3] Initial row count (1-20).
+ * @param {number} [defaultCols=3] Initial column count (1-10).
+ * @param {boolean} [defaultHeader=true] Whether to include a header row.
+ * @returns {Promise<{ rows: number, cols: number, withHeaderRow: boolean }|null>}
+ */
+export function tableModal(defaultRows = 3, defaultCols = 3, defaultHeader = true) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-box table-modal-box';
+
+    const header = document.createElement('h3');
+    header.className = 'modal-title';
+    header.textContent = i18next.t('editor.insertTable') || 'Tabelle einfügen';
+
+    const form = document.createElement('div');
+    form.className = 'table-modal-form';
+
+    // Rows group
+    const rowsGroup = document.createElement('div');
+    rowsGroup.className = 'form-group';
+    const rowsLabel = document.createElement('label');
+    rowsLabel.textContent = i18next.t('editor.tableRows') || 'Zeilen (1-20)';
+    const rowsInput = document.createElement('input');
+    rowsInput.type = 'number';
+    rowsInput.className = 'modal-input';
+    rowsInput.id = 'table-modal-rows';
+    rowsInput.min = '1';
+    rowsInput.max = '20';
+    rowsInput.value = String(defaultRows);
+    rowsGroup.appendChild(rowsLabel);
+    rowsGroup.appendChild(rowsInput);
+
+    // Cols group
+    const colsGroup = document.createElement('div');
+    colsGroup.className = 'form-group';
+    const colsLabel = document.createElement('label');
+    colsLabel.textContent = i18next.t('editor.tableCols') || 'Spalten (1-10)';
+    const colsInput = document.createElement('input');
+    colsInput.type = 'number';
+    colsInput.className = 'modal-input';
+    colsInput.id = 'table-modal-cols';
+    colsInput.min = '1';
+    colsInput.max = '10';
+    colsInput.value = String(defaultCols);
+    colsGroup.appendChild(colsLabel);
+    colsGroup.appendChild(colsInput);
+
+    // Header checkbox group
+    const headerGroup = document.createElement('div');
+    headerGroup.className = 'form-group checkbox-group';
+    const headerLabel = document.createElement('label');
+    headerLabel.style.display = 'flex';
+    headerLabel.style.alignItems = 'center';
+    headerLabel.style.gap = '8px';
+    headerLabel.style.cursor = 'pointer';
+    const headerInput = document.createElement('input');
+    headerInput.type = 'checkbox';
+    headerInput.id = 'table-modal-header';
+    headerInput.checked = defaultHeader;
+    const headerSpan = document.createElement('span');
+    headerSpan.textContent = i18next.t('editor.withHeaderRow') || 'Kopfzeile verwenden';
+    headerLabel.appendChild(headerInput);
+    headerLabel.appendChild(headerSpan);
+    headerGroup.appendChild(headerLabel);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = i18next.t('common.cancel') || 'Abbrechen';
+
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'button';
+    submitBtn.id = 'table-modal-submit';
+    submitBtn.className = 'btn btn-primary';
+    submitBtn.textContent = i18next.t('common.confirm') || 'Einfügen';
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(submitBtn);
+
+    form.appendChild(rowsGroup);
+    form.appendChild(colsGroup);
+    form.appendChild(headerGroup);
+
+    modal.appendChild(header);
+    modal.appendChild(form);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      rowsInput.focus();
+      rowsInput.select();
+    }, 10);
+
+    const cleanup = () => {
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
+    };
+
+    const submit = () => {
+      let r = parseInt(rowsInput.value, 10);
+      let c = parseInt(colsInput.value, 10);
+      if (isNaN(r) || r < 1) r = 1;
+      if (r > 20) r = 20;
+      if (isNaN(c) || c < 1) c = 1;
+      if (c > 10) c = 10;
+      const h = headerInput.checked;
+      cleanup();
+      resolve({ rows: r, cols: c, withHeaderRow: h });
+    };
+
+    const cancel = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    submitBtn.addEventListener('click', submit);
+    cancelBtn.addEventListener('click', cancel);
+
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submit();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancel();
+      }
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cancel();
+    });
+  });
+}
+

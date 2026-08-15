@@ -133,7 +133,10 @@
     "image": "Image",
     "voice": "Voice input",
     "comment": "Add comment",
-    "imageUrlPrompt": "Enter image URL:",
+    "insertTable": "Insert table",
+    "tableRows": "Rows (1-20)",
+    "tableCols": "Columns (1-10)",
+    "withHeaderRow": "Use header row",
     "voiceErrors": {
       "mic-denied": "No microphone access.",
       "unsupported": "Voice input is not supported by this browser.",
@@ -141,6 +144,16 @@
       "recorder": "Could not start audio recording.",
       "backend": "Speech recognition service unavailable."
     }
+  },
+  "table": {
+    "addRowAbove": "Insert row above",
+    "addRowBelow": "Insert row below",
+    "deleteRow": "Delete row",
+    "addColumnBefore": "Insert column before",
+    "addColumnAfter": "Insert column after",
+    "deleteColumn": "Delete column",
+    "toggleHeaderRow": "Toggle header row",
+    "deleteTable": "Delete table"
   },
   "dashboard": {
     "title": "Task Overview",

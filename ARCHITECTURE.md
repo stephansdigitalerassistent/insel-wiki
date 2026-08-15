@@ -29,6 +29,7 @@ The UI is divided into independent modules that communicate via the global state
 
 Based on **Tiptap**, extended with medically relevant functions:
 - **Custom Extensions**: `Comment.js` (mark infrastructure) and `Mention.js` (suggestion logic).
+- **Table Infrastructure**: Full rich-table support via `@tiptap/extension-table` (with resizable columns), custom creation modal (`tableModal`), contextual bubble toolbar for row/column operations, and GFM markdown serialization/deserialization.
 - **Suggestions**: `suggestions.js` integrates `tippy.js` for user-friendly @User search.
 
 ## 4. Design System (`src/styles/`)

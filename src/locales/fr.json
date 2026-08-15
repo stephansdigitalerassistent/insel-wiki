@@ -133,7 +133,10 @@
     "image": "Image",
     "voice": "Saisie vocale (Dictée)",
     "comment": "Ajouter un commentaire",
-    "imageUrlPrompt": "Entrez l'URL de l'image :",
+    "insertTable": "Insérer un tableau",
+    "tableRows": "Lignes (1-20)",
+    "tableCols": "Colonnes (1-10)",
+    "withHeaderRow": "Utiliser une ligne d'en-tête",
     "voiceErrors": {
       "mic-denied": "Aucun accès au microphone.",
       "unsupported": "La saisie vocale n'est pas prise en charge par ce navigateur.",
@@ -141,6 +144,16 @@
       "recorder": "Impossible de démarrer l'enregistrement audio.",
       "backend": "Le service de reconnaissance vocale n'est pas disponible."
     }
+  },
+  "table": {
+    "addRowAbove": "Insérer une ligne au-dessus",
+    "addRowBelow": "Insérer une ligne en-dessous",
+    "deleteRow": "Supprimer la ligne",
+    "addColumnBefore": "Insérer une colonne à gauche",
+    "addColumnAfter": "Insérer une colonne à droite",
+    "deleteColumn": "Supprimer la colonne",
+    "toggleHeaderRow": "Basculer la ligne d'en-tête",
+    "deleteTable": "Supprimer le tableau"
   },
   "dashboard": {
     "title": "Aperçu des tâches",

@@ -133,7 +133,10 @@
     "image": "Bild",
     "voice": "Spracheingabe (Diktat)",
     "comment": "Kommentar hinzufügen",
-    "imageUrlPrompt": "Bild-URL eingeben:",
+    "insertTable": "Tabelle einfügen",
+    "tableRows": "Zeilen (1-20)",
+    "tableCols": "Spalten (1-10)",
+    "withHeaderRow": "Kopfzeile verwenden",
     "voiceErrors": {
       "mic-denied": "Kein Zugriff auf das Mikrofon.",
       "unsupported": "Spracheingabe wird von diesem Browser nicht unterstützt.",
@@ -141,6 +144,16 @@
       "recorder": "Audioaufnahme konnte nicht gestartet werden.",
       "backend": "Spracherkennungs-Dienst nicht erreichbar."
     }
+  },
+  "table": {
+    "addRowAbove": "Zeile oberhalb einfügen",
+    "addRowBelow": "Zeile unterhalb einfügen",
+    "deleteRow": "Zeile löschen",
+    "addColumnBefore": "Spalte links einfügen",
+    "addColumnAfter": "Spalte rechts einfügen",
+    "deleteColumn": "Spalte löschen",
+    "toggleHeaderRow": "Kopfzeile umschalten",
+    "deleteTable": "Tabelle löschen"
   },
   "dashboard": {
     "title": "Aufgaben-Übersicht",
