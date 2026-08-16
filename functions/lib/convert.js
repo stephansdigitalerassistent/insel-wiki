@@ -90,5 +90,52 @@ function getTurndown() {
       return node.innerHTML;
     },
   });
+  turndownInstance.addRule('tables', {
+    filter: 'table',
+    replacement(content, node) {
+      // Turndown parses the HTML with domino, whose `children` is an array-like
+      // HTMLCollection rather than an iterable — hence Array.from() throughout.
+      const rows = [];
+      (function collect(el) {
+        for (const child of Array.from(el.children || [])) {
+          if (child.nodeName === 'TR') rows.push(child);
+          else collect(child);
+        }
+      })(node);
+      if (rows.length === 0) return '';
+
+      const cellsOf = (row) =>
+        Array.from(row.children || []).filter(
+          (cell) => cell.nodeName === 'TH' || cell.nodeName === 'TD'
+        );
+
+      const tableLines = [];
+      let headerHandled = false;
+
+      rows.forEach((row, rowIndex) => {
+        const cells = cellsOf(row);
+        if (cells.length === 0) return;
+
+        const isHeaderRow = cells.some((cell) => cell.nodeName === 'TH') || rowIndex === 0;
+        const cellTexts = cells.map((cell) => {
+          const text = cell.textContent.trim().replace(/\|/g, '\\|').replace(/\n+/g, ' ');
+          return text || ' ';
+        });
+        tableLines.push('| ' + cellTexts.join(' | ') + ' |');
+
+        if (isHeaderRow && !headerHandled) {
+          tableLines.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+          headerHandled = true;
+        }
+      });
+
+      if (!headerHandled && tableLines.length > 0) {
+        const delimiter = cellsOf(rows[0]).map(() => '---').join(' | ');
+        tableLines.splice(1, 0, '| ' + delimiter + ' |');
+      }
+
+      return '\n\n' + tableLines.join('\n') + '\n\n';
+    },
+  });
   return turndownInstance;
 }

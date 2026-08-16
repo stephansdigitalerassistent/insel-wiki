@@ -147,3 +147,93 @@ test('content over 100k characters is truncated', () => {
   });
   assert.equal(projectToMarkdown(bytes).length, 100000);
 });
+
+// --- tables -------------------------------------------------------------
+// The client renders tables into the Yjs doc, but the projected `content`
+// field is what keyword search matches and what the semantic-search embedding
+// is built from — so a table that flattens into loose paragraphs here is a
+// silent search-quality regression, not just a cosmetic one.
+
+function tableCell(text, type = 'tableCell') {
+  return {
+    type,
+    attrs: { colspan: 1, rowspan: 1, colwidth: null },
+    content: [{ type: 'paragraph', content: text ? [{ type: 'text', text }] : [] }],
+  };
+}
+
+test('tables project to GFM with a header delimiter row', () => {
+  const bytes = encodeStateFromPmJson({
+    type: 'doc',
+    content: [
+      {
+        type: 'table',
+        content: [
+          { type: 'tableRow', content: [tableCell('Team', 'tableHeader'), tableCell('Idee', 'tableHeader')] },
+          { type: 'tableRow', content: [tableCell('Alpha'), tableCell('Triage-Bot')] },
+        ],
+      },
+    ],
+  });
+  const md = projectToMarkdown(bytes);
+  assert.match(md, /^\| Team \| Idee \|$/m);
+  assert.match(md, /^\| --- \| --- \|$/m);
+  assert.match(md, /^\| Alpha \| Triage-Bot \|$/m);
+});
+
+test('a header-less table still gets a delimiter row so it stays a table', () => {
+  const bytes = encodeStateFromPmJson({
+    type: 'doc',
+    content: [
+      {
+        type: 'table',
+        content: [
+          { type: 'tableRow', content: [tableCell('a'), tableCell('b')] },
+          { type: 'tableRow', content: [tableCell('c'), tableCell('d')] },
+        ],
+      },
+    ],
+  });
+  const lines = projectToMarkdown(bytes).split('\n').filter(Boolean);
+  assert.equal(lines[0], '| a | b |');
+  assert.equal(lines[1], '| --- | --- |');
+  assert.equal(lines[2], '| c | d |');
+});
+
+test('pipes inside cells are escaped and empty cells keep the column count', () => {
+  const bytes = encodeStateFromPmJson({
+    type: 'doc',
+    content: [
+      {
+        type: 'table',
+        content: [
+          { type: 'tableRow', content: [tableCell('x', 'tableHeader'), tableCell('y', 'tableHeader')] },
+          { type: 'tableRow', content: [tableCell('Triage | Bot'), tableCell('')] },
+        ],
+      },
+    ],
+  });
+  const md = projectToMarkdown(bytes);
+  assert.match(md, /\| Triage \\\| Bot \|/);
+  // The empty cell must not collapse the row to a single column. Count only
+  // unescaped pipes — the escaped one inside the cell is content, not a border.
+  const dataRow = md.split('\n').find((l) => l.includes('Triage'));
+  assert.equal(dataRow.match(/(^|[^\\])\|/g).length, 3); // 2 cells => 3 borders
+});
+
+test('surrounding prose is preserved around a table', () => {
+  const bytes = encodeStateFromPmJson({
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'Vor der Tabelle' }] },
+      {
+        type: 'table',
+        content: [{ type: 'tableRow', content: [tableCell('k', 'tableHeader'), tableCell('v', 'tableHeader')] }],
+      },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Danach' }] },
+    ],
+  });
+  const md = projectToMarkdown(bytes);
+  assert.match(md, /Vor der Tabelle\n\n\| k \| v \|/);
+  assert.match(md, /\n\nDanach$/);
+});
