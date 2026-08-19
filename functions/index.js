@@ -193,7 +193,7 @@ export const spellcheck = onRequest(
         return;
       }
       
-      const model = 'gemini-3.1-flash-lite';
+      const model = 'gemini-3.5-flash-lite';
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       
       const systemPrompt = `Fix dyslexia typos (transpositions, omissions, duplicates, b/d/p/q/ei/ie swaps) for the Target word using Context.
