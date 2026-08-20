@@ -139,23 +139,33 @@ export async function createHistorySnapshot(pageId, content, title, savedBy = ''
     let storedContent = content;
 
     if (latestContent) {
-      // 2. Decide if patch or full
-      const snapshotCount = await getCountFromServer(historyRef);
-      const count = snapshotCount.data().count;
-      
-      // Calculate diff
-      const diffs = dmp.diff_main(latestContent, content);
-      dmp.diff_cleanupSemantic(diffs);
-      const patches = dmp.patch_make(latestContent, diffs);
-      const patchText = dmp.patch_toText(patches);
+      try {
+        // 2. Decide if patch or full
+        const snapshotCount = await getCountFromServer(historyRef);
+        const count = snapshotCount.data().count;
+        
+        // Sanitize unpaired UTF-16 surrogates before diffing if supported
+        const cleanLatest = typeof latestContent.toWellFormed === 'function' ? latestContent.toWellFormed() : latestContent;
+        const cleanContent = typeof content.toWellFormed === 'function' ? content.toWellFormed() : content;
 
-      // Criteria for patch:
-      const isSmallPatch = patchText.length < content.length * 0.5;
-      const isIntervalKeyframe = (count > 0 && count % SNAPSHOT_KEYFRAME_INTERVAL === 0);
+        // Calculate diff
+        const diffs = dmp.diff_main(cleanLatest, cleanContent);
+        dmp.diff_cleanupSemantic(diffs);
+        const patches = dmp.patch_make(cleanLatest, diffs);
+        const patchText = dmp.patch_toText(patches);
 
-      if (isSmallPatch && !isIntervalKeyframe) {
-        type = 'patch';
-        storedContent = patchText;
+        // Criteria for patch:
+        const isSmallPatch = patchText.length < cleanContent.length * 0.5;
+        const isIntervalKeyframe = (count > 0 && count % SNAPSHOT_KEYFRAME_INTERVAL === 0);
+
+        if (isSmallPatch && !isIntervalKeyframe) {
+          type = 'patch';
+          storedContent = patchText;
+        }
+      } catch (diffErr) {
+        console.warn('[Snapshot] Patch computation failed, falling back to full snapshot:', diffErr);
+        type = 'full';
+        storedContent = content;
       }
     }
 
@@ -167,7 +177,7 @@ export async function createHistorySnapshot(pageId, content, title, savedBy = ''
       savedAt: serverTimestamp(),
     });
   } catch (err) {
-    console.error('[Insel-Wiki] Snapshot error:', err);
+    console.error('[Snapshot] Failed to save history snapshot:', err);
   }
 }
 
@@ -552,6 +562,26 @@ export async function logClientError(message, stack = null, options = {}) {
   } catch (err) {
     // Use console.warn to avoid recursion loops with console.error
     console.warn('[Firestore] Failed to log client error to database:', err);
+  }
+}
+
+/**
+ * Fetch latest client errors from Firestore (Admin only).
+ * @param {number} [limitCount=50]
+ * @returns {Promise<Array<object>>}
+ */
+export async function getClientErrors(limitCount = 50) {
+  try {
+    const errorsRef = collection(db, 'client_errors');
+    const q = query(errorsRef, orderBy('timestamp', 'desc'), limit(limitCount));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+  } catch (err) {
+    console.warn('[Firestore] Could not load client errors:', err.message);
+    return [];
   }
 }
 

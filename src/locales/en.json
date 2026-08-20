@@ -156,14 +156,19 @@
     "deleteTable": "Delete table"
   },
   "dashboard": {
-    "title": "Task Overview",
+    "title": "Tasks & System",
     "filterAll": "All",
     "filterMy": "My Tasks",
+    "filterErrors": "System Errors (Admin)",
     "status": "Status:",
     "statusAll": "All",
     "statusOpen": "Open",
     "statusDone": "Done",
-    "noTasks": "No tasks found."
+    "noTasks": "No tasks found.",
+    "noErrors": "No system errors logged.",
+    "stack": "Stack Trace",
+    "breadcrumbs": "Breadcrumbs",
+    "loadingErrors": "Loading errors..."
   },
   "history": {
     "loading": "Loading history…",

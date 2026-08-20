@@ -156,14 +156,19 @@
     "deleteTable": "Tabelle löschen"
   },
   "dashboard": {
-    "title": "Aufgaben-Übersicht",
+    "title": "Aufgaben & System",
     "filterAll": "Alle",
     "filterMy": "Meine Aufgaben",
+    "filterErrors": "Systemfehler (Admin)",
     "status": "Status:",
     "statusAll": "Alle",
     "statusOpen": "Offen",
     "statusDone": "Erledigt",
-    "noTasks": "Keine Aufgaben gefunden."
+    "noTasks": "Keine Aufgaben gefunden.",
+    "noErrors": "Keine Systemfehler protokolliert.",
+    "stack": "Stacktrace",
+    "breadcrumbs": "Breadcrumbs",
+    "loadingErrors": "Lade Fehler..."
   },
   "history": {
     "loading": "Lade Verlauf…",

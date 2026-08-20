@@ -156,14 +156,19 @@
     "deleteTable": "Supprimer le tableau"
   },
   "dashboard": {
-    "title": "Aperçu des tâches",
+    "title": "Tâches & Système",
     "filterAll": "Toutes",
     "filterMy": "Mes tâches",
+    "filterErrors": "Erreurs système (Admin)",
     "status": "Statut :",
     "statusAll": "Tous",
     "statusOpen": "Ouvertes",
     "statusDone": "Terminées",
-    "noTasks": "Aucune tâche trouvée."
+    "noTasks": "Aucune tâche trouvée.",
+    "noErrors": "Aucune erreur système enregistrée.",
+    "stack": "Trace de la pile",
+    "breadcrumbs": "Breadcrumbs",
+    "loadingErrors": "Chargement des erreurs..."
   },
   "history": {
     "loading": "Chargement de l'historique…",

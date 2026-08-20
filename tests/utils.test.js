@@ -205,6 +205,12 @@ test('filters out new privileged endpoint errors', () => {
   expect(shouldLogError('Failed to update ACL: Forbidden: Insufficient permissions for page')).toBeFalsy();
 });
 
+test('filters out firestore multi-tab lease and internal GC warnings', () => {
+  expect(shouldLogError("@firebase/firestore: Firestore (12.14.0): Failed to obtain primary lease for action 'Release target'.")).toBeFalsy();
+  expect(shouldLogError("@firebase/firestore: Firestore (12.14.0): Failed to obtain primary lease for action 'Collect garbage'.")).toBeFalsy();
+  expect(shouldLogError("@firebase/firestore: Firestore (12.14.0): Failed to obtain primary lease for action 'Backfill Indexes'.")).toBeFalsy();
+});
+
 // ──────────────────────────────────────────────
 console.log('\n🤖 SpellCheckerBot Collaboration Awareness');
 // ──────────────────────────────────────────────
@@ -324,6 +330,34 @@ test('SpellCheckerBot restores user identity immediately on subsequent user tran
 
   // Identity should be restored immediately
   expect(localState.user.name).toBe('Alice');
+});
+
+// ──────────────────────────────────────────────
+console.log('\n📜 Snapshot Diff & Unicode Resilience');
+// ──────────────────────────────────────────────
+const DiffMatchPatch = (await import('diff-match-patch')).default;
+
+test('diff-match-patch handles emojis and well-formed unicode gracefully', () => {
+  const dmp = new DiffMatchPatch();
+  const text1 = 'Hello 🚀 World 🏥 Test \uD83D\uDE00'.toWellFormed();
+  const text2 = 'Hello 🏝️ World 🏥 Test with more details \uD83D\uDE00'.toWellFormed();
+  const diffs = dmp.diff_main(text1, text2);
+  dmp.diff_cleanupSemantic(diffs);
+  const patches = dmp.patch_make(text1, diffs);
+  const patchText = dmp.patch_toText(patches);
+  expect(typeof patchText).toBe('string');
+  expect(patchText.length > 0).toBeTruthy();
+});
+
+test('lone surrogates sanitized with toWellFormed prevent URIError', () => {
+  const dmp = new DiffMatchPatch();
+  const malformed = 'Broken surrogate \uD83D text'.toWellFormed();
+  const modified = 'Broken surrogate \uD83D text with fix'.toWellFormed();
+  const diffs = dmp.diff_main(malformed, modified);
+  dmp.diff_cleanupSemantic(diffs);
+  const patches = dmp.patch_make(malformed, diffs);
+  const patchText = dmp.patch_toText(patches);
+  expect(typeof patchText).toBe('string');
 });
 
 // ──────────────────────────────────────────────

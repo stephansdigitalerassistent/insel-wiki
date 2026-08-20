@@ -17,6 +17,11 @@ export const IGNORED_ERROR_PATTERNS = [
   'Missing or insufficient permissions',
   'Unauthorized',
   'Forbidden',
+  'Failed to obtain primary lease',
+  'Collect garbage',
+  'Backfill Indexes',
+  'Release target',
+  '@firebase/firestore',
 ];
 
 /**

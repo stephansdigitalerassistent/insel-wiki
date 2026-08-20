@@ -156,14 +156,19 @@
     "deleteTable": "Elimina tabella"
   },
   "dashboard": {
-    "title": "Panoramica attività",
+    "title": "Attività & Sistema",
     "filterAll": "Tutte",
     "filterMy": "Le mie attività",
+    "filterErrors": "Errori di sistema (Admin)",
     "status": "Stato:",
     "statusAll": "Tutti",
     "statusOpen": "Aperte",
     "statusDone": "Completate",
-    "noTasks": "Nessuna attività trovata."
+    "noTasks": "Nessuna attività trovata.",
+    "noErrors": "Nessun errore di sistema registrato.",
+    "stack": "Stacktrace",
+    "breadcrumbs": "Breadcrumbs",
+    "loadingErrors": "Caricamento errori..."
   },
   "history": {
     "loading": "Caricamento cronologia…",
