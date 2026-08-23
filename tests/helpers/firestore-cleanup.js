@@ -75,9 +75,15 @@ export async function cleanupTestPages({ verbose = true } = {}) {
     const isTestTitle = TEST_TITLE_RE.test(title);
     const isTimestamped = TIMESTAMP_RE.test(title);
     const isUnderTests = parentId === 'page-tests';
-    const isGenericNew = title === 'Neue Seite';
 
-    if (isTestTitle || isTimestamped || isUnderTests || isGenericNew) {
+    // Deliberately does NOT match on `title === 'Neue Seite'`. That is the
+    // default title the app gives every freshly created page, so the clause
+    // matched real users' untitled, in-progress work anywhere in the wiki — not
+    // just test fixtures — and this sweep HARD-deletes, bypassing the trash that
+    // the delete-page UI uses. Pages created by the e2e suite land under
+    // `page-tests`, which `isUnderTests` already covers, and carry a timestamped
+    // title, which `isTimestamped` covers.
+    if (isTestTitle || isTimestamped || isUnderTests) {
       matches.push({ id: d.id, title, parentId });
     }
   });
