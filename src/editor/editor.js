@@ -755,6 +755,205 @@ function activateEntry(entry) {
 // --- Public API ---
 
 /**
+ * Custom list-outdent on Backspace / Delete: merges list item into preceding/current block and outdents nested sublists.
+ *
+ * @param {import('@tiptap/pm/view').EditorView} view Active ProseMirror view.
+ * @param {KeyboardEvent|{key: string, preventDefault?: Function}} event The key press.
+ * @returns {boolean} `true` when the key was handled here.
+ */
+export function handleListMergeKeydown(view, event) {
+  const { key } = event;
+
+  const isCell = n => n.type.name === 'tableCell' || n.type.name === 'tableHeader';
+  const getCell = $pos => {
+    for (let d = $pos.depth; d > 0; d--) {
+      const node = $pos.node(d);
+      if (isCell(node)) return node;
+    }
+    return null;
+  };
+
+  if (key === 'Backspace') {
+    const { state } = view;
+    const { selection } = state;
+    if (selection.empty && selection.$from.parentOffset === 0) {
+      const depth = selection.$from.depth;
+      const isInsideList = depth >= 1 && (
+        selection.$from.node(depth - 1).type.name === 'listItem' || 
+        selection.$from.node(depth - 1).type.name === 'taskItem'
+      );
+      if (isInsideList && selection.$from.index(depth - 1) === 0) {
+        const listStart = selection.$from.before(depth - 1);
+        if (listStart > 0) {
+          const prevSelection = Selection.near(state.doc.resolve(listStart - 1), -1);
+          if (prevSelection && prevSelection.$to && prevSelection.$to.pos < listStart) {
+            if (getCell(selection.$from) !== getCell(prevSelection.$to)) {
+              return false;
+            }
+            const prevEndPos = prevSelection.$to.pos;
+            const content = selection.$from.parent.content;
+            
+            const tr = state.tr;
+            tr.insert(prevEndPos, content);
+            
+            let shift = content.size;
+            
+            const listItemNode = selection.$from.node(depth - 1);
+            const nestedNodes = [];
+            for (let i = 1; i < listItemNode.childCount; i++) {
+              nestedNodes.push(listItemNode.child(i));
+            }
+            
+            for (const nestedNode of nestedNodes) {
+              const insertPos = selection.$from.before(depth - 1) + shift;
+              if (nestedNode.type.name === 'bulletList' || nestedNode.type.name === 'orderedList' || nestedNode.type.name === 'taskList') {
+                tr.insert(insertPos, nestedNode.content);
+                shift += nestedNode.content.size;
+              } else {
+                const wrapperType = selection.$from.node(depth - 1).type;
+                const wrappedNode = wrapperType.createAndFill(null, nestedNode);
+                if (wrappedNode) {
+                  tr.insert(insertPos, wrappedNode);
+                  shift += wrappedNode.nodeSize;
+                } else {
+                  tr.insert(insertPos, nestedNode);
+                  shift += nestedNode.nodeSize;
+                }
+              }
+            }
+            
+            let deleteFrom = selection.$from.before(depth - 1);
+            let deleteTo = selection.$from.after(depth - 1);
+            if (nestedNodes.length === 0) {
+              for (let d = depth - 2; d > 0; d--) {
+                if (selection.$from.node(d).childCount === 1) {
+                  deleteFrom = selection.$from.before(d);
+                  deleteTo = selection.$from.after(d);
+                } else {
+                  break;
+                }
+              }
+            }
+
+            const deleteStart = deleteFrom + shift;
+            const deleteEnd = deleteTo + shift;
+            tr.delete(deleteStart, deleteEnd);
+            
+            tr.setSelection(Selection.near(tr.doc.resolve(prevEndPos)));
+            view.dispatch(tr);
+            if (event.preventDefault) event.preventDefault();
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  if (key === 'Delete') {
+    const { state } = view;
+    const { selection } = state;
+    if (selection.empty && selection.$from.parentOffset === selection.$from.parent.content.size) {
+      const currentEndPos = selection.$from.pos;
+      const afterCurrentBlock = selection.$from.after();
+      if (afterCurrentBlock < state.doc.content.size) {
+        const nextSelection = Selection.near(state.doc.resolve(afterCurrentBlock), 1);
+        if (nextSelection && nextSelection.$from && nextSelection.$from.pos > currentEndPos) {
+          if (getCell(selection.$from) === getCell(nextSelection.$from) && nextSelection.$from.parentOffset === 0) {
+            const nextDepth = nextSelection.$from.depth;
+            const isNextInsideList = nextDepth >= 1 && (
+              nextSelection.$from.node(nextDepth - 1).type.name === 'listItem' || 
+              nextSelection.$from.node(nextDepth - 1).type.name === 'taskItem'
+            );
+
+            if (isNextInsideList && nextSelection.$from.index(nextDepth - 1) === 0) {
+              const nextListItemNode = nextSelection.$from.node(nextDepth - 1);
+              const nextListStart = nextSelection.$from.before(nextDepth - 1);
+              const nextListEnd = nextSelection.$from.after(nextDepth - 1);
+              const content = nextSelection.$from.parent.content;
+
+              const tr = state.tr;
+              tr.insert(currentEndPos, content);
+
+              let shift = content.size;
+
+              const nestedNodes = [];
+              for (let i = 1; i < nextListItemNode.childCount; i++) {
+                nestedNodes.push(nextListItemNode.child(i));
+              }
+
+              for (const nestedNode of nestedNodes) {
+                const insertPos = nextListStart + shift;
+                if (nestedNode.type.name === 'bulletList' || nestedNode.type.name === 'orderedList' || nestedNode.type.name === 'taskList') {
+                  tr.insert(insertPos, nestedNode.content);
+                  shift += nestedNode.content.size;
+                } else {
+                  const wrapperType = nextListItemNode.type;
+                  const wrappedNode = wrapperType.createAndFill(null, nestedNode);
+                  if (wrappedNode) {
+                    tr.insert(insertPos, wrappedNode);
+                    shift += wrappedNode.nodeSize;
+                  } else {
+                    tr.insert(insertPos, nestedNode);
+                    shift += nestedNode.nodeSize;
+                  }
+                }
+              }
+
+              let deleteFrom = nextListStart;
+              let deleteTo = nextListEnd;
+              if (nestedNodes.length === 0) {
+                for (let d = nextDepth - 2; d > 0; d--) {
+                  if (nextSelection.$from.node(d).childCount === 1) {
+                    deleteFrom = nextSelection.$from.before(d);
+                    deleteTo = nextSelection.$from.after(d);
+                  } else {
+                    break;
+                  }
+                }
+              }
+
+              const deleteStart = deleteFrom + shift;
+              const deleteEnd = deleteTo + shift;
+              tr.delete(deleteStart, deleteEnd);
+
+              tr.setSelection(Selection.near(tr.doc.resolve(currentEndPos)));
+              view.dispatch(tr);
+              if (event.preventDefault) event.preventDefault();
+              return true;
+            } else if (nextSelection.$from.parent.isTextblock) {
+              let deleteFrom = nextSelection.$from.before();
+              let deleteTo = nextSelection.$from.after();
+              for (let d = nextSelection.$from.depth - 1; d > 0; d--) {
+                if (nextSelection.$from.node(d).childCount === 1) {
+                  deleteFrom = nextSelection.$from.before(d);
+                  deleteTo = nextSelection.$from.after(d);
+                } else {
+                  break;
+                }
+              }
+
+              const content = nextSelection.$from.parent.content;
+
+              const tr = state.tr;
+              tr.insert(currentEndPos, content);
+              const shift = content.size;
+              tr.delete(deleteFrom + shift, deleteTo + shift);
+
+              tr.setSelection(Selection.near(tr.doc.resolve(currentEndPos)));
+              view.dispatch(tr);
+              if (event.preventDefault) event.preventDefault();
+              return true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Activate (or create) the editor for a given page. Idempotent: if the page is
  * already cached, this re-shows the existing editor instead of rebuilding it.
  *
@@ -1071,159 +1270,10 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
          *   (bold, italic, list toggles, …) take over.
          */
         keydown: (view, event) => {
+          if (handleListMergeKeydown(view, event)) return true;
+
           const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
           const isMod = ctrlKey || metaKey;
-          
-          const isCell = n => n.type.name === 'tableCell' || n.type.name === 'tableHeader';
-          const getCell = $pos => {
-            for (let d = $pos.depth; d > 0; d--) {
-              const node = $pos.node(d);
-              if (isCell(node)) return node;
-            }
-            return null;
-          };
-
-          if (key === 'Backspace') {
-            const { state } = view;
-            const { selection } = state;
-            if (selection.empty && selection.$from.parentOffset === 0) {
-              const depth = selection.$from.depth;
-              const isInsideList = depth >= 1 && (
-                selection.$from.node(depth - 1).type.name === 'listItem' || 
-                selection.$from.node(depth - 1).type.name === 'taskItem'
-              );
-              if (isInsideList && selection.$from.index(depth - 1) === 0) {
-                const listStart = selection.$from.before(depth - 1);
-                if (listStart > 0) {
-                  const prevSelection = Selection.near(state.doc.resolve(listStart - 1), -1);
-                  if (prevSelection && prevSelection.$to && prevSelection.$to.pos < listStart) {
-                    if (getCell(selection.$from) !== getCell(prevSelection.$to)) {
-                      return false;
-                    }
-                    const prevEndPos = prevSelection.$to.pos;
-                    const content = selection.$from.parent.content;
-                    
-                    const tr = state.tr;
-                    tr.insert(prevEndPos, content);
-                    
-                    let shift = content.size;
-                    
-                    const listItemNode = selection.$from.node(depth - 1);
-                    const nestedNodes = [];
-                    for (let i = 1; i < listItemNode.childCount; i++) {
-                      nestedNodes.push(listItemNode.child(i));
-                    }
-                    
-                    for (const nestedNode of nestedNodes) {
-                      const insertPos = selection.$from.before(depth - 1) + shift;
-                      if (nestedNode.type.name === 'bulletList' || nestedNode.type.name === 'orderedList' || nestedNode.type.name === 'taskList') {
-                        tr.insert(insertPos, nestedNode.content);
-                        shift += nestedNode.content.size;
-                      } else {
-                        const wrapperType = selection.$from.node(depth - 1).type;
-                        const wrappedNode = wrapperType.createAndFill(null, nestedNode);
-                        if (wrappedNode) {
-                          tr.insert(insertPos, wrappedNode);
-                          shift += wrappedNode.nodeSize;
-                        } else {
-                          tr.insert(insertPos, nestedNode);
-                          shift += nestedNode.nodeSize;
-                        }
-                      }
-                    }
-                    
-                    const deleteStart = selection.$from.before(depth - 1) + shift;
-                    const deleteEnd = selection.$from.after(depth - 1) + shift;
-                    tr.delete(deleteStart, deleteEnd);
-                    
-                    tr.setSelection(Selection.near(tr.doc.resolve(prevEndPos)));
-                    view.dispatch(tr);
-                    event.preventDefault();
-                    return true;
-                  }
-                }
-              }
-            }
-          }
-
-          if (key === 'Delete') {
-            const { state } = view;
-            const { selection } = state;
-            if (selection.empty && selection.$from.parentOffset === selection.$from.parent.content.size) {
-              const currentEndPos = selection.$from.pos;
-              const afterCurrentBlock = selection.$from.after();
-              if (afterCurrentBlock < state.doc.content.size) {
-                const nextSelection = Selection.near(state.doc.resolve(afterCurrentBlock), 1);
-                if (nextSelection && nextSelection.$from && nextSelection.$from.pos > currentEndPos) {
-                  if (getCell(selection.$from) === getCell(nextSelection.$from) && nextSelection.$from.parentOffset === 0) {
-                    const nextDepth = nextSelection.$from.depth;
-                    const isNextInsideList = nextDepth >= 1 && (
-                      nextSelection.$from.node(nextDepth - 1).type.name === 'listItem' || 
-                      nextSelection.$from.node(nextDepth - 1).type.name === 'taskItem'
-                    );
-
-                    if (isNextInsideList && nextSelection.$from.index(nextDepth - 1) === 0) {
-                      const nextListItemNode = nextSelection.$from.node(nextDepth - 1);
-                      const nextListStart = nextSelection.$from.before(nextDepth - 1);
-                      const nextListEnd = nextSelection.$from.after(nextDepth - 1);
-                      const content = nextSelection.$from.parent.content;
-
-                      const tr = state.tr;
-                      tr.insert(currentEndPos, content);
-
-                      let shift = content.size;
-
-                      const nestedNodes = [];
-                      for (let i = 1; i < nextListItemNode.childCount; i++) {
-                        nestedNodes.push(nextListItemNode.child(i));
-                      }
-
-                      for (const nestedNode of nestedNodes) {
-                        const insertPos = nextListStart + shift;
-                        if (nestedNode.type.name === 'bulletList' || nestedNode.type.name === 'orderedList' || nestedNode.type.name === 'taskList') {
-                          tr.insert(insertPos, nestedNode.content);
-                          shift += nestedNode.content.size;
-                        } else {
-                          const wrapperType = nextListItemNode.type;
-                          const wrappedNode = wrapperType.createAndFill(null, nestedNode);
-                          if (wrappedNode) {
-                            tr.insert(insertPos, wrappedNode);
-                            shift += wrappedNode.nodeSize;
-                          } else {
-                            tr.insert(insertPos, nestedNode);
-                            shift += nestedNode.nodeSize;
-                          }
-                        }
-                      }
-
-                      const deleteStart = nextListStart + shift;
-                      const deleteEnd = nextListEnd + shift;
-                      tr.delete(deleteStart, deleteEnd);
-
-                      tr.setSelection(Selection.near(tr.doc.resolve(currentEndPos)));
-                      view.dispatch(tr);
-                      event.preventDefault();
-                      return true;
-                    } else if (nextSelection.$from.parent.isTextblock) {
-                      const nextBlockStart = nextSelection.$from.before();
-                      const nextBlockEnd = nextSelection.$from.after();
-                      const content = nextSelection.$from.parent.content;
-
-                      const tr = state.tr;
-                      tr.insert(currentEndPos, content);
-                      const shift = content.size;
-                      tr.delete(nextBlockStart + shift, nextBlockEnd + shift);
-
-                      tr.setSelection(Selection.near(tr.doc.resolve(currentEndPos)));
-                      view.dispatch(tr);
-                      event.preventDefault();
-                      return true;
-                    }
-                  }
-                }
-              }
-            }
-          }
           
           if (isMod && altKey && !shiftKey) {
             if (code === 'Digit1') { editor.chain().focus().toggleHeading({ level: 1 }).run(); return true; }
@@ -1637,9 +1687,13 @@ export function clearEditorCache() {
   cache.clear();
   cacheOrder.length = 0;
   currentPageId = null;
-  window.editor = null;
+  if (typeof window !== 'undefined') {
+    window.editor = null;
+  }
 }
-window.clearEditorCache = clearEditorCache;
+if (typeof window !== 'undefined') {
+  window.clearEditorCache = clearEditorCache;
+}
 
 /**
  * Returns the collaboration provider of the active page — the handle used for presence, manual

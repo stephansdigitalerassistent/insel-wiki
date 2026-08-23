@@ -12,6 +12,7 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { EditorState, Selection, TextSelection } from '@tiptap/pm/state';
+import { handleListMergeKeydown } from './editor.js';
 
 let passed = 0;
 let failed = 0;
@@ -67,163 +68,7 @@ const schema = getSchema([
   TableHeader
 ]);
 
-const isCell = n => n.type.name === 'tableCell' || n.type.name === 'tableHeader';
-const getCell = $pos => {
-  for (let d = $pos.depth; d > 0; d--) {
-    const node = $pos.node(d);
-    if (isCell(node)) return node;
-  }
-  return null;
-};
 
-function handleKeydown(view, event) {
-  const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
-  const isMod = ctrlKey || metaKey;
-
-  if (key === 'Backspace') {
-    const { state } = view;
-    const { selection } = state;
-    if (selection.empty && selection.$from.parentOffset === 0) {
-      const depth = selection.$from.depth;
-      const isInsideList = depth >= 1 && (
-        selection.$from.node(depth - 1).type.name === 'listItem' || 
-        selection.$from.node(depth - 1).type.name === 'taskItem'
-      );
-      if (isInsideList && selection.$from.index(depth - 1) === 0) {
-        const listStart = selection.$from.before(depth - 1);
-        if (listStart > 0) {
-          const prevSelection = Selection.near(state.doc.resolve(listStart - 1), -1);
-          if (prevSelection && prevSelection.$to && prevSelection.$to.pos < listStart) {
-            if (getCell(selection.$from) !== getCell(prevSelection.$to)) {
-              return false;
-            }
-            const prevEndPos = prevSelection.$to.pos;
-            const content = selection.$from.parent.content;
-            
-            const tr = state.tr;
-            tr.insert(prevEndPos, content);
-            
-            let shift = content.size;
-            
-            const listItemNode = selection.$from.node(depth - 1);
-            const nestedNodes = [];
-            for (let i = 1; i < listItemNode.childCount; i++) {
-              nestedNodes.push(listItemNode.child(i));
-            }
-            
-            for (const nestedNode of nestedNodes) {
-              const insertPos = selection.$from.before(depth - 1) + shift;
-              if (nestedNode.type.name === 'bulletList' || nestedNode.type.name === 'orderedList' || nestedNode.type.name === 'taskList') {
-                tr.insert(insertPos, nestedNode.content);
-                shift += nestedNode.content.size;
-              } else {
-                const wrapperType = selection.$from.node(depth - 1).type;
-                const wrappedNode = wrapperType.createAndFill(null, nestedNode);
-                if (wrappedNode) {
-                  tr.insert(insertPos, wrappedNode);
-                  shift += wrappedNode.nodeSize;
-                } else {
-                  tr.insert(insertPos, nestedNode);
-                  shift += nestedNode.nodeSize;
-                }
-              }
-            }
-            
-            const deleteStart = selection.$from.before(depth - 1) + shift;
-            const deleteEnd = selection.$from.after(depth - 1) + shift;
-            tr.delete(deleteStart, deleteEnd);
-            
-            tr.setSelection(Selection.near(tr.doc.resolve(prevEndPos)));
-            view.dispatch(tr);
-            if (event.preventDefault) event.preventDefault();
-            return true;
-          }
-        }
-      }
-    }
-  }
-
-  if (key === 'Delete') {
-    const { state } = view;
-    const { selection } = state;
-    if (selection.empty && selection.$from.parentOffset === selection.$from.parent.content.size) {
-      const currentEndPos = selection.$from.pos;
-      const afterCurrentBlock = selection.$from.after();
-      if (afterCurrentBlock < state.doc.content.size) {
-        const nextSelection = Selection.near(state.doc.resolve(afterCurrentBlock), 1);
-        if (nextSelection && nextSelection.$from && nextSelection.$from.pos > currentEndPos) {
-          if (getCell(selection.$from) === getCell(nextSelection.$from) && nextSelection.$from.parentOffset === 0) {
-            const nextDepth = nextSelection.$from.depth;
-            const isNextInsideList = nextDepth >= 1 && (
-              nextSelection.$from.node(nextDepth - 1).type.name === 'listItem' || 
-              nextSelection.$from.node(nextDepth - 1).type.name === 'taskItem'
-            );
-
-            if (isNextInsideList && nextSelection.$from.index(nextDepth - 1) === 0) {
-              const nextListItemNode = nextSelection.$from.node(nextDepth - 1);
-              const nextListStart = nextSelection.$from.before(nextDepth - 1);
-              const nextListEnd = nextSelection.$from.after(nextDepth - 1);
-              const content = nextSelection.$from.parent.content;
-
-              const tr = state.tr;
-              tr.insert(currentEndPos, content);
-
-              let shift = content.size;
-
-              const nestedNodes = [];
-              for (let i = 1; i < nextListItemNode.childCount; i++) {
-                nestedNodes.push(nextListItemNode.child(i));
-              }
-
-              for (const nestedNode of nestedNodes) {
-                const insertPos = nextListStart + shift;
-                if (nestedNode.type.name === 'bulletList' || nestedNode.type.name === 'orderedList' || nestedNode.type.name === 'taskList') {
-                  tr.insert(insertPos, nestedNode.content);
-                  shift += nestedNode.content.size;
-                } else {
-                  const wrapperType = nextListItemNode.type;
-                  const wrappedNode = wrapperType.createAndFill(null, nestedNode);
-                  if (wrappedNode) {
-                    tr.insert(insertPos, wrappedNode);
-                    shift += wrappedNode.nodeSize;
-                  } else {
-                    tr.insert(insertPos, nestedNode);
-                    shift += nestedNode.nodeSize;
-                  }
-                }
-              }
-
-              const deleteStart = nextListStart + shift;
-              const deleteEnd = nextListEnd + shift;
-              tr.delete(deleteStart, deleteEnd);
-
-              tr.setSelection(Selection.near(tr.doc.resolve(currentEndPos)));
-              view.dispatch(tr);
-              if (event.preventDefault) event.preventDefault();
-              return true;
-            } else if (nextSelection.$from.parent.isTextblock) {
-              const nextBlockStart = nextSelection.$from.before();
-              const nextBlockEnd = nextSelection.$from.after();
-              const content = nextSelection.$from.parent.content;
-
-              const tr = state.tr;
-              tr.insert(currentEndPos, content);
-              const shift = content.size;
-              tr.delete(nextBlockStart + shift, nextBlockEnd + shift);
-
-              tr.setSelection(Selection.near(tr.doc.resolve(currentEndPos)));
-              view.dispatch(tr);
-              if (event.preventDefault) event.preventDefault();
-              return true;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return false;
-}
 
 function createMockView(docJSON, cursorFinder) {
   const doc = schema.nodeFromJSON(docJSON);
@@ -303,7 +148,7 @@ test('Delete at end of paragraph merges following list item and outdents nested 
   const paraEnd = view.state.selection.$from.pos + 'Preceding paragraph'.length;
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, paraEnd)));
 
-  const handled = handleKeydown(view, { key: 'Delete' });
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
   expect(handled).toBeTruthy();
 
   const text = view.state.doc.textContent;
@@ -350,7 +195,7 @@ test('Delete at end of list item merges following list item text', () => {
   const endPos = view.state.selection.$from.pos + 'First item'.length;
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
 
-  const handled = handleKeydown(view, { key: 'Delete' });
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
   expect(handled).toBeTruthy();
 
   const list = view.state.doc.child(0);
@@ -392,7 +237,7 @@ test('Delete at end of outer item merges nested child and promotes deeper sublis
   const endPos = view.state.selection.$from.pos + 'Outer item'.length;
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
 
-  const handled = handleKeydown(view, { key: 'Delete' });
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
   expect(handled).toBeTruthy();
 
   const list = view.state.doc.child(0);
@@ -429,7 +274,7 @@ test('Delete at end of first paragraph in multi-paragraph list item merges secon
   const endPos = view.state.selection.$from.pos + 'Paragraph 1'.length;
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
 
-  const handled = handleKeydown(view, { key: 'Delete' });
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
   expect(handled).toBeTruthy();
 
   const list = view.state.doc.child(0);
@@ -462,7 +307,7 @@ test('Delete at end of last list item merges following outside paragraph', () =>
   const endPos = view.state.selection.$from.pos + 'Last item'.length;
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
 
-  const handled = handleKeydown(view, { key: 'Delete' });
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
   expect(handled).toBeTruthy();
 
   expect(view.state.doc.childCount).toBe(1);
@@ -503,7 +348,7 @@ test('Delete at end of paragraph outside table does not merge inside table', () 
   const endPos = view.state.selection.$from.pos + 'Outside Paragraph'.length;
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
 
-  const handled = handleKeydown(view, { key: 'Delete' });
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
   expect(handled).toBeFalsy();
   expect(view.state.doc.textContent).toBe('Outside ParagraphInside Cell');
 });
@@ -552,9 +397,205 @@ test('Backspace at start of list item inside table cell does not merge outside t
   const startPos = view.state.selection.$from.pos;
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, startPos)));
 
-  const handled = handleKeydown(view, { key: 'Backspace' });
+  const handled = handleListMergeKeydown(view, { key: 'Backspace' });
   expect(handled).toBeFalsy();
   expect(view.state.doc.textContent).toBe('Outside ParagraphInside List Item');
+});
+
+test('Delete at end of paragraph before a single-item list removes the emptied list', () => {
+  const docJSON = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Para' }]
+      },
+      {
+        type: 'bulletList',
+        content: [
+          {
+            type: 'listItem',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Only' }] }]
+          }
+        ]
+      }
+    ]
+  };
+
+  const view = createMockView(docJSON, (node) => node.isText && node.text === 'Para');
+  const endPos = view.state.selection.$from.pos + 'Para'.length;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
+
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
+  expect(handled).toBeTruthy();
+
+  expect(view.state.doc.childCount).toBe(1);
+  const firstChild = view.state.doc.child(0);
+  expect(firstChild.type.name).toBe('paragraph');
+  expect(firstChild.textContent).toBe('ParaOnly');
+
+  const types = [];
+  view.state.doc.descendants((node) => {
+    types.push(node.type.name);
+  });
+  expect(types.includes('bulletList')).toBe(false);
+});
+
+test('Delete before a single CHECKED task item leaves no unchecked ghost', () => {
+  const docJSON = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Para' }]
+      },
+      {
+        type: 'taskList',
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { checked: true },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Done' }] }]
+          }
+        ]
+      }
+    ]
+  };
+
+  const view = createMockView(docJSON, (node) => node.isText && node.text === 'Para');
+  const endPos = view.state.selection.$from.pos + 'Para'.length;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
+
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
+  expect(handled).toBeTruthy();
+
+  expect(view.state.doc.childCount).toBe(1);
+  expect(view.state.doc.textContent).toBe('ParaDone');
+
+  const types = [];
+  view.state.doc.descendants((node) => {
+    types.push(node.type.name);
+  });
+  expect(types.includes('taskList')).toBe(false);
+  expect(types.includes('taskItem')).toBe(false);
+});
+
+test('Delete before a single-paragraph blockquote removes the emptied blockquote', () => {
+  const docJSON = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Para' }]
+      },
+      {
+        type: 'blockquote',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'q1' }]
+          }
+        ]
+      }
+    ]
+  };
+
+  const view = createMockView(docJSON, (node) => node.isText && node.text === 'Para');
+  const endPos = view.state.selection.$from.pos + 'Para'.length;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
+
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
+  expect(handled).toBeTruthy();
+
+  expect(view.state.doc.childCount).toBe(1);
+  expect(view.state.doc.textContent).toBe('Paraq1');
+
+  const types = [];
+  view.state.doc.descendants((node) => {
+    types.push(node.type.name);
+  });
+  expect(types.includes('blockquote')).toBe(false);
+});
+
+test('Delete before a two-paragraph blockquote retains remaining blockquote paragraphs', () => {
+  const docJSON = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Para' }]
+      },
+      {
+        type: 'blockquote',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'q1' }]
+          },
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'q2' }]
+          }
+        ]
+      }
+    ]
+  };
+
+  const view = createMockView(docJSON, (node) => node.isText && node.text === 'Para');
+  const endPos = view.state.selection.$from.pos + 'Para'.length;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, endPos)));
+
+  const handled = handleListMergeKeydown(view, { key: 'Delete' });
+  expect(handled).toBeTruthy();
+
+  expect(view.state.doc.childCount).toBe(2);
+  const firstChild = view.state.doc.child(0);
+  expect(firstChild.type.name).toBe('paragraph');
+  expect(firstChild.textContent).toBe('Paraq1');
+
+  const secondChild = view.state.doc.child(1);
+  expect(secondChild.type.name).toBe('blockquote');
+  expect(secondChild.childCount).toBe(1);
+  expect(secondChild.child(0).textContent).toBe('q2');
+});
+
+test('Backspace at start of the only item in a list removes the emptied list', () => {
+  const docJSON = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Para' }]
+      },
+      {
+        type: 'bulletList',
+        content: [
+          {
+            type: 'listItem',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Only' }] }]
+          }
+        ]
+      }
+    ]
+  };
+
+  const view = createMockView(docJSON, (node) => node.isText && node.text === 'Only');
+  const startPos = view.state.selection.$from.pos;
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, startPos)));
+
+  const handled = handleListMergeKeydown(view, { key: 'Backspace' });
+  expect(handled).toBeTruthy();
+
+  expect(view.state.doc.childCount).toBe(1);
+  const firstChild = view.state.doc.child(0);
+  expect(firstChild.type.name).toBe('paragraph');
+  expect(firstChild.textContent).toBe('ParaOnly');
+
+  const types = [];
+  view.state.doc.descendants((node) => {
+    types.push(node.type.name);
+  });
+  expect(types.includes('bulletList')).toBe(false);
 });
 
 console.log(`\n────────────────────────────────────────\nResults: ${passed} passed, ${failed} failed`);
