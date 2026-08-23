@@ -1045,17 +1045,17 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
           return false;
         },
         /**
-         * The editor's keymap: custom list-outdent on Backspace plus the app-level shortcuts.
+         * The editor's keymap: custom list-outdent on Backspace / Delete plus the app-level shortcuts.
          *
-         * **Backspace at the start of the first list item.** ProseMirror's default `joinBackward`
-         * lifts the item but tends to leave nested sublists orphaned or re-wrapped oddly. This
-         * handler instead performs the merge explicitly: it copies the item's inline content to the
-         * end of the preceding block, re-inserts the item's *remaining* children after it — nested
-         * lists spliced in as their own content, anything else re-wrapped in the original item type
-         * so it stays schema-valid — deletes the now-empty item, and finally drops the caret at the
-         * join point so typing continues where the text visually landed. Every insert shifts later
-         * positions, which is what the running `shift` offset accounts for; the delete range is
-         * computed with that same offset rather than from the stale original positions.
+         * **Backspace at the start of the first list item / Delete at the end of the preceding block.**
+         * ProseMirror's default `joinBackward` / `joinForward` lifts the item but tends to leave nested sublists
+         * orphaned or re-wrapped oddly. This handler instead performs the merge explicitly: it copies the item's
+         * inline content to the end of the preceding block (or current block on Delete), re-inserts the item's
+         * *remaining* children after it — nested lists spliced in as their own content, anything else re-wrapped
+         * in the original item type so it stays schema-valid — deletes the now-empty item, and finally drops the
+         * caret at the join point so typing continues where the text visually landed. Every insert shifts later
+         * positions, which is what the running `shift` offset accounts for; the delete range is computed with
+         * that same offset rather than from the stale original positions.
          *
          * **Shortcuts.** `Ctrl/Cmd+Alt+1/2/3` toggle headings and `+C` a code block (`event.code` is
          * used so the digits work on non-US layouts); `Ctrl/Cmd+K` opens the link modal, pre-filled
@@ -1074,6 +1074,15 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
           const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
           const isMod = ctrlKey || metaKey;
           
+          const isCell = n => n.type.name === 'tableCell' || n.type.name === 'tableHeader';
+          const getCell = $pos => {
+            for (let d = $pos.depth; d > 0; d--) {
+              const node = $pos.node(d);
+              if (isCell(node)) return node;
+            }
+            return null;
+          };
+
           if (key === 'Backspace') {
             const { state } = view;
             const { selection } = state;
@@ -1088,6 +1097,9 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                 if (listStart > 0) {
                   const prevSelection = Selection.near(state.doc.resolve(listStart - 1), -1);
                   if (prevSelection && prevSelection.$to && prevSelection.$to.pos < listStart) {
+                    if (getCell(selection.$from) !== getCell(prevSelection.$to)) {
+                      return false;
+                    }
                     const prevEndPos = prevSelection.$to.pos;
                     const content = selection.$from.parent.content;
                     
@@ -1128,6 +1140,85 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
                     view.dispatch(tr);
                     event.preventDefault();
                     return true;
+                  }
+                }
+              }
+            }
+          }
+
+          if (key === 'Delete') {
+            const { state } = view;
+            const { selection } = state;
+            if (selection.empty && selection.$from.parentOffset === selection.$from.parent.content.size) {
+              const currentEndPos = selection.$from.pos;
+              const afterCurrentBlock = selection.$from.after();
+              if (afterCurrentBlock < state.doc.content.size) {
+                const nextSelection = Selection.near(state.doc.resolve(afterCurrentBlock), 1);
+                if (nextSelection && nextSelection.$from && nextSelection.$from.pos > currentEndPos) {
+                  if (getCell(selection.$from) === getCell(nextSelection.$from) && nextSelection.$from.parentOffset === 0) {
+                    const nextDepth = nextSelection.$from.depth;
+                    const isNextInsideList = nextDepth >= 1 && (
+                      nextSelection.$from.node(nextDepth - 1).type.name === 'listItem' || 
+                      nextSelection.$from.node(nextDepth - 1).type.name === 'taskItem'
+                    );
+
+                    if (isNextInsideList && nextSelection.$from.index(nextDepth - 1) === 0) {
+                      const nextListItemNode = nextSelection.$from.node(nextDepth - 1);
+                      const nextListStart = nextSelection.$from.before(nextDepth - 1);
+                      const nextListEnd = nextSelection.$from.after(nextDepth - 1);
+                      const content = nextSelection.$from.parent.content;
+
+                      const tr = state.tr;
+                      tr.insert(currentEndPos, content);
+
+                      let shift = content.size;
+
+                      const nestedNodes = [];
+                      for (let i = 1; i < nextListItemNode.childCount; i++) {
+                        nestedNodes.push(nextListItemNode.child(i));
+                      }
+
+                      for (const nestedNode of nestedNodes) {
+                        const insertPos = nextListStart + shift;
+                        if (nestedNode.type.name === 'bulletList' || nestedNode.type.name === 'orderedList' || nestedNode.type.name === 'taskList') {
+                          tr.insert(insertPos, nestedNode.content);
+                          shift += nestedNode.content.size;
+                        } else {
+                          const wrapperType = nextListItemNode.type;
+                          const wrappedNode = wrapperType.createAndFill(null, nestedNode);
+                          if (wrappedNode) {
+                            tr.insert(insertPos, wrappedNode);
+                            shift += wrappedNode.nodeSize;
+                          } else {
+                            tr.insert(insertPos, nestedNode);
+                            shift += nestedNode.nodeSize;
+                          }
+                        }
+                      }
+
+                      const deleteStart = nextListStart + shift;
+                      const deleteEnd = nextListEnd + shift;
+                      tr.delete(deleteStart, deleteEnd);
+
+                      tr.setSelection(Selection.near(tr.doc.resolve(currentEndPos)));
+                      view.dispatch(tr);
+                      event.preventDefault();
+                      return true;
+                    } else if (nextSelection.$from.parent.isTextblock) {
+                      const nextBlockStart = nextSelection.$from.before();
+                      const nextBlockEnd = nextSelection.$from.after();
+                      const content = nextSelection.$from.parent.content;
+
+                      const tr = state.tr;
+                      tr.insert(currentEndPos, content);
+                      const shift = content.size;
+                      tr.delete(nextBlockStart + shift, nextBlockEnd + shift);
+
+                      tr.setSelection(Selection.near(tr.doc.resolve(currentEndPos)));
+                      view.dispatch(tr);
+                      event.preventDefault();
+                      return true;
+                    }
                   }
                 }
               }
