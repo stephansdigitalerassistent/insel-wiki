@@ -13,8 +13,12 @@ function escapeHtml(str) {
 
 /**
  * Load and render history for a page
+ * @param {string} pageId
+ * @param {Object} livePageData
+ * @param {Function} getLiveContent
+ * @param {Function} [onRestore] Callback (content, entry) => Promise<void>
  */
-export async function loadHistory(pageId, livePageData, getLiveContent) {
+export async function loadHistory(pageId, livePageData, getLiveContent, onRestore) {
   currentPageId = pageId;
   const listEl = document.getElementById('history-list');
   const previewEl = document.getElementById('history-preview');
@@ -61,13 +65,19 @@ export async function loadHistory(pageId, livePageData, getLiveContent) {
 
           if (!latestSnapshotContent) {
             previewEl.innerHTML = `
-              <div style="padding: 8px; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 12px;">${i18next.t('history.noSnapshots')}</div>
-              ${DOMPurify.sanitize(marked.parse(currentContent || ''))}
+              <div class="history-preview-header">
+                <span>${i18next.t('history.noSnapshots')}</span>
+              </div>
+              <div class="history-preview-body">
+                ${DOMPurify.sanitize(marked.parse(currentContent || ''))}
+              </div>
             `;
           } else {
             const diffHtml = computeDiffHtml(latestSnapshotContent, currentContent);
             previewEl.innerHTML = `
-              <div style="padding: 8px; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 12px;">${i18next.t('history.changesSinceLast')}</div>
+              <div class="history-preview-header">
+                <span>${i18next.t('history.changesSinceLast')}</span>
+              </div>
               <div class="diff-view">${diffHtml}</div>
             `;
           }
@@ -92,7 +102,7 @@ export async function loadHistory(pageId, livePageData, getLiveContent) {
         listEl.querySelectorAll('.history-entry').forEach((e) => e.style.background = '');
         el.style.background = 'var(--accent-subtle)';
 
-        // Show preview with diff
+        // Show preview with diff and restore button
         if (previewEl) {
           previewEl.innerHTML = `<div style="padding: 16px; color: var(--text-muted);">${i18next.t('history.comparing')}</div>`;
           
@@ -106,20 +116,46 @@ export async function loadHistory(pageId, livePageData, getLiveContent) {
             previousVersionContent = await getFullHistoryContent(currentPageId, prevEntry.id);
           }
 
-          if (!previousVersionContent) {
-            // First version or no previous: show full marked content
-            previewEl.innerHTML = `
-              <div style="padding: 8px; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 12px;">${i18next.t('history.firstVersion')}</div>
-              ${DOMPurify.sanitize(marked.parse(currentVersionContent || ''))}
+          previewEl.innerHTML = '';
+
+          // Header with label and Restore button
+          const headerEl = document.createElement('div');
+          headerEl.className = 'history-preview-header';
+
+          const labelSpan = document.createElement('span');
+          labelSpan.textContent = !previousVersionContent 
+            ? i18next.t('history.firstVersion') 
+            : i18next.t('history.changesInVersion');
+          headerEl.appendChild(labelSpan);
+
+          if (onRestore) {
+            const restoreBtn = document.createElement('button');
+            restoreBtn.className = 'btn-restore-version';
+            restoreBtn.title = i18next.t('history.restoreTitle');
+            restoreBtn.innerHTML = `
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              <span>${i18next.t('history.restore')}</span>
             `;
-          } else {
-            // Show visual diff
-            const diffHtml = computeDiffHtml(previousVersionContent, currentVersionContent);
-            previewEl.innerHTML = `
-              <div style="padding: 8px; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 12px;">${i18next.t('history.changesInVersion')}</div>
-              <div class="diff-view">${diffHtml}</div>
-            `;
+            restoreBtn.addEventListener('click', async (e) => {
+              e.stopPropagation();
+              await onRestore(currentVersionContent, entry);
+            });
+            headerEl.appendChild(restoreBtn);
           }
+
+          previewEl.appendChild(headerEl);
+
+          const bodyEl = document.createElement('div');
+          if (!previousVersionContent) {
+            bodyEl.innerHTML = DOMPurify.sanitize(marked.parse(currentVersionContent || ''));
+          } else {
+            const diffHtml = computeDiffHtml(previousVersionContent, currentVersionContent);
+            bodyEl.innerHTML = `<div class="diff-view">${diffHtml}</div>`;
+          }
+          previewEl.appendChild(bodyEl);
         }
       });
       listEl.appendChild(el);

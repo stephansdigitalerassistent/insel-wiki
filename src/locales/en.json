@@ -180,7 +180,13 @@
     "changesSinceLast": "Changes since last snapshot:",
     "firstVersion": "First Version",
     "changesInVersion": "Changes in this version:",
-    "noEntries": "No entries yet"
+    "noEntries": "No entries yet",
+    "restore": "Restore",
+    "restoreTitle": "Restore Version",
+    "restoreConfirm": "Are you sure you want to restore this version as the live state? Your current edits will be replaced.",
+    "restoreConfirmWithDate": "Are you sure you want to restore the version from {{date}} ({{user}}) as the live state?",
+    "restoreSuccess": "Version successfully restored!",
+    "restoreError": "Failed to restore version."
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",

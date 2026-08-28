@@ -45,7 +45,7 @@
  * a single user-facing indicator ("Speichern...", "Gespeichert", or "Offline"). Additionally, permissions are
  * verified via `canEdit()` to lock/unlock fields (title inputs, formatting toolbars, markdown mode toggles).
  */
-import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, getFullHistoryContent, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
+import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, getFullHistoryContent, updatePageTitle, deletePage, getChildren, formatTimestamp } from '../firebase/firestore.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, hasCachedEditor } from '../editor/editor.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
@@ -904,6 +904,72 @@ async function handleDeletePage() {
 }
 
 /**
+ * Restores a historical snapshot into the active page editor.
+ *
+ * @param {string} restoredContent - The markdown text to restore.
+ * @param {Object} [restoredEntry] - The snapshot metadata.
+ * @returns {Promise<void>}
+ */
+async function handleRestoreVersion(restoredContent, restoredEntry) {
+  if (!currentPageId || !canEdit()) {
+    showToast(i18next.t('messages.cannotEdit', { defaultValue: 'Keine Bearbeitungsrechte auf dieser Seite.' }), 'error');
+    return;
+  }
+
+  const formattedDate = restoredEntry?.savedAt ? formatTimestamp(restoredEntry.savedAt) : '';
+  const confirmMsg = formattedDate
+    ? i18next.t('history.restoreConfirmWithDate', {
+        defaultValue: `Möchtest du den Stand vom ${formattedDate} (${restoredEntry.savedBy || 'Unbekannt'}) wirklich als aktuelle Version wiederherstellen?`,
+        date: formattedDate,
+        user: restoredEntry.savedBy || ''
+      })
+    : i18next.t('history.restoreConfirm', {
+        defaultValue: 'Möchtest du diesen Stand wirklich als aktuelle Version wiederherstellen?'
+      });
+
+  const confirmed = await confirmModal(
+    i18next.t('history.restoreTitle', { defaultValue: 'Version wiederherstellen' }),
+    confirmMsg,
+    i18next.t('history.restore', { defaultValue: 'Wiederherstellen' })
+  );
+
+  if (!confirmed) return;
+
+  try {
+    // 1. Set editor content (Yjs document & Tiptap)
+    setContent(restoredContent);
+    if (isMarkdownMode && markdownEditor) {
+      markdownEditor.value = restoredContent;
+    }
+
+    // 2. Restore title if available and different
+    if (restoredEntry?.title && pageTitleInput && restoredEntry.title !== pageTitleInput.value) {
+      pageTitleInput.value = restoredEntry.title;
+      await updatePageTitle(currentPageId, restoredEntry.title);
+    }
+
+    // 3. Create a new snapshot explicitly recording the restore event
+    const user = getCurrentUser();
+    await createHistorySnapshot(
+      currentPageId,
+      restoredContent,
+      pageTitleInput?.value || '',
+      user?.email || ''
+    );
+    lastSnapshotContent = restoredContent;
+    lastSnapshotTitle = pageTitleInput?.value || '';
+
+    showToast(i18next.t('history.restoreSuccess', { defaultValue: 'Version erfolgreich wiederhergestellt!' }), 'success');
+
+    // 4. Refresh history panel to show the new snapshot
+    loadHistory(currentPageId, currentPageData, getMarkdown, handleRestoreVersion);
+  } catch (err) {
+    console.error('Error restoring version:', err);
+    showToast(i18next.t('history.restoreError', { defaultValue: 'Fehler beim Wiederherstellen der Version.' }), 'error');
+  }
+}
+
+/**
  * Opens or closes the revision history panel for the page.
  *
  * @returns {Promise<void>}
@@ -911,7 +977,7 @@ async function handleDeletePage() {
 async function handleHistoryToggle() {
   if (currentPageId) {
     toggleHistoryPanel();
-    loadHistory(currentPageId, currentPageData, getMarkdown);
+    loadHistory(currentPageId, currentPageData, getMarkdown, handleRestoreVersion);
   }
 }
 

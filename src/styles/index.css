@@ -847,6 +847,47 @@ table tr:hover td {
   border-top: 1px solid var(--border); padding: 16px; max-height: 40%; overflow-y: auto; font-size: 0.85rem; line-height: 1.6;
 }
 
+.history-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.history-preview-header span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.btn-restore-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--primary, #56D4A5);
+  color: #0b1e16;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  border: none;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn-restore-version:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-restore-version svg {
+  stroke: currentColor;
+}
+
 /* --- Empty State --- */
 .empty-state {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted);

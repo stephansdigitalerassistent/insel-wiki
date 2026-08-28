@@ -180,7 +180,13 @@
     "changesSinceLast": "Changements depuis le dernier instantané :",
     "firstVersion": "Première version",
     "changesInVersion": "Changements dans cette version :",
-    "noEntries": "Aucune entrée pour l'instant"
+    "noEntries": "Aucune entrée pour l'instant",
+    "restore": "Restaurer",
+    "restoreTitle": "Restaurer la version",
+    "restoreConfirm": "Voulez-vous vraiment restaurer cette version comme version actuelle ? Vos modifications actuelles seront remplacées.",
+    "restoreConfirmWithDate": "Voulez-vous vraiment restaurer la version du {{date}} ({{user}}) ?",
+    "restoreSuccess": "Version restaurée avec succès !",
+    "restoreError": "Échec de la restauration de la version."
   },
   "shortcuts": {
     "title": "Raccourcis clavier",

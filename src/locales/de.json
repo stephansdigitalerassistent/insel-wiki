@@ -180,7 +180,13 @@
     "changesSinceLast": "Änderungen seit dem letzten Snapshot:",
     "firstVersion": "Erste Version",
     "changesInVersion": "Änderungen in dieser Version:",
-    "noEntries": "Noch keine Einträge"
+    "noEntries": "Noch keine Einträge",
+    "restore": "Wiederherstellen",
+    "restoreTitle": "Version wiederherstellen",
+    "restoreConfirm": "Möchtest du diese Version wirklich als aktuellen Stand wiederherstellen? Deine aktuellen Änderungen werden überschrieben.",
+    "restoreConfirmWithDate": "Möchtest du den Stand vom {{date}} ({{user}}) wirklich als aktuelle Version wiederherstellen?",
+    "restoreSuccess": "Version erfolgreich wiederhergestellt!",
+    "restoreError": "Fehler beim Wiederherstellen der Version."
   },
   "shortcuts": {
     "title": "Tastenkombinationen",
