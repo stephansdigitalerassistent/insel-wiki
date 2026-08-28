@@ -360,6 +360,57 @@ test('lone surrogates sanitized with toWellFormed prevent URIError', () => {
   expect(typeof patchText).toBe('string');
 });
 
+test('identical content diff produces empty patch string', () => {
+  const dmp = new DiffMatchPatch();
+  const original = '# Title\n\nIdentical content here with **formatting**.'.toWellFormed();
+  const copy = '# Title\n\nIdentical content here with **formatting**.'.toWellFormed();
+  const diffs = dmp.diff_main(original, copy);
+  dmp.diff_cleanupSemantic(diffs);
+  const patches = dmp.patch_make(original, diffs);
+  const patchText = dmp.patch_toText(patches);
+  expect(patchText).toBe('');
+  expect(patches.length).toBe(0);
+});
+
+test('history snapshot logic skips identical content and title', () => {
+  const latestContent = '# Behandlungsplan\n\nPatient stabil.';
+  const currentContent = '# Behandlungsplan\n\nPatient stabil.';
+  const latestTitle = 'Notaufnahme Plan';
+  const currentTitle = 'Notaufnahme Plan';
+
+  const cleanLatest = typeof latestContent?.toWellFormed === 'function' ? latestContent.toWellFormed() : latestContent;
+  const cleanContent = typeof currentContent?.toWellFormed === 'function' ? currentContent.toWellFormed() : currentContent;
+
+  const isIdentical = (cleanLatest === cleanContent && latestTitle === currentTitle);
+  expect(isIdentical).toBe(true);
+});
+
+test('history snapshot logic triggers when only title changes', () => {
+  const latestContent = '# Behandlungsplan\n\nPatient stabil.';
+  const currentContent = '# Behandlungsplan\n\nPatient stabil.';
+  const latestTitle = 'Notaufnahme Plan (Alt)';
+  const currentTitle = 'Notaufnahme Plan (Neu)';
+
+  const cleanLatest = typeof latestContent?.toWellFormed === 'function' ? latestContent.toWellFormed() : latestContent;
+  const cleanContent = typeof currentContent?.toWellFormed === 'function' ? currentContent.toWellFormed() : currentContent;
+
+  const isIdentical = (cleanLatest === cleanContent && latestTitle === currentTitle);
+  expect(isIdentical).toBe(false);
+});
+
+test('history snapshot logic triggers when content changes', () => {
+  const latestContent = '# Behandlungsplan\n\nPatient stabil.';
+  const currentContent = '# Behandlungsplan\n\nPatient entlassen.';
+  const latestTitle = 'Notaufnahme Plan';
+  const currentTitle = 'Notaufnahme Plan';
+
+  const cleanLatest = typeof latestContent?.toWellFormed === 'function' ? latestContent.toWellFormed() : latestContent;
+  const cleanContent = typeof currentContent?.toWellFormed === 'function' ? currentContent.toWellFormed() : currentContent;
+
+  const isIdentical = (cleanLatest === cleanContent && latestTitle === currentTitle);
+  expect(isIdentical).toBe(false);
+});
+
 // ──────────────────────────────────────────────
 // Summary
 // ──────────────────────────────────────────────

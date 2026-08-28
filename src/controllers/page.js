@@ -45,7 +45,7 @@
  * a single user-facing indicator ("Speichern...", "Gespeichert", or "Offline"). Additionally, permissions are
  * verified via `canEdit()` to lock/unlock fields (title inputs, formatting toolbars, markdown mode toggles).
  */
-import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
+import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, getFullHistoryContent, updatePageTitle, deletePage, getChildren } from '../firebase/firestore.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, hasCachedEditor } from '../editor/editor.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
@@ -110,6 +110,7 @@ const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
  * @type {string}
  */
 let lastSnapshotContent = '';
+let lastSnapshotTitle = '';
 
 // --- Utilities ---
 /**
@@ -663,8 +664,20 @@ export async function loadPage(pageId) {
     currentPresenceUnsub = subscribeToYjsPresence(newProvider, (users) => renderPresence(users));
   }
 
-  getLatestHistorySnapshot(pageId).then(snap => {
-    lastSnapshotContent = snap ? snap.content : (page.content || '');
+  // Baseline initial snapshot state from page data
+  lastSnapshotContent = page?.content || '';
+  lastSnapshotTitle = page?.title || '';
+
+  getLatestHistorySnapshot(pageId).then(async (snap) => {
+    if (currentPageId === pageId) {
+      if (snap) {
+        lastSnapshotContent = await getFullHistoryContent(pageId, snap.id);
+        lastSnapshotTitle = snap.title || '';
+      } else if (page) {
+        lastSnapshotContent = page.content || '';
+        lastSnapshotTitle = page.title || '';
+      }
+    }
   }).catch(() => {});
 
   if (!page.title || page.title === 'Neue Seite') {
@@ -785,10 +798,14 @@ async function snapshotCurrentPage() {
     }
     const markdown = getMarkdown();
     if (!markdown || markdown.trim().length === 0) return;
-    if (markdown === lastSnapshotContent) return;
+    const currentTitle = pageTitleInput ? pageTitleInput.value : '';
+    if (markdown === lastSnapshotContent && currentTitle === lastSnapshotTitle) return;
     const user = getCurrentUser();
-    await createHistorySnapshot(currentPageId, markdown, pageTitleInput.value, user?.email || '');
-    lastSnapshotContent = markdown;
+    const resultId = await createHistorySnapshot(currentPageId, markdown, currentTitle, user?.email || '');
+    if (resultId !== null) {
+      lastSnapshotContent = markdown;
+      lastSnapshotTitle = currentTitle;
+    }
   } catch (err) {
     console.warn('[Insel-Wiki] Snapshot error:', err);
   }

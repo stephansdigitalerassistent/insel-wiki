@@ -134,19 +134,28 @@ export async function createHistorySnapshot(pageId, content, title, savedBy = ''
     if (latestSnap) {
       latestContent = await getFullHistoryContent(pageId, latestSnap.id);
     }
+
+    const cleanContent = typeof content?.toWellFormed === 'function' ? content.toWellFormed() : (content || '');
+    const currentTitle = title || '';
+
+    // Check if there are actual changes compared to the latest snapshot
+    if (latestSnap) {
+      const cleanLatest = typeof latestContent?.toWellFormed === 'function' ? latestContent.toWellFormed() : (latestContent || '');
+      const latestTitle = latestSnap.title || '';
+      if (cleanLatest === cleanContent && latestTitle === currentTitle) {
+        return null;
+      }
+    }
     
     let type = 'full';
-    let storedContent = content;
+    let storedContent = cleanContent;
 
-    if (latestContent) {
+    if (latestSnap && latestContent) {
       try {
+        const cleanLatest = typeof latestContent?.toWellFormed === 'function' ? latestContent.toWellFormed() : (latestContent || '');
         // 2. Decide if patch or full
         const snapshotCount = await getCountFromServer(historyRef);
         const count = snapshotCount.data().count;
-        
-        // Sanitize unpaired UTF-16 surrogates before diffing if supported
-        const cleanLatest = typeof latestContent.toWellFormed === 'function' ? latestContent.toWellFormed() : latestContent;
-        const cleanContent = typeof content.toWellFormed === 'function' ? content.toWellFormed() : content;
 
         // Calculate diff
         const diffs = dmp.diff_main(cleanLatest, cleanContent);
@@ -165,17 +174,18 @@ export async function createHistorySnapshot(pageId, content, title, savedBy = ''
       } catch (diffErr) {
         console.warn('[Snapshot] Patch computation failed, falling back to full snapshot:', diffErr);
         type = 'full';
-        storedContent = content;
+        storedContent = cleanContent;
       }
     }
 
-    await addDoc(historyRef, {
+    const docRef = await addDoc(historyRef, {
       content: storedContent,
       type, // 'full' or 'patch'
-      title: title || '',
+      title: currentTitle,
       savedBy,
       savedAt: serverTimestamp(),
     });
+    return docRef?.id;
   } catch (err) {
     console.error('[Snapshot] Failed to save history snapshot:', err);
   }
