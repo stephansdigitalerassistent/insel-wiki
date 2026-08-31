@@ -1,0 +1,43 @@
+{
+  "leave": [
+    ["Wüthrich", "Herr", "ist im Büro."],
+    ["Stalder", "Frau", "hat angerufen."],
+    ["Baumgartner", "Herr", "kommt später."],
+    ["Rüegg", "Frau", "leitet die Sitzung."],
+    ["Hofstetter", "Herr", "war hier."],
+    ["Bracher", "Frau", "ist zuständig."],
+    ["Amrein", "Herr", "hat unterschrieben."],
+    ["Zbinden", "Frau", "ist Ärztin."],
+    ["Wankdorf", "Das Stadion", "ist gross."],
+    ["Emmental", "Wir fahren ins", "am Sonntag."],
+    ["Novartis", "Die Firma", "hat geliefert."],
+    ["Bümpliz", "Er wohnt in", "seit Jahren."],
+    ["Metformin", "Sie nimmt", "morgens."],
+    ["Lisinopril", "Er erhält", "täglich."],
+    ["Pantoprazol", "Das", "wurde abgesetzt."],
+    ["Amlodipin", "Sie bekommt", "seit Mai."],
+    ["MRI", "Das", "ist um zehn."],
+    ["EEG", "Das", "war normal."],
+    ["Bericht", "Der", "ist fertig."],
+    ["Untersuchung", "Die", "war unauffällig."],
+    ["Krankenschwester", "Die", "kommt gleich."],
+    ["Zimmer", "Das", "ist frei."],
+    ["Visite", "Die", "beginnt um acht."],
+    ["Diagnose", "Die", "steht fest."],
+    ["Abteilung", "Die", "ist im dritten Stock."]
+  ],
+  "correct": [
+    ["Berichht", "Der", "ist fertig.", "Bericht"],
+    ["Untersuchnug", "Die", "war unauffällig.", "Untersuchung"],
+    ["Zimmr", "Das", "ist frei.", "Zimmer"],
+    ["Dianose", "Die", "steht fest.", "Diagnose"],
+    ["Abteilnug", "Die", "ist im dritten Stock.", "Abteilung"],
+    ["Visiet", "Die", "beginnt um acht.", "Visite"],
+    ["Krankneschwester", "Die", "kommt gleich.", "Krankenschwester"],
+    ["Feiber", "Sie hat", "seit gestern.", "Fieber"],
+    ["Blud", "Das", "wurde abgenommen.", "Blut"],
+    ["Sprizte", "Die", "ist vorbereitet.", "Spritze"],
+    ["Opeartion", "Die", "dauert zwei Stunden.", "Operation"],
+    ["Meidkament", "Das", "wirkt gut.", "Medikament"]
+  ]
+}

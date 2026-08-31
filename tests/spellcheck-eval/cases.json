@@ -1,0 +1,43 @@
+{
+  "leave": [
+    ["Heuscher", "Herr", "kommt heute."],
+    ["Sprünli", "Herr", "war gestern hier."],
+    ["Zimmerli", "Frau", "hat angerufen."],
+    ["Aebischer", "Herr", "wohnt in Bern."],
+    ["Gurtner", "Frau", "ist Pflegefachfrau."],
+    ["Bircher", "Dr.", "ist im Dienst."],
+    ["Zuberbühler", "Herr", "leitet das Team."],
+    ["Ryffel", "Frau", "hat den Bericht."],
+    ["Insel", "Das", "Spital Bern."],
+    ["Hirslanden", "Die Klinik", "in Zürich."],
+    ["Anspec", "Das Projekt", "läuft gut."],
+    ["Threema", "Wir nutzen", "für Nachrichten."],
+    ["Tavanic", "Das Medikament", "wurde gegeben."],
+    ["Torasemid", "Er nimmt", "täglich ein."],
+    ["Xarelto", "Sie erhält", "seit Montag."],
+    ["EKG", "Das", "war unauffällig."],
+    ["HNO", "Die", "Abteilung ist im dritten Stock."],
+    ["Medikament", "Das", "wurde verabreicht."],
+    ["Pflege", "Die", "ist gut."],
+    ["Termin", "Der", "ist morgen."],
+    ["Spital", "Im", "Bern."],
+    ["Besprechung", "Die", "beginnt um neun."],
+    ["Rechtschreibung", "Die", "ist wichtig."],
+    ["Patienten", "Die", "warten im Flur."],
+    ["danke", "Ich sage", "schön."]
+  ],
+  "correct": [
+    ["legastine", "Ich habe", "Probleme beim Lesen.", "Legasthenie"],
+    ["Rechtscheibung", "Die", "ist wichtig.", "Rechtschreibung"],
+    ["Patiten", "Der", "wurde untersucht.", "Patienten"],
+    ["Medikamnet", "Das", "wurde verabreicht.", "Medikament"],
+    ["Besprechnug", "Die", "beginnt um neun.", "Besprechung"],
+    ["Artz", "Der", "kommt gleich.", "Arzt"],
+    ["Kliink", "Die", "ist modern.", "Klinik"],
+    ["Beisipel", "Ein", "dafür.", "Beispiel"],
+    ["Ziet", "Die", "läuft ab.", "Zeit"],
+    ["Tabbelle", "Die", "zeigt die Werte.", "Tabelle"],
+    ["Sptial", "Im", "Bern.", "Spital"],
+    ["Pflge", "Die", "ist gut.", "Pflege"]
+  ]
+}

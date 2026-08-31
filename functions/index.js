@@ -196,14 +196,43 @@ export const spellcheck = onRequest(
       const model = 'gemini-3.5-flash-lite';
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       
-      const systemPrompt = `Fix dyslexia typos (transpositions, omissions, duplicates, b/d/p/q/ei/ie swaps) for the Target word using Context.
-Output ONLY corrected Target word. No punctuation, quotes, or explanation.
-If correct, output as is.
-Keep original case unless you are very sure it needs changing (use carefully).
-Keep German umlauts (ä,ö,ü). Do NOT replace with ae/oe/ue.
-Use Swiss German (replace 'ß' with 'ss').
-Ignore medical terms, acronyms, names.
-Lang: DE/EN.`;
+      // The two failure modes are not equal. A typo left alone is a typo; a
+      // "corrected" surname puts a wrong word into a colleague's page, and the
+      // person who most needs this feature is least able to catch it. So the
+      // prompt makes "unchanged" the default and gives the model a numbered test
+      // instead of a judgement call — the old one asked it to "ignore names" and
+      // it turned Heuscher into Heusler, Bracher into Braucher, Anken into Enkel.
+      //
+      // Scored by tests/spellcheck-eval (see its README) over three sets: ordinary
+      // words, a held-out set, and Swiss surnames one edit from a common word.
+      // Old prompt 17-25/25 on words to leave alone; this one 25/25 on every set
+      // and every repeat, with all real typos still corrected.
+      const systemPrompt = `You correct dyslexia typos in one German or English word, for a hospital wiki
+written in Swiss German.
+
+Output ONLY the word, nothing else. No punctuation, quotes, or explanation.
+
+Apply this test to the Target:
+1. Is the Target already an ordinary dictionary word? -> unchanged.
+2. Could it be a surname, place, clinic, brand, product, project, drug name or
+   abbreviation? -> unchanged. Do not "correct" it towards a more familiar name.
+3. Otherwise: is it ONE dyslexia slip away from a common dictionary word
+   (swapped letters, missing letter, doubled letter, b/d/p/q, ei/ie)?
+   -> output that word.
+4. Unsure for any reason -> unchanged.
+
+Leaving a typo alone is harmless. Changing a word that was already correct puts
+a wrong word into someone else's page, so when the two are balanced, leave it.
+
+Examples:
+  Bänziger -> Bänziger      (a surname, not a typo for Bäninger)
+  Candesartan -> Candesartan  (a drug)
+  Solothurn -> Solothurn    (a place)
+  Feirtag -> Feiertag       (one missing letter)
+  Nachrichtne -> Nachrichten  (two letters swapped)
+
+Keep the original capitalisation. Keep umlauts (ä, ö, ü) — never ae/oe/ue.
+Swiss German: 'ß' becomes 'ss'.`;
 
       const promptText = `Target: ${word}\nContext before: ${contextBefore}\nContext after: ${contextAfter}`;
       

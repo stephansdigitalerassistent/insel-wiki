@@ -1,0 +1,34 @@
+{
+  "leave": [
+    ["Ryffel", "Frau", "hat den Bericht."],
+    ["Zbinden", "Herr", "ist Arzt."],
+    ["Bieri", "Frau", "kommt um drei."],
+    ["Marti", "Herr", "hat angerufen."],
+    ["Roth", "Frau", "ist zuständig."],
+    ["Stucki", "Herr", "war hier."],
+    ["Kübler", "Frau", "leitet das Team."],
+    ["Bader", "Herr", "wohnt in Thun."],
+    ["Kummer", "Frau", "ist im Dienst."],
+    ["Moser", "Herr", "hat unterschrieben."],
+    ["Lüthi", "Frau", "kommt später."],
+    ["Hurni", "Herr", "ist zuständig."],
+    ["Bracher", "Frau", "hat den Schlüssel."],
+    ["Gurtner", "Herr", "ist Pflegefachmann."],
+    ["Bircher", "Frau", "war gestern hier."],
+    ["Weber", "Herr", "ist im Büro."],
+    ["Frei", "Frau", "hat den Termin."],
+    ["Anken", "Herr", "kommt morgen."],
+    ["Studer", "Frau", "ist Ärztin."],
+    ["Wenger", "Herr", "hat gefragt."]
+  ],
+  "correct": [
+    ["Berichht", "Der", "ist fertig.", "Bericht"],
+    ["Untersuchnug", "Die", "war unauffällig.", "Untersuchung"],
+    ["Dianose", "Die", "steht fest.", "Diagnose"],
+    ["Feiber", "Sie hat", "seit gestern.", "Fieber"],
+    ["Blud", "Das", "wurde abgenommen.", "Blut"],
+    ["Opeartion", "Die", "dauert zwei Stunden.", "Operation"],
+    ["Meidkament", "Das", "wirkt gut.", "Medikament"],
+    ["Sptial", "Im", "Bern.", "Spital"]
+  ]
+}
