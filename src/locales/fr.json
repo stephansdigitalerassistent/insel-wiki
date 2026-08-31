@@ -209,6 +209,13 @@
   "messages": {
     "markdownWarningTitle": "Avertissement : Éléments complexes",
     "markdownWarningMessage": "Cette page contient des tableaux, des commentaires ou des mentions. L'édition en mode Markdown brut peut endommager ou faire perdre ces éléments. Voulez-vous continuer ?",
+    "markdownWarningElementsTitle": "Éléments détectés :",
+    "markdownWarningTables": "{{count}} tableau(x) (la structure du tableau peut être simplifiée)",
+    "markdownWarningComments": "{{count}} commentaire(s) en ligne (les fils de discussion seront supprimés)",
+    "markdownWarningMentions": "{{count}} mention(s) (les liens vers les profils d'utilisateurs seront perdus)",
+    "markdownLossDescription": "Lors de la modification en mode Markdown brut, les éléments complexes suivants seront perdus ou endommagés lors de la synchronisation avec l'éditeur :",
+    "markdownActionReadOnly": "Lecture seule",
+    "markdownActionEdit": "Modifier quand même",
     "unsavedChangesTitle": "Quitter la page ?",
     "unsavedChangesMessage": "Il y a des modifications non enregistrées (synchronisation en cours). Voulez-vous vraiment quitter la page ?",
     "offlineMode": "Mode hors ligne actif",
@@ -261,13 +268,19 @@
       "running": "En cours d'implémentation.",
       "completed": "Implémenté.",
       "failed": "Échec.",
-      "queuing": "Mise en file …"
+      "queuing": "Mise en file …",
+      "preview": "Prêt à être examiné — pas encore en ligne.",
+      "rejected": "Rejeté."
     },
     "action": {
       "startAnalysis": "Lancer l'analyse",
       "approve": "Approuver l'implémentation",
       "restart": "Relancer l'analyse",
-      "sending": "Envoi …"
+      "sending": "Envoi …",
+      "ship": "Publier",
+      "reject": "Rejeter",
+      "openPreview": "Ouvrir l'aperçu",
+      "openPr": "Voir les modifications"
     }
   }
 }

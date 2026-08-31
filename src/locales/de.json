@@ -209,6 +209,13 @@
   "messages": {
     "markdownWarningTitle": "Warnung: Komplexe Elemente",
     "markdownWarningMessage": "Diese Seite enthält Tabellen, Kommentare oder Erwähnungen. Das Bearbeiten im Raw-Markdown-Modus kann diese Elemente beschädigen. Möchten Sie fortfahren?",
+    "markdownWarningElementsTitle": "Gefundene Elemente:",
+    "markdownWarningTables": "{{count}} Tabelle(n) (Tabellenstruktur wird vereinfacht)",
+    "markdownWarningComments": "{{count}} Inline-Kommentar(e) (Kommentarthreads werden gelöscht)",
+    "markdownWarningMentions": "{{count}} Erwähnung(en) (Benutzerverknüpfungen gehen verloren)",
+    "markdownLossDescription": "Beim Bearbeiten im Raw-Markdown-Modus gehen folgende komplexe Elemente verloren oder werden beschädigt, wenn der Text zurück in den Editor übernommen wird:",
+    "markdownActionReadOnly": "Nur Leseansicht",
+    "markdownActionEdit": "Trotzdem bearbeiten",
     "unsavedChangesTitle": "Seite verlassen?",
     "unsavedChangesMessage": "Es gibt noch ungespeicherte Änderungen (Synchronisation läuft). Möchten Sie die Seite wirklich verlassen?",
     "offlineMode": "Offline-Modus aktiv",
@@ -261,13 +268,19 @@
       "running": "Wird gerade umgesetzt.",
       "completed": "Umgesetzt.",
       "failed": "Fehlgeschlagen.",
-      "queuing": "Wird eingereiht …"
+      "queuing": "Wird eingereiht …",
+      "preview": "Bereit zum Anschauen — noch nicht live.",
+      "rejected": "Verworfen."
     },
     "action": {
       "startAnalysis": "Analyse starten",
       "approve": "Umsetzung freigeben",
       "restart": "Analyse neu starten",
-      "sending": "Wird gesendet …"
+      "sending": "Wird gesendet …",
+      "ship": "Live schalten",
+      "reject": "Verwerfen",
+      "openPreview": "Vorschau öffnen",
+      "openPr": "Änderungen ansehen"
     }
   }
 }

@@ -209,6 +209,13 @@
   "messages": {
     "markdownWarningTitle": "Warning: Complex Elements",
     "markdownWarningMessage": "This page contains tables, comments, or mentions. Editing in raw Markdown mode may damage or lose these elements. Do you want to continue?",
+    "markdownWarningElementsTitle": "Detected elements:",
+    "markdownWarningTables": "{{count}} table(s) (table structure may be simplified)",
+    "markdownWarningComments": "{{count}} inline comment(s) (comment threads will be deleted)",
+    "markdownWarningMentions": "{{count}} mention(s) (user profile links will be lost)",
+    "markdownLossDescription": "When editing in raw Markdown mode, the following complex elements will be lost or damaged when synced back to the editor:",
+    "markdownActionReadOnly": "Read-only",
+    "markdownActionEdit": "Edit anyway",
     "unsavedChangesTitle": "Leave page?",
     "unsavedChangesMessage": "There are unsaved changes. Do you really want to leave?",
     "offlineMode": "Offline mode active",
@@ -261,13 +268,19 @@
       "running": "Being implemented now.",
       "completed": "Implemented.",
       "failed": "Failed.",
-      "queuing": "Queuing …"
+      "queuing": "Queuing …",
+      "preview": "Ready to look at — not live yet.",
+      "rejected": "Rejected."
     },
     "action": {
       "startAnalysis": "Start analysis",
       "approve": "Approve implementation",
       "restart": "Restart analysis",
-      "sending": "Sending …"
+      "sending": "Sending …",
+      "ship": "Publish",
+      "reject": "Discard",
+      "openPreview": "Open preview",
+      "openPr": "View changes"
     }
   }
 }

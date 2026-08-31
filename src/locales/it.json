@@ -209,6 +209,13 @@
   "messages": {
     "markdownWarningTitle": "Attenzione: Elementi complessi",
     "markdownWarningMessage": "Questa pagina contiene tabelle, commenti o menzioni. La modifica in modalità Markdown non elaborata potrebbe danneggiare o perdere questi elementi. Vuoi continuare?",
+    "markdownWarningElementsTitle": "Elementi rilevati:",
+    "markdownWarningTables": "{{count}} tabella/e (la struttura della tabella potrebbe essere semplificata)",
+    "markdownWarningComments": "{{count}} commento/i inline (i thread di commenti verranno eliminati)",
+    "markdownWarningMentions": "{{count}} menzione/i (i collegamenti ai profili utente andranno persi)",
+    "markdownLossDescription": "Durante la modifica in modalità Markdown non elaborata, i seguenti elementi complessi andranno persi o danneggiati durante la risincronizzazione con l'editor:",
+    "markdownActionReadOnly": "Sola lettura",
+    "markdownActionEdit": "Modifica comunque",
     "unsavedChangesTitle": "Lasciare la pagina?",
     "unsavedChangesMessage": "Ci sono modifiche non salvate (sincronizzazione in corso). Vuoi davvero lasciare la pagina?",
     "offlineMode": "Modalità offline attiva",
@@ -261,13 +268,19 @@
       "running": "In fase di implementazione.",
       "completed": "Implementato.",
       "failed": "Non riuscito.",
-      "queuing": "In fase di accodamento …"
+      "queuing": "In fase di accodamento …",
+      "preview": "Pronto da esaminare — non ancora online.",
+      "rejected": "Rifiutato."
     },
     "action": {
       "startAnalysis": "Avvia analisi",
       "approve": "Approva implementazione",
       "restart": "Riavvia analisi",
-      "sending": "Invio in corso …"
+      "sending": "Invio in corso …",
+      "ship": "Pubblica",
+      "reject": "Rifiuta",
+      "openPreview": "Apri l'anteprima",
+      "openPr": "Vedi le modifiche"
     }
   }
 }
