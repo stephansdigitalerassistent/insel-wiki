@@ -69,11 +69,39 @@ test('an unknown status offers no buttons rather than guessing', () => {
   assertEqual(actionsFor(undefined), []);
 });
 
+// The preview gate is the one place a person decides against evidence rather
+// than a description, so what it offers has to depend on whether that evidence
+// exists yet. The preview is BUILT by the PR's checks — offering "ship it"
+// while they are still running would be offering to publish something nobody
+// can look at.
+test('a preview with green CI can be shipped or rejected', () => {
+  const actions = actionsFor('preview', 'passed');
+  assertEqual(actions.map(a => a[0]), ['ship', 'reject']);
+  assertEqual(actions[0][2], 'primary', 'ship should be the primary action');
+});
+
+test('a preview whose CI is still running can only be rejected', () => {
+  assertEqual(actionsFor('preview', 'pending').map(a => a[0]), ['reject']);
+});
+
+test('a preview whose CI failed can only be rejected', () => {
+  assertEqual(actionsFor('preview', 'failed').map(a => a[0]), ['reject']);
+});
+
+test('a preview with no CI verdict at all cannot be shipped', () => {
+  assertEqual(actionsFor('preview', undefined).map(a => a[0]), ['reject']);
+});
+
+test('a rejected change offers nothing further', () => {
+  assertEqual(actionsFor('rejected'), []);
+});
+
 console.log('\nheadlineFor()');
 
 test('every known stage has a sentence, not a raw status key', () => {
   const stages = ['waiting', 'analyzing', 'subpage_created', 'proposed',
-                  'approved', 'queued', 'running', 'completed', 'failed'];
+                  'approved', 'queuing', 'queued', 'running', 'preview',
+                  'rejected', 'completed', 'failed'];
   for (const status of stages) {
     const line = headlineFor({ bot_status: status });
     assert(line && line !== status, `${status} should read as a sentence, got "${line}"`);

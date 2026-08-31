@@ -30,6 +30,8 @@ const STAGES = {
     approved:         { tone: 'info',    icon: '✅' },
     queued:           { tone: 'busy',    icon: '📥' },
     running:          { tone: 'busy',    icon: '⚙️' },
+    preview:          { tone: 'action',  icon: '👀' },
+    rejected:         { tone: 'info',    icon: '🗑️' },
     completed:        { tone: 'success', icon: '✅' },
     failed:           { tone: 'error',   icon: '❌' }
 };
@@ -66,7 +68,7 @@ function el(tag, className, text) {
  * for "wait". Every other stage names the decision it needs in the button, so
  * the reader never has to infer what ticking something would do.
  */
-export function actionsFor(status) {
+export function actionsFor(status, ciState) {
     switch (status) {
         case 'waiting':
             return [['start_analysis', t('action.startAnalysis', 'Analyse starten'), 'primary']];
@@ -77,6 +79,17 @@ export function actionsFor(status) {
             ];
         case 'failed':
             return [['restart', t('action.restart', 'Analyse neu starten'), 'secondary']];
+        case 'preview':
+            // Rejecting is always available; shipping waits for green CI,
+            // because the preview being judged is built by those same checks.
+            // Offering "ship it" while they run would be offering to publish
+            // something nobody can look at yet.
+            return [
+                ...(ciState === 'passed'
+                    ? [['ship', t('action.ship', 'Live schalten'), 'primary']]
+                    : []),
+                ['reject', t('action.reject', 'Verwerfen'), 'secondary']
+            ];
         default:
             return [];
     }
@@ -104,6 +117,8 @@ export function headlineFor(page) {
         case 'subpage_created': return t('stage.subpageCreated', 'Die Analyse läuft auf der Unterseite.');
         case 'proposed':        return t('stage.proposed', 'Vorschlag bereit — bitte freigeben.');
         case 'approved':        return t('stage.approved', 'Freigegeben.');
+        case 'preview':         return t('stage.preview', 'Bereit zum Anschauen — noch nicht live.');
+        case 'rejected':        return t('stage.rejected', 'Verworfen.');
         case 'queuing':         return t('stage.queuing', 'Wird eingereiht …');
         case 'queued':          return t('stage.queued', 'In der Warteschlange.');
         case 'running':         return t('stage.running', 'Wird gerade umgesetzt.');
@@ -141,6 +156,27 @@ export function renderBotBanner(container, page, onAction) {
         banner.appendChild(el('p', 'bot-banner__detail', page.bot_detail));
     }
 
+    // The evidence, not a description of it: a running copy of the change on
+    // its own Firebase channel. This link is the entire reason the gate exists,
+    // so it goes above the plan, not buried under it.
+    if (page.bot_status === 'preview' && page.preview_url) {
+        const links = el('div', 'bot-banner__links');
+        const preview = el('a', 'bot-banner__link bot-banner__link--preview',
+                           t('action.openPreview', 'Vorschau öffnen'));
+        preview.href = page.preview_url;
+        preview.target = '_blank';
+        preview.rel = 'noopener noreferrer';
+        links.appendChild(preview);
+        if (page.pr_url) {
+            const pr = el('a', 'bot-banner__link', t('action.openPr', 'Änderungen ansehen'));
+            pr.href = page.pr_url;
+            pr.target = '_blank';
+            pr.rel = 'noopener noreferrer';
+            links.appendChild(pr);
+        }
+        banner.appendChild(links);
+    }
+
     const proposal = page.proposal;
     if (proposal && (page.bot_status === 'proposed' || page.bot_status === 'approved')) {
         if (proposal.analysis) {
@@ -157,7 +193,7 @@ export function renderBotBanner(container, page, onAction) {
         }
     }
 
-    const actions = actionsFor(page.bot_status);
+    const actions = actionsFor(page.bot_status, page.ci_state);
     if (actions.length) {
         const bar = el('div', 'bot-banner__actions');
         for (const [action, label, variant] of actions) {

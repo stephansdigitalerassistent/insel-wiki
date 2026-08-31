@@ -271,13 +271,19 @@
       "running": "Wird gerade umgesetzt.",
       "completed": "Umgesetzt.",
       "failed": "Fehlgeschlagen.",
-      "queuing": "Wird eingereiht …"
+      "queuing": "Wird eingereiht …",
+      "preview": "Bereit zum Anschauen — noch nicht live.",
+      "rejected": "Verworfen."
     },
     "action": {
       "startAnalysis": "Analyse starten",
       "approve": "Umsetzung freigeben",
       "restart": "Analyse neu starten",
-      "sending": "Wird gesendet …"
+      "sending": "Wird gesendet …",
+      "ship": "Live schalten",
+      "reject": "Verwerfen",
+      "openPreview": "Vorschau öffnen",
+      "openPr": "Änderungen ansehen"
     }
   }
 }

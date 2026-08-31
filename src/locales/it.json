@@ -271,13 +271,19 @@
       "running": "In fase di implementazione.",
       "completed": "Implementato.",
       "failed": "Non riuscito.",
-      "queuing": "In fase di accodamento …"
+      "queuing": "In fase di accodamento …",
+      "preview": "Pronto da esaminare — non ancora online.",
+      "rejected": "Rifiutato."
     },
     "action": {
       "startAnalysis": "Avvia analisi",
       "approve": "Approva implementazione",
       "restart": "Riavvia analisi",
-      "sending": "Invio in corso …"
+      "sending": "Invio in corso …",
+      "ship": "Pubblica",
+      "reject": "Rifiuta",
+      "openPreview": "Apri l'anteprima",
+      "openPr": "Vedi le modifiche"
     }
   }
 }

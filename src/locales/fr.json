@@ -271,13 +271,19 @@
       "running": "En cours d'implémentation.",
       "completed": "Implémenté.",
       "failed": "Échec.",
-      "queuing": "Mise en file …"
+      "queuing": "Mise en file …",
+      "preview": "Prêt à être examiné — pas encore en ligne.",
+      "rejected": "Rejeté."
     },
     "action": {
       "startAnalysis": "Lancer l'analyse",
       "approve": "Approuver l'implémentation",
       "restart": "Relancer l'analyse",
-      "sending": "Envoi …"
+      "sending": "Envoi …",
+      "ship": "Publier",
+      "reject": "Rejeter",
+      "openPreview": "Ouvrir l'aperçu",
+      "openPr": "Voir les modifications"
     }
   }
 }

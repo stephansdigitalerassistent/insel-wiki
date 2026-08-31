@@ -271,13 +271,19 @@
       "running": "Being implemented now.",
       "completed": "Implemented.",
       "failed": "Failed.",
-      "queuing": "Queuing …"
+      "queuing": "Queuing …",
+      "preview": "Ready to look at — not live yet.",
+      "rejected": "Rejected."
     },
     "action": {
       "startAnalysis": "Start analysis",
       "approve": "Approve implementation",
       "restart": "Restart analysis",
-      "sending": "Sending …"
+      "sending": "Sending …",
+      "ship": "Publish",
+      "reject": "Discard",
+      "openPreview": "Open preview",
+      "openPr": "View changes"
     }
   }
 }
