@@ -103,6 +103,11 @@ export class FirestoreYjsProvider {
     this.awareness = new Awareness(ydoc);
     /** @type {number} */
     this.clientId = this.awareness.clientID;
+    // Stamped on every update we write. `content` is projected server-side and
+    // carries no author, so an update's own author is the only record of who
+    // made an edit — the DevOps bot reads it to attribute a ticked checkbox.
+    /** @type {string} */
+    this.authorEmail = user?.email || '';
     
     // Initialize awareness state for ourselves
     this.awareness.setLocalStateField('user', {
@@ -219,7 +224,8 @@ export class FirestoreYjsProvider {
     return addDoc(this.updatesRef, {
       update: Bytes.fromUint8Array(merged),
       timestamp: serverTimestamp(),
-      clientId: this.clientId
+      clientId: this.clientId,
+      author: this.authorEmail
     }).catch(() => {}).finally(() => {
       this.pendingWrites--;
       this._emitStatus();
