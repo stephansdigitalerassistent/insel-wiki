@@ -1101,3 +1101,137 @@ export function tableModal(defaultRows = 3, defaultCols = 3, defaultHeader = tru
   });
 }
 
+/**
+ * Multi-choice modal warning the user about complex elements (tables, comments, mentions)
+ * before entering raw Markdown editing mode.
+ *
+ * Offers three actions:
+ * - 'readonly': safe read-only markdown view (no edits, no data corruption)
+ * - 'edit': proceed with editable markdown view (user accepts potential element stripping)
+ * - 'cancel': abort and stay in WYSIWYG mode
+ *
+ * @param {{ tables?: number, comments?: number, mentions?: number }} elements
+ * @returns {Promise<'readonly'|'edit'|'cancel'>}
+ */
+export function markdownWarningModal(elements = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-box markdown-warning-modal-box';
+
+    const header = document.createElement('h3');
+    header.className = 'modal-title';
+    header.textContent = i18next.t('messages.markdownWarningTitle') || 'Warnung: Komplexe Elemente';
+
+    const message = document.createElement('p');
+    message.className = 'modal-message';
+    message.style.marginBottom = '1rem';
+    message.textContent = i18next.t('messages.markdownWarningDesc') || 'Diese Seite enthält Elemente, die beim Bearbeiten im Raw-Markdown-Modus verloren gehen oder verändert werden:';
+
+    const list = document.createElement('ul');
+    list.className = 'markdown-warning-list';
+
+    if (elements.tables && elements.tables > 0) {
+      const li = document.createElement('li');
+      const tableText = elements.tables === 1
+        ? (i18next.t('messages.markdownWarningTableSingle') || '1 Tabelle (Struktur und Formatierung können verändert werden)')
+        : (i18next.t('messages.markdownWarningTables', { count: elements.tables }) || `${elements.tables} Tabellen (Struktur und Formatierung können verändert werden)`);
+      li.textContent = tableText;
+      list.appendChild(li);
+    }
+
+    if (elements.comments && elements.comments > 0) {
+      const li = document.createElement('li');
+      const commentText = elements.comments === 1
+        ? (i18next.t('messages.markdownWarningCommentSingle') || '1 Inline-Kommentar (wird beim Bearbeiten im Markdown-Modus gelöscht)')
+        : (i18next.t('messages.markdownWarningComments', { count: elements.comments }) || `${elements.comments} Inline-Kommentare (werden beim Bearbeiten im Markdown-Modus gelöscht)`);
+      li.textContent = commentText;
+      list.appendChild(li);
+    }
+
+    if (elements.mentions && elements.mentions > 0) {
+      const li = document.createElement('li');
+      const mentionText = elements.mentions === 1
+        ? (i18next.t('messages.markdownWarningMentionSingle') || '1 Erwähnung (wird in einfachen @Text umgewandelt)')
+        : (i18next.t('messages.markdownWarningMentions', { count: elements.mentions }) || `${elements.mentions} Erwähnungen (werden in einfachen @Text umgewandelt)`);
+      li.textContent = mentionText;
+      list.appendChild(li);
+    }
+
+    const notice = document.createElement('p');
+    notice.className = 'modal-message';
+    notice.style.fontSize = '0.85rem';
+    notice.style.color = 'var(--text-muted)';
+    notice.style.marginBottom = '1.5rem';
+    notice.textContent = i18next.t('messages.markdownWarningLossNotice') || 'Wählen Sie «Nur lesen», um den Markdown-Quelltext sicher anzuzeigen oder zu kopieren.';
+
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.id = 'md-warning-cancel';
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = i18next.t('common.cancel') || 'Abbrechen';
+
+    const readOnlyBtn = document.createElement('button');
+    readOnlyBtn.type = 'button';
+    readOnlyBtn.id = 'md-warning-readonly';
+    readOnlyBtn.className = 'btn btn-secondary';
+    readOnlyBtn.textContent = i18next.t('messages.markdownWarningReadOnly') || 'Nur lesen';
+
+    const editAnywayBtn = document.createElement('button');
+    editAnywayBtn.type = 'button';
+    editAnywayBtn.id = 'md-warning-edit';
+    editAnywayBtn.className = 'btn btn-danger';
+    editAnywayBtn.textContent = i18next.t('messages.markdownWarningEditAnyway') || 'Trotzdem bearbeiten';
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(readOnlyBtn);
+    actions.appendChild(editAnywayBtn);
+
+    modal.appendChild(header);
+    modal.appendChild(message);
+    modal.appendChild(list);
+    modal.appendChild(notice);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    setTimeout(() => {
+      readOnlyBtn.focus();
+    }, 10);
+
+    const cleanup = () => {
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
+    };
+
+    const choose = (choice) => {
+      cleanup();
+      resolve(choice);
+    };
+
+    cancelBtn.addEventListener('click', () => choose('cancel'));
+    readOnlyBtn.addEventListener('click', () => choose('readonly'));
+    editAnywayBtn.addEventListener('click', () => choose('edit'));
+
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        choose('cancel');
+      }
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        choose('cancel');
+      }
+    });
+  });
+}
+
+

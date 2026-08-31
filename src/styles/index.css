@@ -1275,6 +1275,25 @@ table tr:hover td {
   color: var(--text-primary);
 }
 
+/* --- Markdown Warning Modal --- */
+.markdown-warning-modal-box {
+  max-width: 480px;
+}
+
+.markdown-warning-list {
+  margin: 12px 0 16px 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.markdown-warning-list li {
+  line-height: 1.4;
+}
+
 /* --- Diff Styles --- */
 .diff-view {
   font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
