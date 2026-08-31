@@ -249,5 +249,24 @@
     "passwordHint": "Min. 10 characters (A-Z, a-z, 0-9)",
     "aclTitle": "Access Permissions",
     "aclDesc": "Manage who can access \"{{title}}\" and all its subpages."
+  },
+  "bot": {
+    "stage": {
+      "waiting": "Request detected.",
+      "analyzing": "Analysing the request …",
+      "subpageCreated": "The analysis is running on the subpage.",
+      "proposed": "Proposal ready — please approve.",
+      "approved": "Approved.",
+      "queued": "In the queue.",
+      "running": "Being implemented now.",
+      "completed": "Implemented.",
+      "failed": "Failed."
+    },
+    "action": {
+      "startAnalysis": "Start analysis",
+      "approve": "Approve implementation",
+      "restart": "Restart analysis",
+      "sending": "Sending …"
+    }
   }
 }

@@ -287,6 +287,30 @@ export async function updatePageTitle(pageId, title) {
 }
 
 /**
+ * Record the reader's decision on a DevOps-Bot page.
+ *
+ * The bot used to be driven by checkboxes inside the page's own Yjs document,
+ * which meant its control state and the reader's prose lived in one CRDT that
+ * both sides rewrote. Ticking a box wrote a blob into `yjs_updates` that the
+ * daemon had to project and string-match, and the daemon answering wiped the
+ * document out from under anyone who had it open. The decision is a field on
+ * the page now: one write, no document surgery, and nothing for a stale tab to
+ * overwrite.
+ *
+ * `botActionBy` is the caller's own address and firestore.rules refuses any
+ * other value, because the daemon checks it against ADMIN_EMAILS before acting.
+ */
+export async function setBotAction(pageId, action, email) {
+  const pageRef = doc(db, PAGES_COLLECTION, pageId);
+  await updateDoc(pageRef, {
+    bot_action: action,
+    bot_action_by: email,
+    bot_action_at: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
+/**
  * Helper to manage atomic batch writes in Firestore.
  * Automatically chunks writes into batches of up to 400 operations to respect Firestore's 500-write limit.
  * 

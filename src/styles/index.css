@@ -1729,3 +1729,89 @@ table tr:hover td {
   }
 }
 
+
+/* --- DevOps-Bot status banner -------------------------------------------
+ * Sits above the editor, outside the collaborative document, so the bot can
+ * say where a request stands without writing into the prose the reader is
+ * editing. Tone comes from the stage, and only stages that actually need a
+ * decision render buttons.
+ */
+.bot-banner {
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.bot-banner--busy    { border-left-color: var(--warning); }
+.bot-banner--success { border-left-color: var(--success); }
+.bot-banner--error   { border-left-color: var(--danger); }
+.bot-banner--action  { border-left-color: var(--accent); }
+
+.bot-banner__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.bot-banner__icon { flex: none; }
+
+.bot-banner__headline {
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.bot-banner__detail,
+.bot-banner__analysis {
+  margin: 0.6rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.bot-banner__plan {
+  margin: 0.7rem 0 0;
+  padding-left: 1.35rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.bot-banner__plan li { margin: 0.2rem 0; }
+
+.bot-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.bot-banner__btn {
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.bot-banner__btn:hover:not(:disabled) { background: var(--bg-active); }
+
+.bot-banner__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-inverse);
+  font-weight: 600;
+}
+
+.bot-banner__btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+.bot-banner__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

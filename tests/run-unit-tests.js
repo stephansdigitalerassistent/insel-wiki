@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import { globSync } from 'node:fs';
 
-// Discover all unit test files matching src/utils/*.test.js, src/editor/*.test.js, and tests/utils.test.js
+// Discover all unit test files matching src/utils/*.test.js, src/editor/*.test.js,
+// src/components/*.test.js, and tests/utils.test.js
 const testFiles = [
   ...globSync('src/utils/*.test.js'),
   ...globSync('src/editor/*.test.js'),
+  ...globSync('src/components/*.test.js'),
   'tests/utils.test.js'
 ];
 

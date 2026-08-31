@@ -45,7 +45,8 @@
  * a single user-facing indicator ("Speichern...", "Gespeichert", or "Offline"). Additionally, permissions are
  * verified via `canEdit()` to lock/unlock fields (title inputs, formatting toolbars, markdown mode toggles).
  */
-import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, getFullHistoryContent, updatePageTitle, deletePage, getChildren, formatTimestamp } from '../firebase/firestore.js';
+import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, getFullHistoryContent, updatePageTitle, deletePage, getChildren, formatTimestamp, setBotAction } from '../firebase/firestore.js';
+import { renderBotBanner } from '../components/bot-banner.js';
 import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, hasCachedEditor } from '../editor/editor.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
@@ -567,6 +568,8 @@ export async function loadPage(pageId) {
     color: getColorForEmail(user?.email || 'Gast')
   };
 
+  showBotBanner(page);
+
   // Create editor (Yjs provider.init() runs internally)
   createEditor(editorEl, pageId, fullUser, page.content || '', () => {
     if (loadingOverlay) loadingOverlay.classList.add('hidden');
@@ -637,15 +640,19 @@ export async function loadPage(pageId) {
         document.title = `Insel-Wiki - ${updatedPage.title || 'Ohne Titel'}`;
       }
 
-      // 2. Force editor reload if bot status changed or if server forced an update
-      // This allows the DevOps-Bot to 'take over' the editor even if the user has it open.
-      if (newBotStatus !== oldBotStatus && newBotStatus !== 'new') {
-        console.log(`[Insel-Wiki] Bot status changed to ${newBotStatus}. Refreshing content.`);
-        setContent(updatedPage.content);
-        if (isMarkdownMode && markdownEditor) {
-          markdownEditor.value = updatedPage.content || '';
-        }
+      // 2. Re-render the bot's banner when it moves the request on.
+      //
+      // This used to call setContent(updatedPage.content) to let the bot "take
+      // over" the editor of whoever had the page open. That is what emptied a
+      // proposal on 2026-08-31: the daemon had just deleted the Yjs document to
+      // force a resync, this handler pushed the stale in-memory document back,
+      // and the reader was left looking at a blank page with the approval
+      // checkbox gone. The bot's state is its own fields now, so there is
+      // nothing to force into the document and the document is never touched.
+      if (newBotStatus !== oldBotStatus) {
+        console.log(`[Insel-Wiki] Bot status: ${oldBotStatus || 'none'} -> ${newBotStatus || 'none'}`);
       }
+      showBotBanner(updatedPage);
 
       updateBreadcrumb(pageId);
       const slug = slugify(updatedPage.title || '');
@@ -691,6 +698,36 @@ export async function loadPage(pageId) {
  *
  * @returns {void}
  */
+/**
+ * Draw the DevOps-Bot banner for `page`, and wire its buttons.
+ *
+ * A button writes one field and returns; the daemon picks the decision up on
+ * its next sweep and answers by moving `bot_status`, which comes back through
+ * the page subscription and redraws this banner. Nothing here touches the
+ * collaborative document.
+ */
+function showBotBanner(page) {
+  if (!editorContainer) return;
+  renderBotBanner(editorContainer, page, async (action) => {
+    const user = getCurrentUser();
+    const email = user?.email || '';
+    if (!email) {
+      showToast(i18next.t('errors.notLoggedIn', 'Nicht angemeldet.'), 'error');
+      throw new Error('not signed in');
+    }
+    try {
+      await setBotAction(page.id, action, email);
+    } catch (e) {
+      // The approval gate lives in the daemon and in firestore.rules, so a
+      // refused write is a real answer and must be visible. Swallowing it is
+      // what made every earlier failure look like a dead bot.
+      console.error('[Insel-Wiki] Bot action failed:', e);
+      showToast(i18next.t('errors.botActionFailed', 'Aktion konnte nicht gesendet werden.'), 'error');
+      throw e;
+    }
+  });
+}
+
 export function showEmptyState() {
   if (isMarkdownMode && markdownEditor) {
     debouncedSyncMarkdownToEditor.flush();

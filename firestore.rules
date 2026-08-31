@@ -74,6 +74,11 @@ service cloud.firestore {
       // Writes must come from an @insel.ch user, AND if the document carries
       // a `lastSavedBy` field it must equal the authenticated email — so it
       // cannot be spoofed to impersonate an admin and trigger the DevOps bot.
+      //
+      // `bot_action_by` is held to the same standard, and for the same reason:
+      // it is the field the DevOps daemon checks against ADMIN_EMAILS before it
+      // implements anything, so a writer who could set it to someone else's
+      // address could approve their own change in an admin's name.
       allow write: if isInsel() && (resource == null || isPageAccessible(resource.data))
         && 'allowedEmails' in request.resource.data
         && request.resource.data.allowedEmails is list
@@ -81,6 +86,10 @@ service cloud.firestore {
         && (resource == null ?
             (!('lastSavedBy' in request.resource.data) || request.resource.data.lastSavedBy == request.auth.token.email) :
             (!(request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSavedBy'])) || request.resource.data.lastSavedBy == request.auth.token.email)
+           )
+        && (resource == null ?
+            (!('bot_action_by' in request.resource.data) || request.resource.data.bot_action_by == request.auth.token.email) :
+            (!(request.resource.data.diff(resource.data).affectedKeys().hasAny(['bot_action_by'])) || request.resource.data.bot_action_by == request.auth.token.email)
            );
       allow delete: if (isInsel() && isPageAccessible(resource.data)) || isBot();
       

@@ -249,5 +249,24 @@
     "passwordHint": "Min. 10 caractères (A-Z, a-z, 0-9)",
     "aclTitle": "Autorisations d'accès",
     "aclDesc": "Gérez qui peut accéder à \"{{title}}\" et à toutes ses sous-pages."
+  },
+  "bot": {
+    "stage": {
+      "waiting": "Demande détectée.",
+      "analyzing": "Analyse de la demande …",
+      "subpageCreated": "L'analyse est en cours sur la sous-page.",
+      "proposed": "Proposition prête — veuillez approuver.",
+      "approved": "Approuvé.",
+      "queued": "Dans la file d'attente.",
+      "running": "En cours d'implémentation.",
+      "completed": "Implémenté.",
+      "failed": "Échec."
+    },
+    "action": {
+      "startAnalysis": "Lancer l'analyse",
+      "approve": "Approuver l'implémentation",
+      "restart": "Relancer l'analyse",
+      "sending": "Envoi …"
+    }
   }
 }
