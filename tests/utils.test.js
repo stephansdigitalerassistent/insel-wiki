@@ -412,6 +412,81 @@ test('history snapshot logic triggers when content changes', () => {
 });
 
 // ──────────────────────────────────────────────
+console.log('\n🔍 detectComplexElements()');
+// ──────────────────────────────────────────────
+const { detectComplexElements, hasComplexElements } = await import('../src/controllers/page.js');
+
+test('detects nothing in plain html content', () => {
+  const result = detectComplexElements('<p>Einfacher Text ohne Besonderheiten.</p>');
+  expect(result.tables).toBe(0);
+  expect(result.comments).toBe(0);
+  expect(result.mentions).toBe(0);
+  expect(result.hasAny).toBe(false);
+  expect(result.total).toBe(0);
+  expect(hasComplexElements('<p>Einfacher Text</p>')).toBe(false);
+});
+
+test('detects and counts tables in HTML', () => {
+  const html = `
+    <h2>Übersicht</h2>
+    <table><thead><tr><th>Spalte 1</th><th>Spalte 2</th></tr></thead><tbody><tr><td>A</td><td>B</td></tr></tbody></table>
+    <p>Zwischentext</p>
+    <table class="custom-table"><tr><td>1</td></tr></table>
+  `;
+  const result = detectComplexElements(html);
+  expect(result.tables).toBe(2);
+  expect(result.comments).toBe(0);
+  expect(result.mentions).toBe(0);
+  expect(result.hasAny).toBe(true);
+  expect(result.total).toBe(2);
+});
+
+test('detects and counts inline comments with data-comment-id', () => {
+  const html = `
+    <p>Hier ist ein <span class="comment-highlight" data-comment-id="thread-1">kommentierter Text</span> und ein weiterer <span data-comment-id="thread-2">Kommentar</span>.</p>
+  `;
+  const result = detectComplexElements(html);
+  expect(result.tables).toBe(0);
+  expect(result.comments).toBe(2);
+  expect(result.mentions).toBe(0);
+  expect(result.hasAny).toBe(true);
+  expect(result.total).toBe(2);
+});
+
+test('detects and counts mentions with data-type="mention" or class="mention"', () => {
+  const html = `
+    <p>Hallo <span data-type="mention" class="mention" data-id="u1">@Alice</span> und <span data-type="mention" data-id="u2">@Bob</span> und <span class="mention">@Charlie</span>!</p>
+  `;
+  const result = detectComplexElements(html);
+  expect(result.tables).toBe(0);
+  expect(result.comments).toBe(0);
+  expect(result.mentions).toBe(3);
+  expect(result.hasAny).toBe(true);
+  expect(result.total).toBe(3);
+});
+
+test('detects mixed complex elements correctly', () => {
+  const html = `
+    <table><tr><td>Inhalt</td></tr></table>
+    <p>Kommentar: <span class="comment-highlight" data-comment-id="c-99">Wichtig</span></p>
+    <p>Erwähnung: <span data-type="mention" class="mention" data-id="u-3">@Doc</span></p>
+  `;
+  const result = detectComplexElements(html);
+  expect(result.tables).toBe(1);
+  expect(result.comments).toBe(1);
+  expect(result.mentions).toBe(1);
+  expect(result.hasAny).toBe(true);
+  expect(result.total).toBe(3);
+  expect(hasComplexElements(html)).toBe(true);
+});
+
+test('handles empty or null content gracefully', () => {
+  expect(detectComplexElements('').hasAny).toBe(false);
+  expect(detectComplexElements(null).hasAny).toBe(false);
+  expect(detectComplexElements(undefined).hasAny).toBe(false);
+});
+
+// ──────────────────────────────────────────────
 // Summary
 // ──────────────────────────────────────────────
 console.log(`\n${'─'.repeat(40)}`);

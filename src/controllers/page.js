@@ -51,7 +51,7 @@ import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, crea
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
 import { loadCommentsForPage } from '../components/comments.js';
-import { promptModal, newPageModal, confirmModal } from '../components/modal.js';
+import { promptModal, newPageModal, confirmModal, markdownWarningModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 import { canEdit, getCurrentUser, isLoggedIn } from '../firebase/auth.js';
 import { formatDefaultName, slugify, getColorForEmail, getInitials } from '../utils/string.js';
@@ -192,7 +192,7 @@ export function anySavePending() {
   if (pendingTitleSaves > 0) return true;
   const provider = getProvider();
   if (provider && provider.hasUnsavedChanges) return true;
-  if (debouncedSyncMarkdownToEditor && debouncedSyncMarkdownToEditor.isPending()) return true;
+  if (debouncedSyncMarkdownToEditor && debouncedSyncMarkdownToEditor.isPending() && !isMarkdownReadOnly) return true;
   return false;
 }
 
@@ -202,7 +202,7 @@ export function anySavePending() {
  * @returns {void}
  */
 export function flushMarkdownEditor() {
-  if (isMarkdownMode && markdownEditor) {
+  if (isMarkdownMode && markdownEditor && !isMarkdownReadOnly) {
     debouncedSyncMarkdownToEditor.flush();
   }
 }
@@ -241,11 +241,12 @@ let collabCursorsEl, emptyState, lastEditedBadge, loadingOverlay;
 let historyBtn, printBtn, addChildBtn, deletePageBtn, toolbarNewPageBtn, copyLinkBtn;
 let markdownEditor, markdownToggleBtn;
 let isMarkdownMode = false;
+let isMarkdownReadOnly = false;
 let originalMarkdownValue = '';
 let lastSyncedMarkdown = '';
 
 const debouncedSyncMarkdownToEditor = debounce((markdown) => {
-  if (currentPageId && canEdit()) {
+  if (currentPageId && canEdit() && !isMarkdownReadOnly) {
     setContent(markdown);
     lastSyncedMarkdown = markdown;
   }
@@ -350,7 +351,7 @@ export function initPageController(opts) {
 
   if (markdownEditor) {
     markdownEditor.addEventListener('input', () => {
-      if (currentPageId && canEdit()) {
+      if (currentPageId && canEdit() && !isMarkdownReadOnly) {
         debouncedSyncMarkdownToEditor(markdownEditor.value);
         recomputeSaveStatus();
       }
@@ -374,7 +375,7 @@ export function initPageController(opts) {
     if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       if (currentPageId) {
-        if (isMarkdownMode && markdownEditor) {
+        if (isMarkdownMode && markdownEditor && !isMarkdownReadOnly) {
           debouncedSyncMarkdownToEditor.flush();
         }
         const provider = getProvider();
@@ -449,8 +450,12 @@ export async function loadPage(pageId) {
   if (pageId === currentPageId) return;
 
   if (isMarkdownMode && markdownEditor) {
-    debouncedSyncMarkdownToEditor.flush();
+    if (!isMarkdownReadOnly) {
+      debouncedSyncMarkdownToEditor.flush();
+    }
     isMarkdownMode = false;
+    isMarkdownReadOnly = false;
+    markdownEditor.readOnly = false;
     markdownEditor.classList.add('hidden');
     if (editorEl) editorEl.style.display = 'block';
     if (markdownToggleBtn) markdownToggleBtn.classList.remove('active');
@@ -730,8 +735,12 @@ function showBotBanner(page) {
 
 export function showEmptyState() {
   if (isMarkdownMode && markdownEditor) {
-    debouncedSyncMarkdownToEditor.flush();
+    if (!isMarkdownReadOnly) {
+      debouncedSyncMarkdownToEditor.flush();
+    }
     isMarkdownMode = false;
+    isMarkdownReadOnly = false;
+    markdownEditor.readOnly = false;
     markdownEditor.classList.add('hidden');
     if (editorEl) editorEl.style.display = 'block';
     if (markdownToggleBtn) markdownToggleBtn.classList.remove('active');
@@ -830,7 +839,7 @@ function setSaveStatus(status) {
 async function snapshotCurrentPage() {
   if (!currentPageId || !canEdit()) return;
   try {
-    if (isMarkdownMode && markdownEditor) {
+    if (isMarkdownMode && markdownEditor && !isMarkdownReadOnly) {
       debouncedSyncMarkdownToEditor.flush();
     }
     const markdown = getMarkdown();
@@ -1096,31 +1105,84 @@ async function toggleMarkdownMode() {
   if (!currentPageId || !canEdit()) return;
   
   if (!isMarkdownMode) {
-    if (hasComplexElements()) {
-      const confirmed = await confirmModal(
-        i18next.t('messages.markdownWarningTitle') || 'Warnung: Komplexe Elemente',
-        i18next.t('messages.markdownWarningMessage') || 'Diese Seite enthält Tabellen, Kommentare oder Erwähnungen. Das Bearbeiten im Raw-Markdown-Modus kann diese Elemente beschädigen. Möchten Sie fortfahren?'
-      );
-      if (!confirmed) {
+    const complexElements = detectComplexElements();
+    if (complexElements.hasAny) {
+      const choice = await markdownWarningModal(complexElements);
+      if (choice === 'cancel' || !choice) {
         return;
       }
+      if (choice === 'readonly') {
+        isMarkdownReadOnly = true;
+      } else if (choice === 'edit') {
+        isMarkdownReadOnly = false;
+      }
+    } else {
+      isMarkdownReadOnly = false;
     }
+    isMarkdownMode = true;
+  } else {
+    isMarkdownMode = false;
   }
 
-  isMarkdownMode = !isMarkdownMode;
   updateMarkdownView();
 }
 
 /**
- * Scans editor content for elements that could be broken by markdown editing (e.g. comments, tables, mentions).
+ * Scans editor HTML content for elements that could be broken or stripped by markdown editing
+ * (e.g. tables, inline comment threads with data-comment-id, mentions with data-type="mention").
  *
+ * @param {string|Object} [contentOrEditor] - HTML string or editor instance (defaults to current active editor).
+ * @returns {{ tables: number, comments: number, mentions: number, hasAny: boolean, total: number }}
+ */
+export function detectComplexElements(contentOrEditor) {
+  let html = '';
+  if (typeof contentOrEditor === 'string') {
+    html = contentOrEditor;
+  } else if (contentOrEditor && typeof contentOrEditor.getHTML === 'function') {
+    html = contentOrEditor.getHTML() || '';
+  } else {
+    const ed = getEditor();
+    if (ed && typeof ed.getHTML === 'function') {
+      html = ed.getHTML() || '';
+    }
+  }
+
+  if (!html) {
+    return { tables: 0, comments: 0, mentions: 0, hasAny: false, total: 0 };
+  }
+
+  // Count tables: match <table with whitespace or >
+  const tableMatches = html.match(/<table(?=[\s>])/gi) || [];
+  const tables = tableMatches.length;
+
+  // Count comments: match data-comment-id attributes
+  const commentMatches = html.match(/data-comment-id\s*=\s*["']?[^"'\s>]+/gi) || [];
+  const comments = commentMatches.length;
+
+  // Count mentions: match data-type="mention" or class="mention"
+  const mentionMatches = html.match(/<[a-z0-9-]+[^>]+(?:data-type=["']mention["']|class=["'][^"']*?\bmention\b[^"']*?)[^>]*>/gi) || [];
+  const mentions = mentionMatches.length;
+
+  const total = tables + comments + mentions;
+  const hasAny = total > 0;
+
+  return {
+    tables,
+    comments,
+    mentions,
+    hasAny,
+    total
+  };
+}
+
+/**
+ * Backwards-compatible boolean check for presence of complex elements.
+ *
+ * @param {string|Object} [contentOrEditor]
  * @returns {boolean} True if any complex elements exist.
  */
-function hasComplexElements() {
-  const ed = getEditor();
-  if (!ed) return false;
-  const html = ed.getHTML() || '';
-  return html.includes('</table>') || html.includes('class="mention"') || html.includes('data-comment-id') || html.includes('data-type="mention"');
+export function hasComplexElements(contentOrEditor) {
+  return detectComplexElements(contentOrEditor).hasAny;
 }
 
 /**
@@ -1138,6 +1200,7 @@ function updateMarkdownView() {
     originalMarkdownValue = markdown;
     lastSyncedMarkdown = markdown;
     markdownEditor.value = markdown;
+    markdownEditor.readOnly = !!isMarkdownReadOnly;
     
     editorEl.style.display = 'none';
     markdownEditor.classList.remove('hidden');
@@ -1148,11 +1211,16 @@ function updateMarkdownView() {
   } else {
     // Switch back to WYSIWYG mode
     debouncedSyncMarkdownToEditor.cancel();
-    const markdown = markdownEditor.value;
-    if (markdown !== lastSyncedMarkdown) {
-      setContent(markdown);
-      lastSyncedMarkdown = markdown;
+    if (!isMarkdownReadOnly) {
+      const markdown = markdownEditor.value;
+      if (markdown !== lastSyncedMarkdown) {
+        setContent(markdown);
+        lastSyncedMarkdown = markdown;
+      }
     }
+    
+    isMarkdownReadOnly = false;
+    markdownEditor.readOnly = false;
     
     markdownEditor.classList.add('hidden');
     editorEl.style.display = 'block';
