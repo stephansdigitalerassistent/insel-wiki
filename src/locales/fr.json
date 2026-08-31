@@ -260,7 +260,8 @@
       "queued": "Dans la file d'attente.",
       "running": "En cours d'implémentation.",
       "completed": "Implémenté.",
-      "failed": "Échec."
+      "failed": "Échec.",
+      "queuing": "Mise en file …"
     },
     "action": {
       "startAnalysis": "Lancer l'analyse",

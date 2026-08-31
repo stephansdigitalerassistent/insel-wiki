@@ -260,7 +260,8 @@
       "queued": "In der Warteschlange.",
       "running": "Wird gerade umgesetzt.",
       "completed": "Umgesetzt.",
-      "failed": "Fehlgeschlagen."
+      "failed": "Fehlgeschlagen.",
+      "queuing": "Wird eingereiht …"
     },
     "action": {
       "startAnalysis": "Analyse starten",

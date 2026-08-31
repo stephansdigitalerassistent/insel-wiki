@@ -260,7 +260,8 @@
       "queued": "In the queue.",
       "running": "Being implemented now.",
       "completed": "Implemented.",
-      "failed": "Failed."
+      "failed": "Failed.",
+      "queuing": "Queuing …"
     },
     "action": {
       "startAnalysis": "Start analysis",

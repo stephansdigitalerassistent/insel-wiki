@@ -260,7 +260,8 @@
       "queued": "In coda.",
       "running": "In fase di implementazione.",
       "completed": "Implementato.",
-      "failed": "Non riuscito."
+      "failed": "Non riuscito.",
+      "queuing": "In fase di accodamento …"
     },
     "action": {
       "startAnalysis": "Avvia analisi",

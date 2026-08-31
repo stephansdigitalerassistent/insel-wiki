@@ -24,6 +24,7 @@ import i18next from 'i18next';
 const STAGES = {
     waiting:          { tone: 'info',    icon: '🤖' },
     analyzing:        { tone: 'busy',    icon: '⏳' },
+    queuing:          { tone: 'busy',    icon: '📥' },
     subpage_created:  { tone: 'info',    icon: '🔍' },
     proposed:         { tone: 'action',  icon: '📋' },
     approved:         { tone: 'info',    icon: '✅' },
@@ -103,6 +104,7 @@ export function headlineFor(page) {
         case 'subpage_created': return t('stage.subpageCreated', 'Die Analyse läuft auf der Unterseite.');
         case 'proposed':        return t('stage.proposed', 'Vorschlag bereit — bitte freigeben.');
         case 'approved':        return t('stage.approved', 'Freigegeben.');
+        case 'queuing':         return t('stage.queuing', 'Wird eingereiht …');
         case 'queued':          return t('stage.queued', 'In der Warteschlange.');
         case 'running':         return t('stage.running', 'Wird gerade umgesetzt.');
         case 'completed':       return t('stage.completed', 'Umgesetzt.');
