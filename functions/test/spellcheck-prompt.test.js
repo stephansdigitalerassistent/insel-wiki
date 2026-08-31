@@ -16,12 +16,22 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const INDEX = path.join(HERE, '..', 'index.js');
 const PROMPTS = path.join(HERE, '..', '..', 'tests', 'spellcheck-eval', 'prompts.mjs');
 
-// The prompt as index.js will send it: the one template literal assigned to
-// systemPrompt inside the spellcheck handler.
+/**
+ * The prompt as index.js will send it.
+ *
+ * Sliced out of the spellcheck handler rather than taken as the file's first
+ * `systemPrompt`: index.js holds more than one (the hAnSpecathon fork also has a
+ * translator), and a test that silently grabs the wrong one would pass while the
+ * prompt it is guarding drifted freely.
+ */
 async function shippedPrompt() {
     const src = await readFile(INDEX, 'utf8');
-    const m = src.match(/const systemPrompt = `([\s\S]*?)`;/);
-    assert.ok(m, 'no systemPrompt template literal found in functions/index.js');
+    const start = src.indexOf('export const spellcheck = onRequest');
+    assert.notEqual(start, -1, 'no spellcheck handler found in functions/index.js');
+    const end = src.indexOf('\nexport const ', start + 1);
+    const handler = src.slice(start, end === -1 ? undefined : end);
+    const m = handler.match(/const systemPrompt = `([\s\S]*?)`;/);
+    assert.ok(m, 'no systemPrompt template literal inside the spellcheck handler');
     return m[1];
 }
 
