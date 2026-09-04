@@ -187,6 +187,10 @@ export async function createHistorySnapshot(pageId, content, title, savedBy = ''
     });
     return docRef?.id;
   } catch (err) {
+    if (err?.code === 'already-exists' || err?.message?.includes('Document already exists')) {
+      console.warn('[Snapshot] History snapshot already committed (benign network retry):', err.message);
+      return null;
+    }
     console.error('[Snapshot] Failed to save history snapshot:', err);
   }
 }

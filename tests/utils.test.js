@@ -175,6 +175,45 @@ test('ignores regular text without task markers', () => {
   expect(tasks).toHaveLength(0);
 });
 
+test('extracts multi-assignee tasks across different positions and formats', () => {
+  const content = [
+    '- [ ] Task 1 @Alice @Bob',
+    '- [ ] Task 2 @Bob @Alice',
+    '- [ ] Task 3 @Carol @Alice @Dave',
+    '- [x] Done task @Alice @Bob',
+    '- [X] Done capital X @Bob @Alice'
+  ].join('\n');
+  const tasks = extractTasks(content);
+  expect(tasks).toHaveLength(5);
+  expect(tasks[0].text).toBe('Task 1 @Alice @Bob');
+  expect(tasks[0].done).toBe(false);
+  expect(tasks[1].text).toBe('Task 2 @Bob @Alice');
+  expect(tasks[2].text).toBe('Task 3 @Carol @Alice @Dave');
+  expect(tasks[3].text).toBe('Done task @Alice @Bob');
+  expect(tasks[3].done).toBe(true);
+  expect(tasks[4].text).toBe('Done capital X @Bob @Alice');
+  expect(tasks[4].done).toBe(true);
+});
+
+test('handles mention edge cases including punctuation, email coexistence, and formatting', () => {
+  const content = [
+    '- [ ] Review with @Alice, urgent',
+    '- [ ] Assigned to @Bob.',
+    '- [ ] @Carol: please verify',
+    '- [ ] Great work (@Dave)!',
+    '- [ ] Email support@insel.ch about access @Alice',
+    '- [ ] Complex @User-64 and @Test_User_01'
+  ].join('\n');
+  const tasks = extractTasks(content);
+  expect(tasks).toHaveLength(6);
+  expect(tasks[0].text).toBe('Review with @Alice, urgent');
+  expect(tasks[1].text).toBe('Assigned to @Bob.');
+  expect(tasks[2].text).toBe('@Carol: please verify');
+  expect(tasks[3].text).toBe('Great work (@Dave)!');
+  expect(tasks[4].text).toBe('Email support@insel.ch about access @Alice');
+  expect(tasks[5].text).toBe('Complex @User-64 and @Test_User_01');
+});
+
 // ──────────────────────────────────────────────
 console.log('\n🛡️  shouldLogError()');
 // ──────────────────────────────────────────────
@@ -209,6 +248,11 @@ test('filters out firestore multi-tab lease and internal GC warnings', () => {
   expect(shouldLogError("@firebase/firestore: Firestore (12.14.0): Failed to obtain primary lease for action 'Release target'.")).toBeFalsy();
   expect(shouldLogError("@firebase/firestore: Firestore (12.14.0): Failed to obtain primary lease for action 'Collect garbage'.")).toBeFalsy();
   expect(shouldLogError("@firebase/firestore: Firestore (12.14.0): Failed to obtain primary lease for action 'Backfill Indexes'.")).toBeFalsy();
+});
+
+test('filters out transient document already exists errors', () => {
+  expect(shouldLogError('[Snapshot] Failed to save history snapshot: Document already exists: projects/insel-wiki/databases/(default)/documents/pages/aCOQ22eTmGfUmqkFQQ51/history/8mYgfwf1DPdNBbrRkcR4')).toBeFalsy();
+  expect(shouldLogError('FirebaseError: [code=already-exists]: Document already exists')).toBeFalsy();
 });
 
 // ──────────────────────────────────────────────
