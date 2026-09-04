@@ -179,8 +179,9 @@ export function renderBotBanner(container, page, onAction) {
 
     const proposal = page.proposal;
     if (proposal && (page.bot_status === 'proposed' || page.bot_status === 'approved')) {
+        const body = el('div', 'bot-banner__body');
         if (proposal.analysis) {
-            banner.appendChild(el('p', 'bot-banner__analysis', proposal.analysis));
+            body.appendChild(el('p', 'bot-banner__analysis', proposal.analysis));
         }
         const steps = Array.isArray(proposal.plan) ? proposal.plan : [];
         if (steps.length) {
@@ -189,7 +190,10 @@ export function renderBotBanner(container, page, onAction) {
                 const text = planStepText(step);
                 if (text) list.appendChild(el('li', null, text));
             }
-            banner.appendChild(list);
+            body.appendChild(list);
+        }
+        if (body.hasChildNodes()) {
+            banner.appendChild(body);
         }
     }
 

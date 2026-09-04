@@ -1117,6 +1117,11 @@ table tr:hover td {
   .tree-item .more-btn {
     opacity: 0.7;
   }
+  .bot-banner {
+    margin: 10px 16px 0.5rem;
+    max-height: min(220px, 35vh);
+    padding: 0.75rem 0.9rem;
+  }
 }
 
 /* --- Animations --- */
@@ -1314,7 +1319,7 @@ table tr:hover td {
 /* --- Print Styles --- */
 @media print {
   /* Override variables to plain black/white for clarity and ink-saving */
-  :root { --bg-root: #ffffff; --bg-surface: #ffffff; --bg-elevated: #f8f9fa; --text-primary: #000000; --text-secondary: #333333; --text-muted: #555555; --accent: #000000; --accent-hover: #000000; --border: #cccccc; --border-strong: #aaaaaa; } html, body { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; } .app-layout, .main-content, .editor-container, .editor { display: block !important; height: auto !important; min-height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; position: static !important; padding: 0 !important; margin: 0 !important; width: auto !important; max-width: 100% !important; float: none !important; } .editor .tiptap { min-height: auto !important; padding: 0 !important; margin: 0 !important; } .sidebar, .toolbar, .format-toolbar, .auth-overlay, .modal-overlay, .history-panel, .collab-cursors, .save-status, .empty-state, #print-page-btn, #history-btn, #delete-page-btn, #new-page-btn, #add-child-btn, .mobile-only, .markdown-editor { display: none !important; } @page { margin: 2cm; } .title-input-wrapper { padding: 0 0 16px 0 !important; margin: 0 0 16px 0 !important; border-bottom: 2px solid #000; } .page-title-input { font-size: 24pt !important; color: #000 !important; padding: 0 !important; } .editor .tiptap h1 { font-size: 18pt; margin-top: 1.5em; } .editor .tiptap h2 { font-size: 16pt; margin-top: 1.5em; } .editor .tiptap h3 { font-size: 14pt; margin-top: 1.5em; } .editor .tiptap p { font-size: 11pt; line-height: 1.5; orphans: 3; widows: 3; } .editor .tiptap a[href]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: #555; text-decoration: none; }
+  :root { --bg-root: #ffffff; --bg-surface: #ffffff; --bg-elevated: #f8f9fa; --text-primary: #000000; --text-secondary: #333333; --text-muted: #555555; --accent: #000000; --accent-hover: #000000; --border: #cccccc; --border-strong: #aaaaaa; } html, body { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; } .app-layout, .main-content, .editor-container, .editor { display: block !important; height: auto !important; min-height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; position: static !important; padding: 0 !important; margin: 0 !important; width: auto !important; max-width: 100% !important; float: none !important; } .editor .tiptap { min-height: auto !important; padding: 0 !important; margin: 0 !important; } .sidebar, .toolbar, .format-toolbar, .auth-overlay, .modal-overlay, .history-panel, .collab-cursors, .save-status, .empty-state, #print-page-btn, #history-btn, #delete-page-btn, #new-page-btn, #add-child-btn, .mobile-only, .markdown-editor, .bot-banner { display: none !important; } @page { margin: 2cm; } .title-input-wrapper { padding: 0 0 16px 0 !important; margin: 0 0 16px 0 !important; border-bottom: 2px solid #000; } .page-title-input { font-size: 24pt !important; color: #000 !important; padding: 0 !important; } .editor .tiptap h1 { font-size: 18pt; margin-top: 1.5em; } .editor .tiptap h2 { font-size: 16pt; margin-top: 1.5em; } .editor .tiptap h3 { font-size: 14pt; margin-top: 1.5em; } .editor .tiptap p { font-size: 11pt; line-height: 1.5; orphans: 3; widows: 3; } .editor .tiptap a[href]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: #555; text-decoration: none; }
 }
 
 /* --- Commenting System --- */
@@ -1756,13 +1761,18 @@ table tr:hover td {
  * decision render buttons.
  */
 .bot-banner {
-  margin: 0 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  margin: 16px 32px 0.75rem;
   padding: 1rem 1.15rem;
   border: 1px solid var(--border-strong);
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   color: var(--text-primary);
+  flex-shrink: 0;
+  max-height: min(340px, 42vh);
+  overflow: hidden;
 }
 
 .bot-banner--busy    { border-left-color: var(--warning); }
@@ -1774,6 +1784,7 @@ table tr:hover td {
   display: flex;
   align-items: baseline;
   gap: 0.55rem;
+  flex-shrink: 0;
 }
 
 .bot-banner__icon { flex: none; }
@@ -1783,16 +1794,31 @@ table tr:hover td {
   line-height: 1.4;
 }
 
-.bot-banner__detail,
+.bot-banner__detail {
+  margin: 0.5rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  flex-shrink: 0;
+}
+
+.bot-banner__body {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  margin-top: 0.25rem;
+  padding-right: 0.25rem;
+}
+
 .bot-banner__analysis {
-  margin: 0.6rem 0 0;
+  margin: 0.4rem 0 0;
   color: var(--text-secondary);
   font-size: 0.875rem;
   line-height: 1.55;
 }
 
 .bot-banner__plan {
-  margin: 0.7rem 0 0;
+  margin: 0.5rem 0 0;
   padding-left: 1.35rem;
   color: var(--text-secondary);
   font-size: 0.85rem;
@@ -1805,7 +1831,8 @@ table tr:hover td {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.9rem;
+  margin-top: 0.75rem;
+  flex-shrink: 0;
 }
 
 .bot-banner__btn {
