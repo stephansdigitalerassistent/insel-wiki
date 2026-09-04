@@ -1,14 +1,23 @@
 import { spawnSync } from 'node:child_process';
-import { globSync } from 'node:fs';
+import fs from 'node:fs';
+import path from 'node:path';
+
+function findTests(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter(f => f.endsWith('.test.js'))
+    .map(f => path.join(dir, f))
+    .sort();
+}
 
 // Discover all unit test files matching src/utils/*.test.js, src/editor/*.test.js,
 // src/components/*.test.js, and tests/utils.test.js
 const testFiles = [
-  ...globSync('src/utils/*.test.js'),
-  ...globSync('src/editor/*.test.js'),
-  ...globSync('src/components/*.test.js'),
+  ...findTests('src/utils'),
+  ...findTests('src/editor'),
+  ...findTests('src/components'),
   'tests/utils.test.js'
-];
+].filter(f => fs.existsSync(f));
 
 console.log(`Found ${testFiles.length} unit test file(s) to execute.\n`);
 
