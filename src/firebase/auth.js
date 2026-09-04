@@ -47,6 +47,13 @@ export function getCurrentUser() {
 }
 
 /**
+ * Test-only helper to override the current user in unit tests.
+ */
+export function _setCurrentUserForTesting(user) {
+  currentUser = user;
+}
+
+/**
  * Check if user is logged in
  */
 export function isLoggedIn() {

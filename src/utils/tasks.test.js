@@ -309,6 +309,116 @@ test('always returns a fresh array instance (no shared state)', () => {
 });
 
 // ──────────────────────────────────────────────
+console.log('\n👥 multi-assignee task parsing & mention edge cases');
+// ──────────────────────────────────────────────
+
+test('extracts tasks with multiple assignees in various positions', () => {
+  const content = `
+- [ ] First position: @Alice @Bob
+- [ ] Second position: @Bob @Alice
+- [ ] Middle position: @Carol @Alice @Dave
+- [ ] Four assignees: @Alice @Bob @Carol @Dave
+`;
+  const tasks = extractTasksFromContent(content);
+  expect(tasks).toHaveLength(4);
+  expect(tasks[0].text).toBe('First position: @Alice @Bob');
+  expect(tasks[0].done).toBe(false);
+  expect(tasks[1].text).toBe('Second position: @Bob @Alice');
+  expect(tasks[2].text).toBe('Middle position: @Carol @Alice @Dave');
+  expect(tasks[3].text).toBe('Four assignees: @Alice @Bob @Carol @Dave');
+});
+
+test('extracts completed multi-assignee tasks with [x] and [X]', () => {
+  const content = `
+- [x] Completed task @Alice @Bob
+- [X] Capital X task @Bob @Alice
+* [x] Star completed task @Carol @Dave
+`;
+  const tasks = extractTasksFromContent(content);
+  expect(tasks).toHaveLength(3);
+  expect(tasks[0].done).toBe(true);
+  expect(tasks[0].text).toBe('Completed task @Alice @Bob');
+  expect(tasks[1].done).toBe(true);
+  expect(tasks[1].text).toBe('Capital X task @Bob @Alice');
+  expect(tasks[2].done).toBe(true);
+  expect(tasks[2].text).toBe('Star completed task @Carol @Dave');
+});
+
+test('extracts indented multi-assignee tasks with proper indent tracking', () => {
+  const content = `
+- [ ] Parent task
+  - [ ] Two-space subtask @Alice @Bob
+\t- [x] Tab-indented subtask @Carol @Dave
+`;
+  const tasks = extractTasksFromContent(content);
+  expect(tasks).toHaveLength(3);
+  expect(tasks[0].indent).toBe(0);
+  expect(tasks[1].indent).toBe(2);
+  expect(tasks[1].text).toBe('Two-space subtask @Alice @Bob');
+  expect(tasks[2].indent).toBe(1);
+  expect(tasks[2].text).toBe('Tab-indented subtask @Carol @Dave');
+  expect(tasks[2].done).toBe(true);
+});
+
+test('handles mentions with trailing punctuation attached (comma, period, colon, exclamation, question mark, parens)', () => {
+  const content = `
+- [ ] Urgent review @Alice, please confirm
+- [ ] Assigned to @Bob.
+- [ ] @Carol: please prepare presentation
+- [ ] Great work @Dave!
+- [ ] Can you double check @Eve?
+- [ ] Handled by (@Frank) and (@Grace)
+`;
+  const tasks = extractTasksFromContent(content);
+  expect(tasks).toHaveLength(6);
+  expect(tasks[0].text).toBe('Urgent review @Alice, please confirm');
+  expect(tasks[1].text).toBe('Assigned to @Bob.');
+  expect(tasks[2].text).toBe('@Carol: please prepare presentation');
+  expect(tasks[3].text).toBe('Great work @Dave!');
+  expect(tasks[4].text).toBe('Can you double check @Eve?');
+  expect(tasks[5].text).toBe('Handled by (@Frank) and (@Grace)');
+});
+
+test('handles mentions at the very start and very end of tasks', () => {
+  const content = `
+- [ ] @Alice deploy release
+- [ ] Deploy release @Bob
+`;
+  const tasks = extractTasksFromContent(content);
+  expect(tasks).toHaveLength(2);
+  expect(tasks[0].text).toBe('@Alice deploy release');
+  expect(tasks[1].text).toBe('Deploy release @Bob');
+});
+
+test('preserves email addresses alongside mentions without corruption', () => {
+  const content = `
+- [ ] Email support@insel.ch for access @Alice
+- [ ] Contact info@example.org and notify @Bob @Carol
+`;
+  const tasks = extractTasksFromContent(content);
+  expect(tasks).toHaveLength(2);
+  expect(tasks[0].text).toBe('Email support@insel.ch for access @Alice');
+  expect(tasks[1].text).toBe('Contact info@example.org and notify @Bob @Carol');
+});
+
+test('handles usernames with hyphens, underscores, and numbers', () => {
+  const content = `
+- [ ] Task for @User-64 and @ColleagueA
+- [ ] Bug fix @team_lead_1 and @Dev-02
+`;
+  const tasks = extractTasksFromContent(content);
+  expect(tasks).toHaveLength(2);
+  expect(tasks[0].text).toBe('Task for @User-64 and @ColleagueA');
+  expect(tasks[1].text).toBe('Bug fix @team_lead_1 and @Dev-02');
+});
+
+test('handles multi-assignee tasks with multiple consecutive spaces', () => {
+  const tasks = extractTasksFromContent('- [ ] Task   @Alice     @Bob  ');
+  expect(tasks).toHaveLength(1);
+  expect(tasks[0].text).toBe('Task   @Alice     @Bob');
+});
+
+// ──────────────────────────────────────────────
 // Summary
 // ──────────────────────────────────────────────
 console.log(`\n${'─'.repeat(40)}`);

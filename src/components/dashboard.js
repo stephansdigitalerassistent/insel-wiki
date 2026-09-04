@@ -2,14 +2,15 @@ import { extractTasksFromContent } from '../utils/tasks.js';
 import { subscribeToPages, getClientErrors } from '../firebase/firestore.js';
 import { onAuthChange, canEdit, getCurrentUser } from '../firebase/auth.js';
 import { toggleTask } from '../utils/yjs-sync.js';
+import { formatDefaultName } from '../utils/string.js';
 import i18next from '../i18n.js';
 
 let unsubscribe = null;
 let lastPages = [];
 let lastErrors = [];
 let lastNavigateTo = null;
-let currentFilter = 'all'; // 'all', 'my', or 'errors'
-let currentStatus = 'all'; // 'all', 'open', 'done'
+let currentFilter = 'my'; // 'all', 'my', or 'errors'
+let currentStatus = 'open'; // 'all', 'open', 'done'
 let isLoadingErrors = false;
 
 const ADMIN_EMAILS = [
@@ -62,7 +63,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-function renderDashboard(pages, navigateTo) {
+export function renderDashboard(pages, navigateTo) {
   lastPages = pages || lastPages;
   lastNavigateTo = navigateTo || lastNavigateTo;
 
@@ -76,7 +77,7 @@ function renderDashboard(pages, navigateTo) {
 
   const user = getCurrentUser();
   const isAdmin = isUserAdmin(user);
-  const myName = user ? user.displayName : null;
+  const myName = user ? (user.displayName || (user.email ? formatDefaultName(user.email) : null)) : null;
 
   let contentHtml = '';
 
@@ -128,8 +129,8 @@ function renderDashboard(pages, navigateTo) {
     let filteredTasks = allTasks;
 
     // Apply Filter: My Tasks
-    if (currentFilter === 'my' && myName) {
-      filteredTasks = filteredTasks.filter(t => t.text.includes(`@${myName}`));
+    if (currentFilter === 'my') {
+      filteredTasks = myName ? filteredTasks.filter(t => t.text.includes(`@${myName}`)) : [];
     }
 
     // Apply Filter: Status
@@ -274,4 +275,24 @@ function renderDashboard(pages, navigateTo) {
       if (navigateTo) navigateTo(pageId);
     });
   });
+}
+
+/**
+ * Testing helper to reset internal dashboard state between unit test runs.
+ */
+export function _resetDashboardStateForTesting() {
+  lastPages = [];
+  lastErrors = [];
+  lastNavigateTo = null;
+  currentFilter = 'my';
+  currentStatus = 'open';
+  isLoadingErrors = false;
+}
+
+/**
+ * Testing helper to set current filter and status.
+ */
+export function _setDashboardFilterForTesting(filter, status) {
+  if (filter !== undefined) currentFilter = filter;
+  if (status !== undefined) currentStatus = status;
 }

@@ -22,6 +22,8 @@ export const IGNORED_ERROR_PATTERNS = [
   'Backfill Indexes',
   'Release target',
   '@firebase/firestore',
+  'Document already exists',
+  'already-exists',
 ];
 
 /**
