@@ -255,6 +255,14 @@ test('filters out transient document already exists errors', () => {
   expect(shouldLogError('FirebaseError: [code=already-exists]: Document already exists')).toBeFalsy();
 });
 
+test('filters out browser extension and iOS WebKit/Brave injection noise', () => {
+  expect(shouldLogError("undefined is not an object (evaluating 'window.__firefox__.reader')")).toBeFalsy();
+  expect(shouldLogError("Can't find variable: __firefox__")).toBeFalsy();
+  expect(shouldLogError("undefined is not an object (evaluating 'window.__firefox__.playlistLongPressed_EE35C18F9EE84E1897677429DE857CD8')")).toBeFalsy();
+  expect(shouldLogError("undefined is not an object (evaluating 'window.ethereum.selectedAddress = undefined')")).toBeFalsy();
+  expect(shouldLogError("Script error.")).toBeFalsy();
+});
+
 // ──────────────────────────────────────────────
 console.log('\n🤖 SpellCheckerBot Collaboration Awareness');
 // ──────────────────────────────────────────────

@@ -24,6 +24,12 @@ export const IGNORED_ERROR_PATTERNS = [
   '@firebase/firestore',
   'Document already exists',
   'already-exists',
+  // Browser extension and WebKit/Brave internal injection noise
+  'Script error.',
+  '__firefox__',
+  'window.__firefox__',
+  'ethereum',
+  'window.ethereum',
 ];
 
 /**

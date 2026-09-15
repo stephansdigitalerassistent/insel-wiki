@@ -125,7 +125,7 @@ export function initGlobalErrorHandler() {
     originalConsoleError('[Insel-Wiki] Uncaught error:', err);
     if (shouldLogError(message)) {
       logClientError(message, err?.stack || null, { severity: 'uncaught', source: 'window' });
+      showToast(i18next.t('errors.reload'), 'error', 8000);
     }
-    showToast(i18next.t('errors.reload'), 'error', 8000);
   });
 }
