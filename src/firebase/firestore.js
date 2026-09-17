@@ -123,7 +123,7 @@ export async function savePage(pageId, content, savedBy = '', savedByName = '', 
  * Create a history snapshot explicitly.
  * Uses a hybrid approach: saves full text occasionally, and patches for small changes.
  */
-export async function createHistorySnapshot(pageId, content, title, savedBy = '') {
+export async function createHistorySnapshot(pageId, content, title, savedBy = '', contributors = []) {
   try {
     const historyRef = collection(db, PAGES_COLLECTION, pageId, 'history');
     
@@ -178,13 +178,18 @@ export async function createHistorySnapshot(pageId, content, title, savedBy = ''
       }
     }
 
-    const docRef = await addDoc(historyRef, {
+    const docData = {
       content: storedContent,
       type, // 'full' or 'patch'
       title: currentTitle,
       savedBy,
       savedAt: serverTimestamp(),
-    });
+    };
+    if (Array.isArray(contributors) && contributors.length > 0) {
+      docData.contributors = contributors;
+    }
+
+    const docRef = await addDoc(historyRef, docData);
     return docRef?.id;
   } catch (err) {
     if (err?.code === 'already-exists' || err?.message?.includes('Document already exists')) {

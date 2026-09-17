@@ -186,7 +186,8 @@
     "restoreConfirm": "Sei sicuro di voler ripristinare questa versione come versione corrente? Le tue modifiche attuali verranno sostituite.",
     "restoreConfirmWithDate": "Sei sicuro di voler ripristinare la versione del {{date}} ({{user}}) ?",
     "restoreSuccess": "Versione ripristinata con successo!",
-    "restoreError": "Impossibile ripristinare la versione."
+    "restoreError": "Impossibile ripristinare la versione.",
+    "moreContributors": "altri"
   },
   "shortcuts": {
     "title": "Scorciatoie da tastiera",

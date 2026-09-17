@@ -186,7 +186,8 @@
     "restoreConfirm": "Are you sure you want to restore this version as the live state? Your current edits will be replaced.",
     "restoreConfirmWithDate": "Are you sure you want to restore the version from {{date}} ({{user}}) as the live state?",
     "restoreSuccess": "Version successfully restored!",
-    "restoreError": "Failed to restore version."
+    "restoreError": "Failed to restore version.",
+    "moreContributors": "more"
   },
   "shortcuts": {
     "title": "Keyboard Shortcuts",

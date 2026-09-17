@@ -101,7 +101,20 @@ service cloud.firestore {
 
       match /yjs_updates/{updateId} {
         allow read: if canAccessPage(pageId);
-        allow write: if canAccessPage(pageId) && isInsel();
+        // `userEmail`/`author` are what history attribution is built from: another user's
+        // client reads them off these docs and writes them into `history/{id}.savedBy`. Pin
+        // them to the caller's own identity, the same way `pages/{id}.lastSavedBy` is pinned
+        // above, so an edit cannot be signed with a colleague's name. The only client-side
+        // writer is FirestoreYjsProvider.flushPending(), which always sends the signed-in
+        // user's own address; the bot writes through the Admin SDK and bypasses rules.
+        // Docs without the fields (older clients) stay allowed.
+        allow write: if canAccessPage(pageId) && isInsel()
+          && (request.resource == null
+              || !('userEmail' in request.resource.data)
+              || request.resource.data.userEmail == request.auth.token.email)
+          && (request.resource == null
+              || !('author' in request.resource.data)
+              || request.resource.data.author == request.auth.token.email);
         allow delete: if canAccessPage(pageId) && (isInsel() || isBot());
       }
 

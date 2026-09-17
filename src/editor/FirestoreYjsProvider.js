@@ -8,6 +8,7 @@ import {
 import { db } from '../firebase/config.js';
 import i18next from '../i18n.js';
 import { showToast } from '../components/toast.js';
+import { formatDefaultName } from '../utils/string.js';
 import { 
   collection, 
   addDoc, 
@@ -108,6 +109,12 @@ export class FirestoreYjsProvider {
     // made an edit — the DevOps bot reads it to attribute a ticked checkbox.
     /** @type {string} */
     this.authorEmail = user?.email || '';
+    
+    this.user = user || null;
+    /** @type {Map<string, { email: string, name: string }>} */
+    this.recentContributors = new Map();
+    /** @type {boolean} Whether this client made local edits since the last snapshot. */
+    this.hasLocalEdits = false;
     
     // Initialize awareness state for ourselves
     this.awareness.setLocalStateField('user', {
@@ -221,12 +228,24 @@ export class FirestoreYjsProvider {
     if (this._pendingUpdates.length === 0) return Promise.resolve();
     const merged = Y.mergeUpdates(this._pendingUpdates);
     this._pendingUpdates = [];
-    return addDoc(this.updatesRef, {
+
+    const updateDocData = {
       update: Bytes.fromUint8Array(merged),
       timestamp: serverTimestamp(),
-      clientId: this.clientId,
-      author: this.authorEmail
-    }).catch(() => {}).finally(() => {
+      clientId: this.clientId
+    };
+    if (this.authorEmail) {
+      updateDocData.author = this.authorEmail;
+    }
+    if (this.user?.email || this.authorEmail) {
+      const email = this.user?.email || this.authorEmail;
+      const name = this.user?.name || formatDefaultName(email);
+      updateDocData.userEmail = email;
+      updateDocData.userName = name;
+      if (!updateDocData.author) updateDocData.author = email;
+    }
+
+    return addDoc(this.updatesRef, updateDocData).catch(() => {}).finally(() => {
       this.pendingWrites--;
       this._emitStatus();
     });
@@ -250,6 +269,37 @@ export class FirestoreYjsProvider {
    */
   setLocalPersistence(persistence) {
     this.persistence = persistence;
+  }
+
+  /**
+   * Record a contributor who performed an edit during this session.
+   * @param {string} email
+   * @param {string} [name]
+   */
+  recordContributor(email, name) {
+    if (!email) return;
+    // Re-insert so iteration order stays oldest-observed → most-recently-observed.
+    this.recentContributors.delete(email);
+    this.recentContributors.set(email, {
+      email,
+      name: name || formatDefaultName(email)
+    });
+  }
+
+  /**
+   * Get all distinct contributors recorded since the last snapshot, oldest observed first.
+   * @returns {Array<{ email: string, name: string }>}
+   */
+  getContributors() {
+    return Array.from(this.recentContributors.values());
+  }
+
+  /**
+   * Reset the contributors list and local edit dirty flag after a snapshot is saved.
+   */
+  clearContributors() {
+    this.recentContributors.clear();
+    this.hasLocalEdits = false;
   }
 
   /**
@@ -348,8 +398,13 @@ export class FirestoreYjsProvider {
 
       if (!pendingUpdates.empty) {
         pendingUpdates.forEach(change => {
-          if (change.data().update) {
-            const updateArr = change.data().update.toUint8Array();
+          const updateData = change.data();
+          if (updateData.update) {
+            // Deliberately no recordContributor() here: this replays every update that has
+            // not been compacted yet, including ones written long before this session. Only
+            // the live listener (and our own edits) define who contributed *since* the last
+            // snapshot — see resolveSnapshotAttribution().
+            const updateArr = updateData.update.toUint8Array();
             Y.applyUpdate(this.ydoc, updateArr, this);
           }
         });
@@ -368,34 +423,7 @@ export class FirestoreYjsProvider {
     }
 
     // 3. Sync New Document Updates (Live, debounced 2s)
-    this.ydoc.on('update', (update, origin) => {
-      // Skip self-applied (Firestore replay) and y-indexeddb-applied (local cache replay) updates.
-      if (origin === this) return;
-      if (this.persistence && origin === this.persistence) return;
-
-      const wasEmpty = this._pendingUpdates.length === 0;
-      this._pendingUpdates.push(update);
-      if (wasEmpty) {
-        // Mark as dirty for the duration of the buffer + write so the
-        // save indicator stays on "Speichern…" while changes are pending.
-        this.pendingWrites++;
-        this._emitStatus();
-      }
-
-      if (this.isOnline) {
-        clearTimeout(this._writeTimer);
-        this._writeTimer = setTimeout(() => this.flushPending(), this._writeDebounceMs);
-
-        // Check if we should trigger background compaction
-        this.localUpdateCount++;
-        if (this.localUpdateCount >= this.compactionThreshold) {
-          this.compact();
-        }
-      } else {
-        this.hadLocalEditsWhileOffline = true;
-        this._emitStatus();
-      }
-    });
+    this._setupUpdateListener();
 
     // 4. Sync Awareness (Cursors & Selections)
     // Clean up stale awareness docs in the background
@@ -433,6 +461,48 @@ export class FirestoreYjsProvider {
   }
 
   /**
+   * Sets up the listener on the local Yjs document for local updates to debounce and buffer writes to Firestore.
+   * 
+   * @private
+   * @returns {void}
+   */
+  _setupUpdateListener() {
+    this.ydoc.on('update', (update, origin) => {
+      // Skip self-applied (Firestore replay) and y-indexeddb-applied (local cache replay) updates.
+      if (origin === this) return;
+      if (this.persistence && origin === this.persistence) return;
+
+      this.hasLocalEdits = true;
+      if (this.user?.email || this.authorEmail) {
+        this.recordContributor(this.user?.email || this.authorEmail, this.user?.name);
+      }
+
+      const wasEmpty = this._pendingUpdates.length === 0;
+      this._pendingUpdates.push(update);
+      if (wasEmpty) {
+        // Mark as dirty for the duration of the buffer + write so the
+        // save indicator stays on "Speichern…" while changes are pending.
+        this.pendingWrites++;
+        this._emitStatus();
+      }
+
+      if (this.isOnline) {
+        clearTimeout(this._writeTimer);
+        this._writeTimer = setTimeout(() => this.flushPending(), this._writeDebounceMs);
+
+        // Check if we should trigger background compaction
+        this.localUpdateCount++;
+        if (this.localUpdateCount >= this.compactionThreshold) {
+          this.compact();
+        }
+      } else {
+        this.hadLocalEditsWhileOffline = true;
+        this._emitStatus();
+      }
+    });
+  }
+
+  /**
    * Sets up a Firestore snapshot listener on the updates collection to fetch and apply new incremental updates.
    * 
    * @private
@@ -447,6 +517,9 @@ export class FirestoreYjsProvider {
         if (change.type === 'added') {
           const updateData = change.doc.data();
           if (updateData.clientId !== this.clientId && updateData.update) {
+            if (updateData.userEmail || updateData.author) {
+              this.recordContributor(updateData.userEmail || updateData.author, updateData.userName);
+            }
             const updateArr = updateData.update.toUint8Array();
             Y.applyUpdate(this.ydoc, updateArr, this);
             remoteUpdatesCount++;
@@ -548,6 +621,8 @@ export class FirestoreYjsProvider {
       pending.forEach(change => {
         const updateData = change.data();
         if (updateData.update && updateData.clientId !== this.clientId) {
+          // No recordContributor() either: this catch-up re-reads the whole uncompacted
+          // collection, not just what arrived while we were suspended.
           Y.applyUpdate(this.ydoc, updateData.update.toUint8Array(), this);
         }
       });

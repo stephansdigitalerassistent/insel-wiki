@@ -15,9 +15,8 @@
  *    - When moving away from `currentPageId`, we flush any pending debounced title updates
  *      ({@link debouncedUpdateTitle}) or markdown edits ({@link debouncedSyncMarkdownToEditor}).
  *    - We fire off a history snapshot ({@link snapshotCurrentPage}) to persist a checkpoint.
- *    - We synchronously unsubscribe from active page updates (`currentPageUnsub`), presence updates
- *      (`currentPresenceUnsub`), clear the automatic history snapshotting timer (`historySnapshotInterval`),
- *      and empty active collab cursor avatars.
+ *    - We synchronously unsubscribe from active page updates (`currentPageUnsub`) and presence
+ *      updates (`currentPresenceUnsub`), and empty active collab cursor avatars.
  *
  * 2. **Optimistic Pre-load**:
  *    - We immediately update the active page ID (`currentPageId`), set the sidebar active state
@@ -55,6 +54,7 @@ import { promptModal, newPageModal, confirmModal, markdownWarningModal } from '.
 import { showToast } from '../components/toast.js';
 import { canEdit, getCurrentUser, isLoggedIn } from '../firebase/auth.js';
 import { formatDefaultName, slugify, getColorForEmail, getInitials } from '../utils/string.js';
+import { resolveSnapshotAttribution } from '../utils/attribution.js';
 import { subscribeToPage } from '../firebase/firestore.js';
 import { marked } from 'marked';
 import i18next from '../i18n.js';
@@ -92,18 +92,6 @@ let currentPresenceUnsub = null;
 let formatToolbar = null;
 
 /**
- * Interval timer handle for scheduling automatic history snapshots.
- * @type {*}
- */
-let historySnapshotInterval = null;
-
-/**
- * Frequency of automatic history snapshots.
- * @const {number}
- */
-const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
-
-/**
  * Markdown source content of the last captured history snapshot, used to skip redundant saves.
  * History optimization: Snapshots are gated purely by content comparison
  * against the last snapshot (see {@link snapshotCurrentPage}) now that the client no
@@ -112,6 +100,32 @@ const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
  */
 let lastSnapshotContent = '';
 let lastSnapshotTitle = '';
+
+/**
+ * Whether *this* client's user typed in the title input since the last snapshot.
+ *
+ * `pageTitleInput.value` is also written by the page subscription when a remote user renames
+ * the page, so a plain `title !== lastSnapshotTitle` comparison cannot tell a local rename
+ * from a remote one — and treating a remote rename as local work is exactly how a passive
+ * viewer ends up signing someone else's snapshot.
+ * @type {boolean}
+ */
+let titleEditedLocally = false;
+
+/**
+ * In-flight snapshot write, if any. `lastSnapshotContent` only advances once the write
+ * resolves, so two overlapping calls would both pass the content guard and store the same
+ * version twice.
+ * @type {Promise<void>|null}
+ */
+let snapshotInFlight = null;
+
+/**
+ * Whether a snapshot was requested while one was already being written. The content may have
+ * moved on since that write was prepared, so one more run is scheduled when it resolves.
+ * @type {boolean}
+ */
+let snapshotQueued = false;
 
 // --- Utilities ---
 /**
@@ -354,6 +368,7 @@ export function initPageController(opts) {
       if (currentPageId && canEdit() && !isMarkdownReadOnly) {
         debouncedSyncMarkdownToEditor(markdownEditor.value);
         recomputeSaveStatus();
+        debouncedSnapshot();
       }
     });
   }
@@ -363,8 +378,17 @@ export function initPageController(opts) {
 
   pageTitleInput.addEventListener('input', () => {
     if (currentPageId && canEdit()) {
+      titleEditedLocally = true;
       debouncedUpdateTitle(currentPageId, pageTitleInput.value);
       document.title = `Insel-Wiki - ${pageTitleInput.value || 'Ohne Titel'}`;
+      debouncedSnapshot();
+    }
+  });
+
+  window.addEventListener('page-content-updated', (e) => {
+    const provider = getProvider();
+    if (provider?.hasLocalEdits && (!e.detail?.pageId || e.detail.pageId === currentPageId)) {
+      debouncedSnapshot();
     }
   });
 
@@ -378,6 +402,8 @@ export function initPageController(opts) {
         if (isMarkdownMode && markdownEditor && !isMarkdownReadOnly) {
           debouncedSyncMarkdownToEditor.flush();
         }
+        debouncedUpdateTitle.flush();
+        debouncedSnapshot.cancel();
         const provider = getProvider();
         if (provider) {
           await provider.flushPending();
@@ -385,6 +411,7 @@ export function initPageController(opts) {
             console.warn('[PageController] Compact failed:', err);
           });
         }
+        snapshotCurrentPage();
       }
     }
   });
@@ -402,6 +429,7 @@ export function initPageController(opts) {
       debouncedSyncMarkdownToEditor.flush();
     }
     debouncedUpdateTitle.flush();
+    debouncedSnapshot.cancel();
     const provider = getProvider();
     if (provider) provider.flushPending();
     snapshotCurrentPage();
@@ -464,6 +492,7 @@ export async function loadPage(pageId) {
   }
 
   if (debouncedUpdateTitle) debouncedUpdateTitle.flush();
+  debouncedSnapshot.cancel();
 
   // Fire-and-forget cleanup (don't block the new page load)
   const oldPageId = currentPageId;
@@ -474,7 +503,6 @@ export async function loadPage(pageId) {
   // Cleanup subscriptions synchronously (instant, no network)
   if (currentPageUnsub) { currentPageUnsub(); currentPageUnsub = null; }
   if (currentPresenceUnsub) { currentPresenceUnsub(); currentPresenceUnsub = null; }
-  clearInterval(historySnapshotInterval);
   closeHistoryPanel();
   collabCursorsEl.innerHTML = '';
 
@@ -624,7 +652,9 @@ export async function loadPage(pageId) {
     markdownEditor.readOnly = !canEdit();
   }
 
-  historySnapshotInterval = setInterval(() => snapshotCurrentPage(), SNAPSHOT_INTERVAL_MS);
+  // No periodic snapshot timer: snapshots are driven by editing (debouncedSnapshot, 30s
+  // after a pause), by Ctrl+S, and by leaving the page. A timer only added a second copy
+  // of the same version from every client that happened to have the page open.
 
   // Unload/visibilitychange handlers are registered once at controller init
   // (see initPageController). They read module-level state, so a single
@@ -677,6 +707,7 @@ export async function loadPage(pageId) {
   }
 
   // Baseline initial snapshot state from page data
+  titleEditedLocally = false;
   lastSnapshotContent = page?.content || '';
   lastSnapshotTitle = page?.title || '';
 
@@ -747,9 +778,9 @@ export function showEmptyState() {
   } else {
     debouncedSyncMarkdownToEditor.cancel();
   }
+  debouncedSnapshot.cancel();
   snapshotCurrentPage();
   if (currentPresenceUnsub) { currentPresenceUnsub(); currentPresenceUnsub = null; }
-  clearInterval(historySnapshotInterval);
   currentPageId = null;
   destroyEditor();
   editorContainer.classList.add('hidden');
@@ -832,30 +863,90 @@ function setSaveStatus(status) {
 
 /**
  * Evaluates the page content and captures a history snapshot if there are unsaved markdown changes
- * compared to the last snapshot.
+ * compared to the last snapshot. Ensures passive viewers do not take credit for remote edits.
  *
  * @returns {Promise<void>}
  */
 async function snapshotCurrentPage() {
   if (!currentPageId || !canEdit()) return;
+  // A write for the current content is already on its way out; a second one would
+  // store the same version twice, because the baseline below only advances on resolve.
+  if (snapshotInFlight) {
+    snapshotQueued = true;
+    return snapshotInFlight;
+  }
+
+  const pageId = currentPageId;
+  let markdown;
+  let currentTitle;
+  let attribution;
+  let provider;
+
   try {
     if (isMarkdownMode && markdownEditor && !isMarkdownReadOnly) {
       debouncedSyncMarkdownToEditor.flush();
     }
-    const markdown = getMarkdown();
+    markdown = getMarkdown();
     if (!markdown || markdown.trim().length === 0) return;
-    const currentTitle = pageTitleInput ? pageTitleInput.value : '';
+    currentTitle = pageTitleInput ? pageTitleInput.value : '';
     if (markdown === lastSnapshotContent && currentTitle === lastSnapshotTitle) return;
-    const user = getCurrentUser();
-    const resultId = await createHistorySnapshot(currentPageId, markdown, currentTitle, user?.email || '');
-    if (resultId !== null) {
-      lastSnapshotContent = markdown;
-      lastSnapshotTitle = currentTitle;
-    }
+
+    provider = getProvider();
+    attribution = resolveSnapshotAttribution({
+      hasLocalEdits: Boolean(provider?.hasLocalEdits || titleEditedLocally),
+      contributors: provider?.getContributors ? provider.getContributors() : [],
+      currentUser: getCurrentUser()
+    });
+
+    // `null` means this client is a passive viewer that saw no editor: the content changed
+    // underneath it, but signing the snapshot would credit the edit to the wrong person.
+    // Whichever client actually made the edit writes it instead.
+    if (!attribution) return;
   } catch (err) {
     console.warn('[Insel-Wiki] Snapshot error:', err);
+    return;
   }
+
+  snapshotInFlight = (async () => {
+    const resultId = await createHistorySnapshot(
+      pageId,
+      markdown,
+      currentTitle,
+      attribution.primaryEmail,
+      attribution.contributors
+    );
+    // `createHistorySnapshot` resolves to `undefined` when the write failed. Advancing the
+    // baseline on a failure would drop the version from history for good, since nothing
+    // would ever see the content as unsaved again.
+    if (!resultId) return;
+    if (currentPageId !== pageId) return; // navigated away; the new page owns the baseline now
+    lastSnapshotContent = markdown;
+    lastSnapshotTitle = currentTitle;
+    titleEditedLocally = false;
+    if (provider?.clearContributors) {
+      provider.clearContributors();
+    }
+  })()
+    .catch(err => { console.warn('[Insel-Wiki] Snapshot error:', err); })
+    .finally(() => {
+      snapshotInFlight = null;
+      if (snapshotQueued) {
+        snapshotQueued = false;
+        snapshotCurrentPage(); // content changed while the write was out; the guards re-check
+      }
+    });
+
+  return snapshotInFlight;
 }
+
+/**
+ * Debounced snapshot trigger running 30 seconds after local editing pauses.
+ *
+ * @type {Function}
+ */
+const debouncedSnapshot = debounce(() => {
+  snapshotCurrentPage();
+}, 30000);
 
 // --- Breadcrumb ---
 
@@ -996,11 +1087,16 @@ async function handleRestoreVersion(restoredContent, restoredEntry) {
 
     // 3. Create a new snapshot explicitly recording the restore event
     const user = getCurrentUser();
+    const restoreContributors = user?.email ? [{
+      email: user.email,
+      name: user.displayName || formatDefaultName(user.email)
+    }] : [];
     await createHistorySnapshot(
       currentPageId,
       restoredContent,
       pageTitleInput?.value || '',
-      user?.email || ''
+      user?.email || '',
+      restoreContributors
     );
     lastSnapshotContent = restoredContent;
     lastSnapshotTitle = pageTitleInput?.value || '';

@@ -186,7 +186,8 @@
     "restoreConfirm": "Möchtest du diese Version wirklich als aktuellen Stand wiederherstellen? Deine aktuellen Änderungen werden überschrieben.",
     "restoreConfirmWithDate": "Möchtest du den Stand vom {{date}} ({{user}}) wirklich als aktuelle Version wiederherstellen?",
     "restoreSuccess": "Version erfolgreich wiederhergestellt!",
-    "restoreError": "Fehler beim Wiederherstellen der Version."
+    "restoreError": "Fehler beim Wiederherstellen der Version.",
+    "moreContributors": "weitere"
   },
   "shortcuts": {
     "title": "Tastenkombinationen",

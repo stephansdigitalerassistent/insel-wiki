@@ -1436,6 +1436,9 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
   editor.on('selectionUpdate', updateActiveBubbleMenus);
   editor.on('transaction', updateActiveBubbleMenus);
   editor.on('focus', updateActiveBubbleMenus);
+  editor.on('update', () => {
+    window.dispatchEvent(new CustomEvent('page-content-updated', { detail: { pageId } }));
+  });
 
   // Toolbar state must follow whichever editor is currently active.
   const toolbarBindUpdate = () => {

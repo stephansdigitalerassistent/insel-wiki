@@ -93,9 +93,27 @@ export async function loadHistory(pageId, livePageData, getLiveContent, onRestor
     entries.forEach((entry, index) => {
       const el = document.createElement('div');
       el.className = 'history-entry';
+      const contributors = Array.isArray(entry.contributors) ? entry.contributors : [];
+      let userHtml = '';
+
+      if (contributors.length > 1) {
+        const primaryName = escapeHtml(entry.savedByName || (contributors[0]?.name) || entry.savedBy || i18next.t('history.unknownUser'));
+        const allNames = contributors.map(c => escapeHtml(c.name || c.email || '')).filter(Boolean).join(', ');
+        const othersCount = contributors.length - 1;
+        userHtml = `
+          <div class="history-user" title="${allNames}">
+            <span>${primaryName}</span>
+            <span class="history-collab-badge">+${othersCount} ${i18next.t('history.moreContributors')}</span>
+          </div>
+        `;
+      } else {
+        const authorName = escapeHtml(entry.savedByName || (contributors[0]?.name) || entry.savedBy || i18next.t('history.unknownUser'));
+        userHtml = `<div class="history-user">${authorName}</div>`;
+      }
+
       el.innerHTML = `
         <div class="history-date">${formatTimestamp(entry.savedAt)}</div>
-        <div class="history-user">${escapeHtml(entry.savedBy || i18next.t('history.unknownUser'))}</div>
+        ${userHtml}
       `;
       el.addEventListener('click', async () => {
         // Highlight active entry
