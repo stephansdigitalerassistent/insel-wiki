@@ -263,6 +263,12 @@ test('filters out browser extension and iOS WebKit/Brave injection noise', () =>
   expect(shouldLogError("Script error.")).toBeFalsy();
 });
 
+test('filters out user authentication input failures', () => {
+  expect(shouldLogError('[Auth] Login failed: {"message":"Firebase: Error (auth/invalid-credential).","code":"auth/invalid-credential","customData":{}}')).toBeFalsy();
+  expect(shouldLogError('Firebase: Error (auth/user-not-found).')).toBeFalsy();
+  expect(shouldLogError('Firebase: Error (auth/wrong-password).')).toBeFalsy();
+});
+
 // ──────────────────────────────────────────────
 console.log('\n🤖 SpellCheckerBot Collaboration Awareness');
 // ──────────────────────────────────────────────

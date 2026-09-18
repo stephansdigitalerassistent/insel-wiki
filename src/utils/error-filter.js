@@ -24,6 +24,10 @@ export const IGNORED_ERROR_PATTERNS = [
   '@firebase/firestore',
   'Document already exists',
   'already-exists',
+  // User auth input failures (wrong password, unknown account)
+  'auth/invalid-credential',
+  'auth/user-not-found',
+  'auth/wrong-password',
   // Browser extension and WebKit/Brave internal injection noise
   'Script error.',
   '__firefox__',
