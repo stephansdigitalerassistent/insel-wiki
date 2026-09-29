@@ -10,7 +10,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@google-cloud/speech": "^6.7.0",
+    "@google-cloud/speech": "^8.1.0",
     "firebase-admin": "^13.0.2",
     "ws": "^8.18.0"
   }
