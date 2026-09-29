@@ -99,7 +99,8 @@
     "newSubpage": "New subpage",
     "moveUp": "Move up",
     "moveDown": "Move down",
-    "editAcls": "Manage Access"
+    "editAcls": "Manage Access",
+    "pageActions": "Page actions"
   },
   "editor": {
     "markdownToggle": "Edit Raw Markdown",
@@ -143,7 +144,21 @@
       "auth": "Session expired or not authorized — please log in again.",
       "recorder": "Could not start audio recording.",
       "backend": "Speech recognition service unavailable."
-    }
+    },
+    "deleteImage": "Delete image",
+    "openImage": "Open image in new tab",
+    "presentationMode": "Present (Alt+P)",
+    "presentationModeShort": "Present",
+    "showOriginal": "Show original",
+    "targetLanguage": "Target Language",
+    "translateButton": "Translate",
+    "translateError": "Error during AI translation.",
+    "translateModalHint": "Select the target language. The translation will be displayed as a non-editable preview and does not modify the original.",
+    "translateModalTitle": "Translate page with AI",
+    "translatePage": "Translate page with AI",
+    "translating": "Translating page with AI…",
+    "translationBanner": "<strong>AI Translation ({{language}})</strong> — Non-editable preview",
+    "translationStatus": "AI Translation (Read-only)"
   },
   "table": {
     "addRowAbove": "Insert row above",
@@ -205,7 +220,8 @@
     "horizontalRule": "Horizontal rule",
     "undo": "Undo",
     "redo": "Redo",
-    "save": "Save"
+    "save": "Save",
+    "presentation": "Presentation Mode"
   },
   "messages": {
     "markdownWarningTitle": "Warning: Complex Elements",
@@ -242,7 +258,8 @@
     "deletePermanentConfirm": "This cannot be undone.",
     "newSubpageTitle": "Title of new subpage:",
     "newSubpagePlaceholder": "Enter title...",
-    "imageUploadError": "Error uploading image: "
+    "imageUploadError": "Error uploading image: ",
+    "emptyPageTranslate": "The page is empty and cannot be translated."
   },
   "profile": {
     "title": "Edit Profile",
@@ -286,5 +303,15 @@
       "openPreview": "Open preview",
       "openPr": "View changes"
     }
+  },
+  "languages": {
+    "de": "German",
+    "en": "English",
+    "fr": "French",
+    "it": "Italian"
+  },
+  "pwa": {
+    "updateAvailable": "A new version is available.",
+    "reload": "Reload"
   }
 }

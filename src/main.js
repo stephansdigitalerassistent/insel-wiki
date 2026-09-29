@@ -13,6 +13,8 @@ import { initAuthUI, handleAuthChange } from './controllers/auth-ui.js';
 import { initPageController, loadPage, showEmptyState, getFormatToolbar, getPageTitleInput, rejoinPresence, anySavePending, flushMarkdownEditor } from './controllers/page.js';
 import { confirmModal } from './components/modal.js';
 import { ensurePageExists } from './firebase/firestore.js';
+import { initServiceWorkerUpdates } from './pwa-update.js';
+import { initMobilePageActions } from './components/mobile-page-actions.js';
 
 
 // --- DOM Elements ---
@@ -178,6 +180,9 @@ async function init() {
   // Init sidebar
   initSidebar(pageTreeEl, navigateToPage);
 
+  // Below 768px the page actions live in the drawer, not the toolbar.
+  initMobilePageActions();
+
   // Initial route
   handleRoute();
 
@@ -211,4 +216,5 @@ async function init() {
 }
 
 // --- Go! ---
+initServiceWorkerUpdates();
 init().catch(console.error);

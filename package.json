@@ -11,7 +11,7 @@
     "deploy:beta": "npm run build && firebase deploy -P beta",
     "test:e2e": "playwright test",
     "test:unit": "node tests/run-unit-tests.js",
-    "postinstall": "node .burn/patch-lodash.cjs"
+    "postinstall": "node .burn/patch-lodash.cjs && node scripts/patch-y-prosemirror.cjs"
   },
   "keywords": [
     "wiki",

@@ -64,7 +64,7 @@ import suggestion from './suggestions.js';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { FirestoreYjsProvider } from './FirestoreYjsProvider.js';
-import { Selection } from '@tiptap/pm/state';
+import { Selection, NodeSelection, TextSelection } from '@tiptap/pm/state';
 
 import TurndownService from 'turndown';
 import { marked } from 'marked';
@@ -247,6 +247,7 @@ let _bubbleMenuGlobalListenersInstalled = false;
 let sharedFormatTippy = null;
 let sharedLinkTippy = null;
 let sharedTableTippy = null;
+let sharedImageTippy = null;
 
 /**
  * Anchor rect for shared bubble popups: where the current selection is on screen for the active editor.
@@ -257,6 +258,15 @@ function _activeSelectionBoundingRect() {
   const active = _active();
   if (!active || !active.editor) return new DOMRect(0, 0, 0, 0);
   const { view, state } = active.editor;
+  if (state.selection?.node) {
+    try {
+      const dom = view.nodeDOM(state.selection.from);
+      if (dom && typeof dom.getBoundingClientRect === 'function') {
+        const rect = dom.getBoundingClientRect();
+        if (rect && (rect.width > 0 || rect.height > 0)) return rect;
+      }
+    } catch (e) {}
+  }
   const domSelection = window.getSelection();
   if (domSelection && domSelection.rangeCount > 0 && !domSelection.isCollapsed) {
     const rect = domSelection.getRangeAt(0).getBoundingClientRect();
@@ -275,6 +285,7 @@ function hideAllBubbleMenus() {
   if (sharedFormatTippy) sharedFormatTippy.hide();
   if (sharedLinkTippy) sharedLinkTippy.hide();
   if (sharedTableTippy) sharedTableTippy.hide();
+  if (sharedImageTippy) sharedImageTippy.hide();
 }
 
 /**
@@ -293,6 +304,7 @@ function updateActiveBubbleMenus() {
   const linkMenuEl = document.getElementById('link-bubble-menu');
   const formatMenuEl = document.getElementById('format-bubble-menu');
   const tableMenuEl = document.getElementById('table-bubble-menu');
+  const imageMenuEl = document.getElementById('image-bubble-menu');
 
   const isFocused = view.hasFocus() ||
                    (document.activeElement && (
@@ -300,11 +312,26 @@ function updateActiveBubbleMenus() {
                      view.dom?.contains(document.activeElement) ||
                      formatMenuEl?.contains(document.activeElement) || 
                      linkMenuEl?.contains(document.activeElement) ||
-                     tableMenuEl?.contains(document.activeElement)
+                     tableMenuEl?.contains(document.activeElement) ||
+                     imageMenuEl?.contains(document.activeElement)
                    ));
+  const isImage = selection?.node?.type?.name === 'image';
   const isLink = editor.isActive('link');
   const isTable = editor.isActive('table') || editor.isActive('tableCell') || editor.isActive('tableHeader');
   const isCellSelection = selection?.constructor?.name === 'CellSelection' || ('$headCell' in selection);
+
+  if (isImage) {
+    if (sharedFormatTippy) sharedFormatTippy.hide();
+    if (sharedLinkTippy) sharedLinkTippy.hide();
+    if (sharedTableTippy) sharedTableTippy.hide();
+    if (sharedImageTippy) {
+      sharedImageTippy.setProps({ getReferenceClientRect: _activeSelectionBoundingRect });
+      sharedImageTippy.show();
+    }
+    return;
+  }
+
+  if (sharedImageTippy) sharedImageTippy.hide();
 
   if (isLink) {
     if (sharedFormatTippy) sharedFormatTippy.hide();
@@ -357,9 +384,10 @@ function updateActiveBubbleMenus() {
  * @param {HTMLElement|null} linkMenuEl The `#link-bubble-menu` element, if present in the page.
  * @param {HTMLElement|null} formatMenuEl The `#format-bubble-menu` element, if present.
  * @param {HTMLElement|null} tableMenuEl The `#table-bubble-menu` element, if present.
+ * @param {HTMLElement|null} [imageMenuEl] The `#image-bubble-menu` element, if present.
  * @returns {void} No-op on every call after the first.
  */
-function ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl, tableMenuEl) {
+function ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl, tableMenuEl, imageMenuEl) {
   if (_bubbleMenuGlobalListenersInstalled) return;
   _bubbleMenuGlobalListenersInstalled = true;
   const preventBlur = (e) => { if (e.target.closest('button')) e.preventDefault(); };
@@ -544,6 +572,51 @@ function ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl, tableMenuEl) 
     };
 
     tableMenuEl.addEventListener('click', handleTableClick);
+  }
+
+  if (imageMenuEl) {
+    imageMenuEl.style.display = 'flex';
+    imageMenuEl.addEventListener('mousedown', preventBlur);
+    imageMenuEl.addEventListener('touchstart', preventBlur, { passive: false });
+
+    sharedImageTippy = tippy(document.body, {
+      content: imageMenuEl,
+      interactive: true,
+      trigger: 'manual',
+      placement: 'top',
+      appendTo: document.body,
+      zIndex: 1000,
+      getReferenceClientRect: _activeSelectionBoundingRect
+    });
+
+    const handleImageClick = (e) => {
+      const openBtn = e.target.closest('#bubble-image-open');
+      const deleteBtn = e.target.closest('#bubble-image-delete');
+      const editor = _active()?.editor;
+      if (!editor) return;
+
+      if (openBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const { state } = editor;
+        const src = state.selection?.node?.attrs?.src;
+        if (src) {
+          window.open(src, '_blank');
+        }
+      } else if (deleteBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const { view } = editor;
+        if (deleteSelectedImage(view)) {
+          view.focus();
+        } else {
+          editor.chain().focus().deleteSelection().run();
+        }
+        if (sharedImageTippy) sharedImageTippy.hide();
+      }
+    };
+
+    imageMenuEl.addEventListener('click', handleImageClick);
   }
 }
 
@@ -954,6 +1027,206 @@ export function handleListMergeKeydown(view, event) {
 }
 
 /**
+ * Resolves an image node's document start position near or at a given document position.
+ *
+ * @param {import('@tiptap/pm/model').Node} doc Document node.
+ * @param {number} testPos ProseMirror document position to check.
+ * @returns {number|null} Position where the image node starts, or null if no image found.
+ */
+export function findImagePos(doc, testPos) {
+  if (typeof testPos !== 'number' || isNaN(testPos) || testPos < 0 || testPos > doc.content.size) {
+    return null;
+  }
+  if (doc.nodeAt(testPos)?.type?.name === 'image') {
+    return testPos;
+  }
+  const $pos = doc.resolve(testPos);
+  if ($pos.nodeAfter?.type?.name === 'image') {
+    return $pos.pos;
+  }
+  if ($pos.nodeBefore?.type?.name === 'image') {
+    return $pos.pos - $pos.nodeBefore.nodeSize;
+  }
+  return null;
+}
+
+/**
+ * Deletes the node-selected image, collapsing the NodeSelection first.
+ *
+ * y-prosemirror snapshots the selection *before* each transaction and rebuilds
+ * it afterwards. Its 'node' branch calls `NodeSelection.create` unguarded, so a
+ * NodeSelection whose node the very next transaction deletes makes that restore
+ * throw `Cannot read properties of null (reading 'nodeSize')`. Collapsing to a
+ * TextSelection in its own dispatch means the deleting transaction is preceded
+ * by a text selection, which y-prosemirror restores through its guarded branch.
+ *
+ * `scripts/patch-y-prosemirror.cjs` fixes the library-side hole as well — that
+ * one also covers a *remote* peer deleting an image you have selected, which
+ * this cannot.
+ *
+ * @param {import('@tiptap/pm/view').EditorView} view Active ProseMirror view.
+ * @returns {boolean} `true` when an image selection was deleted.
+ */
+export function deleteSelectedImage(view) {
+  const { selection } = view.state;
+  if (!selection.node || selection.node.type.name !== 'image') return false;
+
+  const from = selection.from;
+  const size = selection.node.nodeSize;
+
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from)));
+  view.dispatch(view.state.tr.delete(from, from + size));
+  return true;
+}
+
+/**
+ * Keyboard handler for image selection and adjacent deletion on Backspace / Delete.
+ *
+ * Ensures images in empty paragraphs or inline void positions can be deleted naturally
+ * via Backspace and Delete keys, preventing the user from being trapped when an image
+ * is the only content or cursor caret targets are obscured.
+ *
+ * @param {import('@tiptap/pm/view').EditorView} view Active ProseMirror view.
+ * @param {KeyboardEvent|{key: string, preventDefault?: Function}} event The key press.
+ * @returns {boolean} `true` when the key was handled and consumed here.
+ */
+export function handleImageKeydown(view, event) {
+  const { key } = event;
+  if (key !== 'Backspace' && key !== 'Delete') return false;
+
+  const { state } = view;
+  const { selection } = state;
+
+  // Case 1: Image node is explicitly selected (NodeSelection)
+  if (selection.node && selection.node.type.name === 'image') {
+    deleteSelectedImage(view);
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    return true;
+  }
+
+  // Case 2: Backspace pressed immediately after an image
+  if (key === 'Backspace' && selection.empty && selection.$from.nodeBefore?.type?.name === 'image') {
+    const size = selection.$from.nodeBefore.nodeSize;
+    const tr = state.tr.delete(selection.from - size, selection.from);
+    view.dispatch(tr);
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    return true;
+  }
+
+  // Case 3: Delete pressed immediately before an image
+  if (key === 'Delete' && selection.empty && selection.$from.nodeAfter?.type?.name === 'image') {
+    const size = selection.$from.nodeAfter.nodeSize;
+    const tr = state.tr.delete(selection.from, selection.from + size);
+    view.dispatch(tr);
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Handles application-level editor shortcuts (headings, code block, links, save, hr).
+ * Supports both Ctrl/Cmd+Shift+1..6 and Ctrl/Cmd+Alt+1..6 for headings.
+ *
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {KeyboardEvent} event
+ * @param {CacheEntry|{provider?: import('./FirestoreYjsProvider.js').FirestoreYjsProvider}} [entry]
+ * @returns {boolean}
+ */
+export function handleShortcutKeydown(editor, event, entry = {}) {
+  const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
+  const isMod = ctrlKey || metaKey;
+
+  if (isMod && shiftKey && !altKey) {
+    if (code === 'Digit1' || code === 'Numpad1' || key === '1') {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      editor.chain().focus().toggleHeading({ level: 1 }).run();
+      return true;
+    }
+    if (code === 'Digit2' || code === 'Numpad2' || key === '2') {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      editor.chain().focus().toggleHeading({ level: 2 }).run();
+      return true;
+    }
+    if (code === 'Digit3' || code === 'Numpad3' || key === '3') {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      editor.chain().focus().toggleHeading({ level: 3 }).run();
+      return true;
+    }
+    if (code === 'Digit4' || code === 'Numpad4' || key === '4') {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      editor.chain().focus().toggleHeading({ level: 4 }).run();
+      return true;
+    }
+    if (code === 'Digit5' || code === 'Numpad5' || key === '5') {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      editor.chain().focus().toggleHeading({ level: 5 }).run();
+      return true;
+    }
+    if (code === 'Digit6' || code === 'Numpad6' || key === '6') {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      editor.chain().focus().toggleHeading({ level: 6 }).run();
+      return true;
+    }
+    if (code === 'Digit0' || code === 'Numpad0' || key === '0') {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      editor.chain().focus().setParagraph().run();
+      return true;
+    }
+  }
+  // Legacy Ctrl/Cmd+Alt+C for code blocks. The digit variants were removed:
+  // Windows maps AltGr to Ctrl+Alt, and on the Swiss German layout AltGr+2 is
+  // `@` and AltGr+3 is `#`, so intercepting Ctrl+Alt+digit swallowed the
+  // characters used for @mentions. Ctrl/Cmd+Shift+digit above is the documented
+  // binding for headings.
+  if (isMod && altKey && !shiftKey) {
+    if (code === 'KeyC') {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      editor.chain().focus().toggleCodeBlock().run();
+      return true;
+    }
+  }
+  if (isMod && key === 'k') {
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    (async () => {
+      const { href } = editor.getAttributes('link');
+      if (editor.isActive('link')) editor.chain().focus().extendMarkRange('link').run();
+      const { state } = editor;
+      const { from, to } = state.selection;
+      const selectedText = state.doc.textBetween(from, to, ' ');
+      const linkData = await linkModal(href || '', selectedText || '');
+      if (linkData) {
+        editor.chain().focus()
+          .extendMarkRange('link')
+          .insertContent({
+            type: 'text',
+            text: linkData.text,
+            marks: [{ type: 'link', attrs: { href: linkData.url } }]
+          })
+          .run();
+      }
+    })();
+    return true;
+  }
+  if (isMod && key === 's') {
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    // Edits live in Yjs (the source of truth); the markdown `content`
+    // field is projected server-side. A manual save just flushes the
+    // buffered Yjs updates to Firestore immediately.
+    if (entry?.provider) entry.provider.flushPending();
+    return true;
+  }
+  if (isMod && key === 'Enter') {
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    editor.chain().focus().setHorizontalRule().run();
+    return true;
+  }
+  return false;
+}
+
+
+/**
  * Activate (or create) the editor for a given page. Idempotent: if the page is
  * already cached, this re-shows the existing editor instead of rebuilding it.
  *
@@ -1053,7 +1326,11 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
     formatTippy: null,
     linkTippy: null,
     tableTippy: null,
+    imageTippy: null,
     detachSelectionListener: null,
+    hasYjsData: false,
+    hasLocalYjsData: false,
+    hasLoadedYjs: false,
   };
 
   // Restore selection from a prior browser session (cold reloads benefit too).
@@ -1064,27 +1341,43 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
 
   /** @type {boolean} Latch making `fireReady` idempotent across its three racing callers. */
   let onReadyFired = false;
+  /** @type {boolean} Tracks if the local document was edited before sync settled. */
+  let hasDocChanged = false;
+  /** @type {any|null} Safety timeout handle. */
+  let readyTimeout = null;
+
   /**
    * Reveals the editor: marks the pane synced, applies the markdown fallback if needed, notifies the
    * caller, and restores the caret.
    *
    * Races between the provider load callback, IndexedDB hydration, and the 3 s timeout are resolved
    * by the `onReadyFired` latch — first one wins, the rest are no-ops. The fallback content is only
-   * applied when the editor is *still* empty and this page is *still* the active one, so a slow
-   * Firestore markdown read can never overwrite Yjs content or bleed into a page the user has
-   * meanwhile navigated to.
+   * applied when Yjs has NO existing data in Firestore or IndexedDB (legacy un-migrated page), the
+   * editor has not undergone any edits, the editor is still empty, and this page is still the active one.
    *
    * @returns {void}
    */
   const fireReady = () => {
     if (onReadyFired) return;
     onReadyFired = true;
+    if (readyTimeout) {
+      clearTimeout(readyTimeout);
+      readyTimeout = null;
+    }
     pane.dataset.synced = 'true';
 
-    // Apply fallback content if the editor is still empty after loading or timeout.
-    // This ensures we show the Firestore Markdown content if Yjs is empty or slow.
-    if (initialContent && entry.editor && entry.editor.isEmpty && currentPageId === pageId) {
-      console.log(`[Insel-Wiki] Applying fallback content for ${pageId}`);
+    // Apply fallback content ONLY if:
+    // 1. Initial markdown fallback is provided.
+    // 2. The editor is currently empty.
+    // 3. The page is still active.
+    // 4. No document edits or changes have occurred.
+    // 5. Yjs confirmed NO data exists in Firestore or local IndexedDB (legacy un-migrated page).
+    // If Yjs already has data, an empty document is the legitimate state of the page (e.g. user
+    // deleted all content) and must NOT be overwritten with stale Firestore markdown.
+    const hasAnyYjsData = Boolean(entry.hasYjsData || entry.hasLocalYjsData || provider.hasYjsData);
+    const canApplyFallback = provider.isLoaded || Boolean(window.__E2E_DISABLE_COLLAB__);
+    if (initialContent && entry.editor && entry.editor.isEmpty && !hasDocChanged && !hasAnyYjsData && canApplyFallback && currentPageId === pageId) {
+      console.log(`[Insel-Wiki] Applying fallback content for legacy/unseeded page ${pageId}`);
       setContentInternal(entry.editor, initialContent);
     }
 
@@ -1092,7 +1385,11 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
     restoreSelection(entry);
   };
 
-  provider.setLoadCallback(() => {
+  provider.setLoadCallback((hasData) => {
+    entry.hasLoadedYjs = true;
+    if (hasData) {
+      entry.hasYjsData = true;
+    }
     // Allow Yjs binary state to settle and Tiptap extensions to sync before
     // hiding the loading overlay. 100ms is a safe buffer for CI stability.
     setTimeout(fireReady, 100);
@@ -1101,6 +1398,9 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
   // If IDB has prior state, surface it the moment hydrate completes — no waiting on Firestore.
   if (persistence) {
     persistence.whenSynced.then(() => {
+      if (ydoc.store.clients.size > 0) {
+        entry.hasLocalYjsData = true;
+      }
       if (entry.editor && !entry.editor.isDestroyed && !entry.editor.isEmpty && currentPageId === pageId) {
         fireReady();
       }
@@ -1110,8 +1410,9 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
   const linkMenuEl = document.getElementById('link-bubble-menu');
   const formatMenuEl = document.getElementById('format-bubble-menu');
   const tableMenuEl = document.getElementById('table-bubble-menu');
+  const imageMenuEl = document.getElementById('image-bubble-menu');
   // Bubble menus are shared DOM. Wire global listeners exactly once.
-  ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl, tableMenuEl);
+  ensureBubbleMenuGlobalListeners(linkMenuEl, formatMenuEl, tableMenuEl, imageMenuEl);
 
   /**
    * Tiptap extension set for this editor.
@@ -1156,7 +1457,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
       suggestion,
     }),
     Placeholder.configure({ placeholder: i18next.t('editor.placeholder') }),
-    Image.configure({ inline: true }),
+    Image.extend({ draggable: false }).configure({ inline: true }),
     Link.configure({
       autolink: true,
       openOnClick: false,
@@ -1225,6 +1526,31 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
          * @returns {boolean} `true` when the click was consumed as navigation.
          */
         click: (view, event) => {
+          if (event.target && event.target.tagName === 'IMG') {
+            let imgPos = null;
+            try {
+              const domPos = view.posAtDOM(event.target, 0);
+              imgPos = findImagePos(view.state.doc, domPos);
+            } catch (e) {}
+            if (imgPos === null) {
+              const coordsPos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+              if (coordsPos !== undefined) {
+                imgPos = findImagePos(view.state.doc, coordsPos);
+              }
+            }
+            if (imgPos !== null) {
+              try {
+                const tr = view.state.tr.setSelection(NodeSelection.create(view.state.doc, imgPos));
+                view.dispatch(tr);
+                view.focus();
+                updateActiveBubbleMenus();
+                return true;
+              } catch (e) {
+                console.warn('[Insel-Wiki] Failed to select image node:', e);
+              }
+            }
+          }
+
           const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
           if (pos === undefined) return false;
           const { schema } = view.state;
@@ -1256,7 +1582,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
          * positions, which is what the running `shift` offset accounts for; the delete range is computed with
          * that same offset rather than from the stale original positions.
          *
-         * **Shortcuts.** `Ctrl/Cmd+Alt+1/2/3` toggle headings and `+C` a code block (`event.code` is
+         * **Shortcuts.** `Ctrl/Cmd+Shift+1..6` toggle headings, `+Shift+0` sets a paragraph and `+Alt+C` a code block (`event.code` is
          * used so the digits work on non-US layouts); `Ctrl/Cmd+K` opens the link modal, pre-filled
          * with the current href and selected text; `Ctrl/Cmd+Enter` inserts a horizontal rule.
          *
@@ -1270,52 +1596,9 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
          *   (bold, italic, list toggles, …) take over.
          */
         keydown: (view, event) => {
+          if (handleImageKeydown(view, event)) return true;
           if (handleListMergeKeydown(view, event)) return true;
-
-          const { ctrlKey, metaKey, altKey, shiftKey, code, key } = event;
-          const isMod = ctrlKey || metaKey;
-          
-          if (isMod && altKey && !shiftKey) {
-            if (code === 'Digit1') { editor.chain().focus().toggleHeading({ level: 1 }).run(); return true; }
-            if (code === 'Digit2') { editor.chain().focus().toggleHeading({ level: 2 }).run(); return true; }
-            if (code === 'Digit3') { editor.chain().focus().toggleHeading({ level: 3 }).run(); return true; }
-            if (code === 'KeyC')   { editor.chain().focus().toggleCodeBlock().run(); return true; }
-          }
-          if (isMod && key === 'k') {
-            event.preventDefault();
-            (async () => {
-              const { href } = editor.getAttributes('link');
-              if (editor.isActive('link')) editor.chain().focus().extendMarkRange('link').run();
-              const { state } = editor;
-              const { from, to } = state.selection;
-              const selectedText = state.doc.textBetween(from, to, ' ');
-              const linkData = await linkModal(href || '', selectedText || '');
-              if (linkData) {
-                editor.chain().focus()
-                  .extendMarkRange('link')
-                  .insertContent({
-                    type: 'text',
-                    text: linkData.text,
-                    marks: [{ type: 'link', attrs: { href: linkData.url } }]
-                  })
-                  .run();
-              }
-            })();
-            return true;
-          }
-          if (isMod && key === 's') {
-            event.preventDefault();
-            // Edits live in Yjs (the source of truth); the markdown `content`
-            // field is projected server-side. A manual save just flushes the
-            // buffered Yjs updates to Firestore immediately.
-            if (entry.provider) entry.provider.flushPending();
-            return true;
-          }
-          if (isMod && key === 'Enter') {
-            editor.chain().focus().setHorizontalRule().run();
-            return true;
-          }
-          return false;
+          return handleShortcutKeydown(editor, event, entry);
         },
         /**
          * Double-click on a link follows it without any modifier — the discoverable counterpart to
@@ -1433,6 +1716,11 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
    */
 
 
+  editor.on('transaction', ({ transaction }) => {
+    if (transaction.docChanged) {
+      hasDocChanged = true;
+    }
+  });
   editor.on('selectionUpdate', updateActiveBubbleMenus);
   editor.on('transaction', updateActiveBubbleMenus);
   editor.on('focus', updateActiveBubbleMenus);
@@ -1456,13 +1744,18 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
       if (!pane.contains(document.activeElement) &&
           (!formatMenuEl || !formatMenuEl.contains(document.activeElement)) &&
           (!linkMenuEl || !linkMenuEl.contains(document.activeElement)) &&
-          (!tableMenuEl || !tableMenuEl.contains(document.activeElement))) {
+          (!tableMenuEl || !tableMenuEl.contains(document.activeElement)) &&
+          (!imageMenuEl || !imageMenuEl.contains(document.activeElement))) {
         hideAllBubbleMenus();
       }
     }, 250);
   });
 
   editor.on('destroy', () => {
+    if (readyTimeout) {
+      clearTimeout(readyTimeout);
+      readyTimeout = null;
+    }
     document.removeEventListener('selectionchange', onSelectionChange);
   });
 
@@ -1470,7 +1763,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
 
   // Fallback: if provider or IDB take too long, fire ready anyway so the UI doesn't hang.
   // This is especially important for CI/testing environments where Firebase might be slow.
-  setTimeout(fireReady, 3000);
+  readyTimeout = setTimeout(fireReady, 3000);
 
   if (isSpellCheckEnabled()) {
     entry.spellCheckerBot = new SpellCheckerBot(editor, provider);

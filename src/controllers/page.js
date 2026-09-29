@@ -46,18 +46,25 @@
  */
 import { createPage, getPage, createHistorySnapshot, getLatestHistorySnapshot, getFullHistoryContent, updatePageTitle, deletePage, getChildren, formatTimestamp, setBotAction } from '../firebase/firestore.js';
 import { renderBotBanner } from '../components/bot-banner.js';
-import { createEditor, setContent, getMarkdown, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, hasCachedEditor } from '../editor/editor.js';
+import { createEditor, setContent, getMarkdown, getHTML, setEditable, destroyEditor, createFormatToolbar, getProvider, getEditor, hasCachedEditor } from '../editor/editor.js';
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
 import { loadCommentsForPage } from '../components/comments.js';
-import { promptModal, newPageModal, confirmModal, markdownWarningModal } from '../components/modal.js';
+import { promptModal, newPageModal, confirmModal, markdownWarningModal, translateModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 import { canEdit, getCurrentUser, isLoggedIn } from '../firebase/auth.js';
 import { formatDefaultName, slugify, getColorForEmail, getInitials } from '../utils/string.js';
 import { resolveSnapshotAttribution } from '../utils/attribution.js';
 import { subscribeToPage } from '../firebase/firestore.js';
+import { auth } from '../firebase/config.js';
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import i18next from '../i18n.js';
+import { initTranslationView, enterTranslationMode, exitTranslationMode, getIsTranslationMode } from './translation-view.js';
+import { initUsersView, enterUsersView, exitUsersView, getIsUsersViewActive } from './users-view.js';
+import { openPresentation, closePresentation, isPresentationOpen, updatePresentation } from '../components/presentation.js';
+
+export { enterTranslationMode, exitTranslationMode, getIsTranslationMode, enterUsersView, exitUsersView, getIsUsersViewActive };
 
 // --- State ---
 
@@ -163,13 +170,17 @@ function debounce(callback, delayMs) {
   return debounced;
 }
 
+function setDocumentTitle(pageTitle) {
+  document.title = `Insel-Wiki - ${pageTitle || i18next.t('common.untitled', { defaultValue: 'Ohne Titel' })}`;
+}
+
 /**
  * Debounced Firestore title update to merge rapid user keypresses.
  *
  * @type {Function}
  */
 const debouncedUpdateTitle = debounce(async (id, title) => {
-  if (!id || !canEdit()) return;
+  if (!id || !canEdit() || getIsTranslationMode()) return;
   pendingTitleSaves++;
   recomputeSaveStatus();
   try {
@@ -228,6 +239,21 @@ export function flushMarkdownEditor() {
  * @returns {void}
  */
 function recomputeSaveStatus() {
+  if (getIsUsersViewActive()) {
+    if (saveStatus) {
+      saveStatus.classList.remove('saving', 'error', 'offline');
+      saveStatus.className = 'save-status read-only-live-badge';
+      saveStatus.innerHTML = '<span class="status-dot-pulse"></span> ' + i18next.t('editor.readOnlyLive', { defaultValue: 'Live synchronisiert (Schreibgeschützt)' });
+    }
+    return;
+  }
+  if (getIsTranslationMode()) {
+    if (saveStatus) {
+      saveStatus.classList.remove('saving', 'error', 'offline');
+      saveStatus.textContent = i18next.t('editor.translationStatus', { defaultValue: 'KI-Übersetzung (Nur Leseansicht)' });
+    }
+    return;
+  }
   if (saveErrored) {
     clearTimeout(savedSettleTimer);
     savedSettleTimer = null;
@@ -252,8 +278,9 @@ function recomputeSaveStatus() {
 // --- DOM References (set during init) ---
 let editorContainer, editorEl, pageTitleInput, saveStatus, breadcrumbEl;
 let collabCursorsEl, emptyState, lastEditedBadge, loadingOverlay;
-let historyBtn, printBtn, addChildBtn, deletePageBtn, toolbarNewPageBtn, copyLinkBtn;
+let historyBtn, printBtn, presentationBtn, addChildBtn, deletePageBtn, toolbarNewPageBtn, copyLinkBtn;
 let markdownEditor, markdownToggleBtn;
+let translatePageBtn, translationBanner, translationBannerText, exitTranslationBtn, translationPreviewEl, usersPreviewEl;
 let isMarkdownMode = false;
 let isMarkdownReadOnly = false;
 let originalMarkdownValue = '';
@@ -344,12 +371,19 @@ export function initPageController(opts) {
   loadingOverlay = document.getElementById('editor-loading-overlay');
   historyBtn = document.getElementById('history-btn');
   printBtn = document.getElementById('print-page-btn');
+  presentationBtn = document.getElementById('presentation-btn');
   addChildBtn = document.getElementById('add-child-btn');
   deletePageBtn = document.getElementById('delete-page-btn');
   toolbarNewPageBtn = document.getElementById('toolbar-new-page-btn');
   copyLinkBtn = document.getElementById('copy-link-btn');
   markdownEditor = document.getElementById('markdown-editor');
   markdownToggleBtn = document.getElementById('markdown-toggle-btn');
+  translatePageBtn = document.getElementById('translate-page-btn');
+  translationBanner = document.getElementById('translation-banner');
+  translationBannerText = document.getElementById('translation-banner-text');
+  exitTranslationBtn = document.getElementById('exit-translation-btn');
+  translationPreviewEl = document.getElementById('translation-preview');
+  usersPreviewEl = document.getElementById('users-preview');
 
   navigateCallback = opts.navigateTo;
 
@@ -360,14 +394,50 @@ export function initPageController(opts) {
   if (deletePageBtn) deletePageBtn.addEventListener('click', handleDeletePage);
   if (historyBtn) historyBtn.addEventListener('click', handleHistoryToggle);
   if (printBtn) printBtn.addEventListener('click', () => window.print());
+  if (presentationBtn) presentationBtn.addEventListener('click', handlePresentation);
   if (copyLinkBtn) copyLinkBtn.addEventListener('click', handleCopyLink);
   if (markdownToggleBtn) markdownToggleBtn.addEventListener('click', toggleMarkdownMode);
+  if (translatePageBtn) translatePageBtn.addEventListener('click', handleTranslatePage);
+  if (exitTranslationBtn) exitTranslationBtn.addEventListener('click', exitTranslationMode);
+
+  initTranslationView({
+    editorEl,
+    markdownEditor,
+    translationPreviewEl,
+    pageTitleInput,
+    markdownToggleBtn,
+    translationBanner,
+    translationBannerText,
+    translatePageBtn,
+    saveStatus,
+    canEdit,
+    recomputeSaveStatus,
+    getCurrentPageData: () => currentPageData,
+    getIsMarkdownMode: () => isMarkdownMode,
+    getFormatToolbar: () => formatToolbar,
+    sanitizeHtml: (dirty) => DOMPurify.sanitize(dirty)
+  });
+
+  initUsersView({
+    editorEl,
+    markdownEditor,
+    translationPreviewEl,
+    translationBanner,
+    usersPreviewEl,
+    pageTitleInput,
+    markdownToggleBtn,
+    translatePageBtn,
+    saveStatus,
+    getFormatToolbar: () => formatToolbar,
+    recomputeSaveStatus
+  });
 
   if (markdownEditor) {
     markdownEditor.addEventListener('input', () => {
-      if (currentPageId && canEdit() && !isMarkdownReadOnly) {
+      if (currentPageId && canEdit() && !isMarkdownReadOnly && !getIsTranslationMode()) {
         debouncedSyncMarkdownToEditor(markdownEditor.value);
         recomputeSaveStatus();
+        if (isPresentationOpen()) debouncedUpdatePresentation();
         debouncedSnapshot();
       }
     });
@@ -377,15 +447,19 @@ export function initPageController(opts) {
   document.getElementById('empty-new-page').addEventListener('click', () => handleNewPage());
 
   pageTitleInput.addEventListener('input', () => {
-    if (currentPageId && canEdit()) {
+    if (currentPageId && canEdit() && !getIsTranslationMode()) {
       titleEditedLocally = true;
       debouncedUpdateTitle(currentPageId, pageTitleInput.value);
-      document.title = `Insel-Wiki - ${pageTitleInput.value || 'Ohne Titel'}`;
+      setDocumentTitle(pageTitleInput.value);
+      if (isPresentationOpen()) debouncedUpdatePresentation();
       debouncedSnapshot();
     }
   });
 
   window.addEventListener('page-content-updated', (e) => {
+    if (isPresentationOpen() && (!e.detail?.pageId || e.detail.pageId === currentPageId)) {
+      debouncedUpdatePresentation();
+    }
     const provider = getProvider();
     if (provider?.hasLocalEdits && (!e.detail?.pageId || e.detail.pageId === currentPageId)) {
       debouncedSnapshot();
@@ -396,6 +470,20 @@ export function initPageController(opts) {
   // the buffered Yjs updates. The markdown `content` field is projected
   // server-side, so there is nothing to write from the client here.
   window.addEventListener('keydown', async (e) => {
+    // Alt+P: Toggle Presentation Mode. Matched on `e.code`, not `e.key`:
+    // macOS turns Option+P into 'π', which made the advertised shortcut dead
+    // there, and Windows reports AltGr as Ctrl+Alt, so AltGr+P used to open the
+    // presentation.
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyP') {
+      e.preventDefault();
+      if (isPresentationOpen()) {
+        closePresentation();
+      } else {
+        handlePresentation();
+      }
+      return;
+    }
+
     if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       if (currentPageId) {
@@ -474,6 +562,13 @@ export function getCurrentPageId() { return currentPageId; }
  * @returns {Promise<void>}
  */
 export async function loadPage(pageId) {
+  if (isPresentationOpen()) {
+    closePresentation();
+  }
+  if (getIsTranslationMode()) {
+    exitTranslationMode();
+  }
+
   // Skip if we're already on this page
   if (pageId === currentPageId) return;
 
@@ -609,7 +704,8 @@ export async function loadPage(pageId) {
     // Swap out static preview for real editor
     const staticPreview = document.getElementById('static-editor-preview');
     if (staticPreview) staticPreview.remove();
-    editorEl.style.display = 'block';
+    if (!getIsUsersViewActive()) editorEl.style.display = 'block';
+    if (isPresentationOpen()) syncPresentation(true);
   });
 
   // Subscribe to Yjs pending-write status so the indicator reflects in-flight
@@ -636,20 +732,37 @@ export async function loadPage(pageId) {
     });
   }, 1000); // Defer by 1s to allow editor to fully render and idle
 
-  if (!formatToolbar) {
-    formatToolbar = createFormatToolbar(editorContainer);
-  }
-  if (formatToolbar) {
-    formatToolbar.style.display = canEdit() ? 'flex' : 'none';
-  }
+  const isUsersPage = pageId === 'hanspecathon-teilnehmende' || pageId === 'teilnehmende' || pageId === 'users' || page?.isUsersPage === true;
 
-  setEditable(canEdit());
-  pageTitleInput.readOnly = !canEdit();
-  if (markdownToggleBtn) {
-    markdownToggleBtn.style.display = canEdit() ? 'inline-flex' : 'none';
-  }
-  if (markdownEditor) {
-    markdownEditor.readOnly = !canEdit();
+  if (isUsersPage) {
+    if (getIsTranslationMode()) exitTranslationMode();
+    enterUsersView(page);
+    setEditable(false);
+    pageTitleInput.readOnly = true;
+    if (formatToolbar) formatToolbar.style.display = 'none';
+    if (markdownToggleBtn) markdownToggleBtn.style.display = 'none';
+    if (translatePageBtn) translatePageBtn.style.display = 'none';
+    if (deletePageBtn) deletePageBtn.style.display = 'none';
+    if (markdownEditor) markdownEditor.readOnly = true;
+  } else {
+    if (getIsUsersViewActive()) exitUsersView();
+    if (deletePageBtn) deletePageBtn.style.display = canEdit() ? 'inline-flex' : 'none';
+    if (translatePageBtn) translatePageBtn.style.display = 'inline-flex';
+    if (!formatToolbar) {
+      formatToolbar = createFormatToolbar(editorContainer);
+    }
+    if (formatToolbar) {
+      formatToolbar.style.display = canEdit() ? 'flex' : 'none';
+    }
+
+    setEditable(canEdit());
+    pageTitleInput.readOnly = !canEdit();
+    if (markdownToggleBtn) {
+      markdownToggleBtn.style.display = canEdit() ? 'inline-flex' : 'none';
+    }
+    if (markdownEditor) {
+      markdownEditor.readOnly = !canEdit();
+    }
   }
 
   // No periodic snapshot timer: snapshots are driven by editing (debouncedSnapshot, 30s
@@ -670,7 +783,7 @@ export async function loadPage(pageId) {
       currentPageData = updatedPage;
 
       // 1. Update Title if not actively editing it
-      if (document.activeElement !== pageTitleInput && updatedPage.title !== pageTitleInput.value) {
+      if (!getIsTranslationMode() && document.activeElement !== pageTitleInput && updatedPage.title !== pageTitleInput.value) {
         pageTitleInput.value = updatedPage.title || '';
         document.title = `Insel-Wiki - ${updatedPage.title || 'Ohne Titel'}`;
       }
@@ -690,6 +803,7 @@ export async function loadPage(pageId) {
       showBotBanner(updatedPage);
 
       updateBreadcrumb(pageId);
+      if (isPresentationOpen()) debouncedUpdatePresentation();
       const slug = slugify(updatedPage.title || '');
       const newHash = `#/${pageId}/${slug}`;
       if (window.location.hash !== newHash) {
@@ -765,6 +879,16 @@ function showBotBanner(page) {
 }
 
 export function showEmptyState() {
+  if (isPresentationOpen()) {
+    closePresentation();
+  }
+  if (getIsUsersViewActive()) {
+    exitUsersView();
+  }
+  if (getIsTranslationMode()) {
+    exitTranslationMode();
+  }
+
   if (isMarkdownMode && markdownEditor) {
     if (!isMarkdownReadOnly) {
       debouncedSyncMarkdownToEditor.flush();
@@ -1198,7 +1322,7 @@ export async function rejoinPresence(updatedUser) {
  * @returns {Promise<void>}
  */
 async function toggleMarkdownMode() {
-  if (!currentPageId || !canEdit()) return;
+  if (!currentPageId || !canEdit() || getIsTranslationMode()) return;
   
   if (!isMarkdownMode) {
     const complexElements = detectComplexElements();
@@ -1324,6 +1448,178 @@ function updateMarkdownView() {
     
     // Show format toolbar if user can edit
     if (formatToolbar && canEdit()) formatToolbar.style.display = 'flex';
+  }
+}
+
+// --- Presentation Mode ---
+
+/**
+ * Opens Presentation Mode for the active page.
+ */
+function handlePresentation() {
+  if (!currentPageId) return;
+  const title = pageTitleInput?.value?.trim() || currentPageData?.title || i18next.t('common.untitled', { defaultValue: 'Ohne Titel' });
+  let content = '';
+  let isMarkdown = false;
+
+  if (isMarkdownMode && markdownEditor) {
+    content = markdownEditor.value;
+    isMarkdown = true;
+  } else {
+    // `currentPageData.content` is the server-side *markdown* projection, so the
+    // fallback must be flagged as markdown — parsing it as HTML rendered the
+    // whole page as one unformatted slide.
+    const html = getHTML();
+    if (html) {
+      content = html;
+      isMarkdown = false;
+    } else {
+      content = currentPageData?.content || '';
+      isMarkdown = true;
+    }
+  }
+
+  openPresentation({ title, content, isMarkdown, pageId: currentPageId });
+}
+
+/**
+ * Synchronizes the presentation (if currently open) with the active page's current content and title.
+ *
+ * @param {boolean} [immediate=false]
+ */
+export function syncPresentation(immediate = false) {
+  if (!isPresentationOpen()) return;
+  const title = pageTitleInput?.value?.trim() || currentPageData?.title || i18next.t('common.untitled', { defaultValue: 'Ohne Titel' });
+  let content = '';
+  let isMarkdown = false;
+
+  if (isMarkdownMode && markdownEditor) {
+    content = markdownEditor.value;
+    isMarkdown = true;
+  } else {
+    // `currentPageData.content` is the server-side *markdown* projection, so the
+    // fallback must be flagged as markdown — parsing it as HTML rendered the
+    // whole page as one unformatted slide.
+    const html = getHTML();
+    if (html) {
+      content = html;
+      isMarkdown = false;
+    } else {
+      content = currentPageData?.content || '';
+      isMarkdown = true;
+    }
+  }
+
+  updatePresentation({ title, content, isMarkdown, pageId: currentPageId });
+}
+
+let _presentationDebounceTimer = null;
+
+/**
+ * Debounced update trigger for typing and live edits while presentation mode is active.
+ */
+export function debouncedUpdatePresentation() {
+  if (!isPresentationOpen()) return;
+  if (_presentationDebounceTimer) clearTimeout(_presentationDebounceTimer);
+  _presentationDebounceTimer = setTimeout(() => {
+    syncPresentation(true);
+  }, 150);
+}
+
+// --- AI Translation (Non-Editable Preview) ---
+
+/**
+ * Calls backend /api/translate proxy to translate title and content.
+ *
+ * @param {string} title - Page title to translate.
+ * @param {string} content - Markdown content to translate.
+ * @param {string} targetLanguage - Target language code ('de', 'en', 'fr', 'it').
+ * @returns {Promise<{translatedTitle: string, translatedContent: string}>}
+ */
+export async function requestTranslation(title, content, targetLanguage) {
+  let token = '';
+  try {
+    const user = auth.currentUser;
+    if (user) {
+      token = await user.getIdToken();
+    }
+  } catch (e) {
+    console.warn('[Translate] Failed to get auth token:', e);
+  }
+
+  if (!token) {
+    throw new Error(i18next.t('editor.voiceErrors.auth', { defaultValue: 'Not authenticated' }));
+  }
+
+  const response = await fetch('/api/translate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      title,
+      content,
+      targetLanguage
+    })
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '');
+    throw new Error(`API ${response.status}: ${errorBody.substring(0, 200)}`);
+  }
+
+  return await response.json();
+}
+
+/**
+ * Handles translation button clicks. Prompts for language, executes translation,
+ * and enters non-editable translation mode.
+ *
+ * @returns {Promise<void>}
+ */
+export async function handleTranslatePage() {
+  if (!currentPageId) return;
+  const requestedPageId = currentPageId;
+
+  if (getIsTranslationMode()) {
+    exitTranslationMode();
+    return;
+  }
+
+  if (isMarkdownMode && markdownEditor) {
+    debouncedSyncMarkdownToEditor.flush();
+  }
+
+  const currentTitle = pageTitleInput ? pageTitleInput.value : (currentPageData?.title || '');
+  const currentMarkdown = getMarkdown() || currentPageData?.content || '';
+
+  if (!currentMarkdown.trim() && !currentTitle.trim()) {
+    showToast(i18next.t('messages.emptyPageTranslate', { defaultValue: 'Die Seite ist leer und kann nicht übersetzt werden.' }), 'warning');
+    return;
+  }
+
+  const currentLang = i18next.language || 'de';
+  const targetLang = await translateModal(currentLang);
+  if (currentPageId !== requestedPageId) return;
+  if (!targetLang) return;
+
+  showToast(i18next.t('editor.translating', { defaultValue: 'Übersetze Seite mit KI…' }), 'info', 3000);
+  if (translatePageBtn) translatePageBtn.classList.add('loading');
+
+  try {
+    const result = await requestTranslation(currentTitle, currentMarkdown, targetLang);
+    if (currentPageId !== requestedPageId) return;
+    if (!result || (result.translatedContent === undefined && result.translatedTitle === undefined)) {
+      throw new Error('Invalid translation response');
+    }
+
+    enterTranslationMode(result.translatedTitle || currentTitle, result.translatedContent || '', targetLang);
+  } catch (err) {
+    console.error('[Translate] Translation failed:', err);
+    showToast(i18next.t('editor.translateError', { defaultValue: 'Fehler bei der KI-Übersetzung.' }) + ' ' + (err.message || ''), 'error');
+  } finally {
+    if (translatePageBtn) translatePageBtn.classList.remove('loading');
   }
 }
 

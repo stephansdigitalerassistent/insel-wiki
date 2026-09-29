@@ -11,8 +11,9 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
-import { EditorState, Selection, TextSelection } from '@tiptap/pm/state';
-import { handleListMergeKeydown } from './editor.js';
+import { Image } from '@tiptap/extension-image';
+import { EditorState, Selection, TextSelection, NodeSelection } from '@tiptap/pm/state';
+import { handleListMergeKeydown, handleShortcutKeydown, handleImageKeydown, findImagePos, deleteSelectedImage } from './editor.js';
 
 let passed = 0;
 let failed = 0;
@@ -65,7 +66,8 @@ const schema = getSchema([
   Table,
   TableRow,
   TableCell,
-  TableHeader
+  TableHeader,
+  Image.configure({ inline: true })
 ]);
 
 
@@ -596,6 +598,312 @@ test('Backspace at start of the only item in a list removes the emptied list', (
     types.push(node.type.name);
   });
   expect(types.includes('bulletList')).toBe(false);
+});
+
+console.log('\n⌨️ Shortcut Keymap (Ctrl+Shift+1..6 & Headings)');
+
+function createMockShortcutEditor() {
+  const calls = [];
+  const editor = {
+    chain() {
+      return {
+        focus() {
+          return {
+            toggleHeading(opts) {
+              calls.push({ name: 'toggleHeading', opts });
+              return { run() { return true; } };
+            },
+            setParagraph() {
+              calls.push({ name: 'setParagraph' });
+              return { run() { return true; } };
+            },
+            toggleCodeBlock() {
+              calls.push({ name: 'toggleCodeBlock' });
+              return { run() { return true; } };
+            },
+            setHorizontalRule() {
+              calls.push({ name: 'setHorizontalRule' });
+              return { run() { return true; } };
+            }
+          };
+        }
+      };
+    }
+  };
+  return { editor, calls };
+}
+
+test('Ctrl+Shift+1 triggers toggleHeading level 1', () => {
+  const { editor, calls } = createMockShortcutEditor();
+  let prevented = false;
+  const event = { ctrlKey: true, shiftKey: true, altKey: false, code: 'Digit1', preventDefault: () => { prevented = true; } };
+  const handled = handleShortcutKeydown(editor, event);
+  expect(handled).toBeTruthy();
+  expect(prevented).toBeTruthy();
+  expect(calls.length).toBe(1);
+  expect(calls[0].name).toBe('toggleHeading');
+  expect(calls[0].opts.level).toBe(1);
+});
+
+test('Ctrl+Shift+2 triggers toggleHeading level 2', () => {
+  const { editor, calls } = createMockShortcutEditor();
+  const event = { ctrlKey: true, shiftKey: true, altKey: false, code: 'Digit2', preventDefault: () => {} };
+  const handled = handleShortcutKeydown(editor, event);
+  expect(handled).toBeTruthy();
+  expect(calls.length).toBe(1);
+  expect(calls[0].name).toBe('toggleHeading');
+  expect(calls[0].opts.level).toBe(2);
+});
+
+test('Ctrl+Shift+3 triggers toggleHeading level 3', () => {
+  const { editor, calls } = createMockShortcutEditor();
+  const event = { ctrlKey: true, shiftKey: true, altKey: false, code: 'Digit3', preventDefault: () => {} };
+  const handled = handleShortcutKeydown(editor, event);
+  expect(handled).toBeTruthy();
+  expect(calls.length).toBe(1);
+  expect(calls[0].name).toBe('toggleHeading');
+  expect(calls[0].opts.level).toBe(3);
+});
+
+test('Cmd+Shift+1 on Mac triggers toggleHeading level 1', () => {
+  const { editor, calls } = createMockShortcutEditor();
+  const event = { metaKey: true, shiftKey: true, altKey: false, code: 'Digit1', preventDefault: () => {} };
+  const handled = handleShortcutKeydown(editor, event);
+  expect(handled).toBeTruthy();
+  expect(calls.length).toBe(1);
+  expect(calls[0].opts.level).toBe(1);
+});
+
+test('Ctrl+Shift+4..6 trigger heading levels 4, 5, 6 and 0 sets paragraph', () => {
+  for (let lvl = 4; lvl <= 6; lvl++) {
+    const { editor, calls } = createMockShortcutEditor();
+    const event = { ctrlKey: true, shiftKey: true, altKey: false, code: `Digit${lvl}`, preventDefault: () => {} };
+    const handled = handleShortcutKeydown(editor, event);
+    expect(handled).toBeTruthy();
+    expect(calls[0].opts.level).toBe(lvl);
+  }
+
+  const { editor: ed0, calls: calls0 } = createMockShortcutEditor();
+  const event0 = { ctrlKey: true, shiftKey: true, altKey: false, code: 'Digit0', preventDefault: () => {} };
+  const handled0 = handleShortcutKeydown(ed0, event0);
+  expect(handled0).toBeTruthy();
+  expect(calls0[0].name).toBe('setParagraph');
+});
+
+test('Ctrl+Alt+C still toggles a code block', () => {
+  const { editor, calls } = createMockShortcutEditor();
+  const eventCode = { ctrlKey: true, altKey: true, shiftKey: false, code: 'KeyC', preventDefault: () => {} };
+  expect(handleShortcutKeydown(editor, eventCode)).toBeTruthy();
+  expect(calls[0].name).toBe('toggleCodeBlock');
+});
+
+// Windows reports AltGr as Ctrl+Alt. On the Swiss German layout AltGr+2 is `@`
+// and AltGr+3 is `#`, so Ctrl+Alt+digit must fall through to the browser or
+// @mentions become impossible to type.
+test('Ctrl+Alt+digit is not intercepted, so AltGr characters still reach the editor', () => {
+  for (const digit of ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit0']) {
+    const { editor, calls } = createMockShortcutEditor();
+    let prevented = false;
+    const event = { ctrlKey: true, altKey: true, shiftKey: false, code: digit, preventDefault: () => { prevented = true; } };
+    expect(handleShortcutKeydown(editor, event)).toBeFalsy();
+    expect(prevented).toBeFalsy();
+    expect(calls.length).toBe(0);
+  }
+});
+
+test('Non-matching keys return false', () => {
+  const { editor, calls } = createMockShortcutEditor();
+  const event = { ctrlKey: false, shiftKey: false, altKey: false, code: 'KeyA' };
+  expect(handleShortcutKeydown(editor, event)).toBeFalsy();
+  expect(calls.length).toBe(0);
+});
+
+console.log('\n🖼️ Image Selection and Deletion Reaction Coverage');
+
+test('findImagePos resolves image position correctly', () => {
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.text('Hello '),
+      schema.node('image', { src: 'https://example.com/test.png' }),
+      schema.text(' world')
+    ])
+  ]);
+  expect(findImagePos(doc, 7)).toBe(7);
+  expect(findImagePos(doc, 8)).toBe(7);
+  expect(findImagePos(doc, 0)).toBe(null);
+  expect(findImagePos(doc, -1)).toBe(null);
+  expect(findImagePos(doc, 100)).toBe(null);
+});
+
+test('handleImageKeydown: Backspace and Delete remove selected image node (NodeSelection)', () => {
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.node('image', { src: 'https://example.com/screenshot.png' })
+    ])
+  ]);
+
+  // Backspace with NodeSelection
+  let state = EditorState.create({ doc, schema });
+  state = state.apply(state.tr.setSelection(NodeSelection.create(state.doc, 1)));
+  let prevented = false;
+  const view1 = {
+    get state() { return state; },
+    dispatch(tr) { state = state.apply(tr); }
+  };
+  const handled1 = handleImageKeydown(view1, { key: 'Backspace', preventDefault: () => { prevented = true; } });
+  expect(handled1).toBeTruthy();
+  expect(prevented).toBeTruthy();
+  expect(state.doc.toString()).toBe('doc(paragraph)');
+
+  // Delete with NodeSelection
+  let state2 = EditorState.create({ doc, schema });
+  state2 = state2.apply(state2.tr.setSelection(NodeSelection.create(state2.doc, 1)));
+  let prevented2 = false;
+  const view2 = {
+    get state() { return state2; },
+    dispatch(tr) { state2 = state2.apply(tr); }
+  };
+  const handled2 = handleImageKeydown(view2, { key: 'Delete', preventDefault: () => { prevented2 = true; } });
+  expect(handled2).toBeTruthy();
+  expect(prevented2).toBeTruthy();
+  expect(state2.doc.toString()).toBe('doc(paragraph)');
+});
+
+test('handleImageKeydown: Backspace removes image immediately preceding the caret (nodeBefore)', () => {
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.node('image', { src: 'https://example.com/screenshot.png' })
+    ])
+  ]);
+  // Caret at pos 2 (after the image)
+  let state = EditorState.create({ doc, schema, selection: TextSelection.create(doc, 2) });
+  let prevented = false;
+  const view = {
+    get state() { return state; },
+    dispatch(tr) { state = state.apply(tr); }
+  };
+  const handled = handleImageKeydown(view, { key: 'Backspace', preventDefault: () => { prevented = true; } });
+  expect(handled).toBeTruthy();
+  expect(prevented).toBeTruthy();
+  expect(state.doc.toString()).toBe('doc(paragraph)');
+});
+
+test('handleImageKeydown: Delete removes image immediately following the caret (nodeAfter)', () => {
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.node('image', { src: 'https://example.com/screenshot.png' })
+    ])
+  ]);
+  // Caret at pos 1 (before the image)
+  let state = EditorState.create({ doc, schema, selection: TextSelection.create(doc, 1) });
+  let prevented = false;
+  const view = {
+    get state() { return state; },
+    dispatch(tr) { state = state.apply(tr); }
+  };
+  const handled = handleImageKeydown(view, { key: 'Delete', preventDefault: () => { prevented = true; } });
+  expect(handled).toBeTruthy();
+  expect(prevented).toBeTruthy();
+  expect(state.doc.toString()).toBe('doc(paragraph)');
+});
+
+test('handleImageKeydown: Unrelated key does not delete image and returns false', () => {
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.node('image', { src: 'https://example.com/screenshot.png' })
+    ])
+  ]);
+  let state = EditorState.create({ doc, schema, selection: TextSelection.create(doc, 2) });
+  let prevented = false;
+  const view = {
+    get state() { return state; },
+    dispatch(tr) { state = state.apply(tr); }
+  };
+  const handled = handleImageKeydown(view, { key: 'Enter', preventDefault: () => { prevented = true; } });
+  expect(handled).toBeFalsy();
+  expect(prevented).toBeFalsy();
+  expect(state.doc.toString()).toBe('doc(paragraph(image))');
+});
+
+test('handleImageKeydown: Caret before image with Backspace falls through to default', () => {
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.node('image', { src: 'https://example.com/screenshot.png' })
+    ])
+  ]);
+  // Caret at pos 1 (before image). Backspace should NOT delete image behind it.
+  let state = EditorState.create({ doc, schema, selection: TextSelection.create(doc, 1) });
+  const view = {
+    get state() { return state; },
+    dispatch(tr) { state = state.apply(tr); }
+  };
+  const handled = handleImageKeydown(view, { key: 'Backspace' });
+  expect(handled).toBeFalsy();
+  expect(state.doc.toString()).toBe('doc(paragraph(image))');
+});
+
+test('handleImageKeydown: Caret after image with Delete falls through to default', () => {
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.node('image', { src: 'https://example.com/screenshot.png' })
+    ])
+  ]);
+  // Caret at pos 2 (after image). Delete should NOT delete image ahead of it.
+  let state = EditorState.create({ doc, schema, selection: TextSelection.create(doc, 2) });
+  const view = {
+    get state() { return state; },
+    dispatch(tr) { state = state.apply(tr); }
+  };
+  const handled = handleImageKeydown(view, { key: 'Delete' });
+  expect(handled).toBeFalsy();
+  expect(state.doc.toString()).toBe('doc(paragraph(image))');
+});
+
+// y-prosemirror rebuilds the pre-transaction selection after every observed
+// change, and its NodeSelection branch is unguarded. Deleting the very node that
+// selection points at is what threw "Cannot read properties of null (reading
+// 'nodeSize')" on every image delete, so the selection must be collapsed in a
+// separate transaction first.
+test('deleting a selected image collapses the NodeSelection before removing it', () => {
+  const doc = schema.node('doc', null, [
+    schema.node('paragraph', null, [
+      schema.text('as soon'),
+      schema.node('image', { src: 'https://example.com/screenshot.png' })
+    ])
+  ]);
+
+  let state = EditorState.create({ doc, schema });
+  state = state.apply(state.tr.setSelection(NodeSelection.create(state.doc, 8)));
+  expect(state.selection instanceof NodeSelection).toBeTruthy();
+
+  const seen = [];
+  const view = {
+    get state() { return state; },
+    dispatch(tr) {
+      seen.push(state.selection.constructor.name);
+      state = state.apply(tr);
+    }
+  };
+
+  const handled = handleImageKeydown(view, { key: 'Backspace', preventDefault: () => {} });
+  expect(handled).toBeTruthy();
+
+  // Two dispatches: collapse, then delete. The delete must not be preceded by a
+  // NodeSelection.
+  expect(seen.length).toBe(2);
+  expect(seen[0]).toBe('NodeSelection');
+  expect(seen[1]).toBe('TextSelection');
+
+  expect(state.doc.toString()).toBe('doc(paragraph("as soon"))');
+  expect(state.selection instanceof NodeSelection).toBeFalsy();
+});
+
+test('deleteSelectedImage returns false when the selection is not an image', () => {
+  const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text('kein Bild')])]);
+  let state = EditorState.create({ doc, schema });
+  const view = { get state() { return state; }, dispatch(tr) { state = state.apply(tr); } };
+  expect(deleteSelectedImage(view)).toBeFalsy();
+  expect(state.doc.toString()).toBe('doc(paragraph("kein Bild"))');
 });
 
 console.log(`\n────────────────────────────────────────\nResults: ${passed} passed, ${failed} failed`);

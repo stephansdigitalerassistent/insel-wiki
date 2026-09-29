@@ -542,6 +542,26 @@ export async function getUsers() {
 }
 
 /**
+ * Subscribe to all users in real-time
+ * @param {Function} callback Callback receiving array of user objects
+ * @returns {Function} Unsubscribe function
+ */
+export function subscribeToUsers(callback) {
+  try {
+    const usersRef = collection(db, 'users');
+    return onSnapshot(usersRef, (snapshot) => {
+      const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      callback(users);
+    }, (err) => {
+      console.warn('[Firestore] Failed to subscribe to users:', err.message || err);
+    });
+  } catch (err) {
+    console.warn('[Firestore] Error setting up users subscription:', err.message || err);
+    return () => {};
+  }
+}
+
+/**
  * Ensure a page exists (e.g. root test page)
  */
 export async function ensurePageExists(pageId, title = 'Tests', parentId = null) {

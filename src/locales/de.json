@@ -99,7 +99,8 @@
     "newSubpage": "Neue Unterseite",
     "moveUp": "Nach oben",
     "moveDown": "Nach unten",
-    "editAcls": "Zugriff verwalten"
+    "editAcls": "Zugriff verwalten",
+    "pageActions": "Seitenaktionen"
   },
   "editor": {
     "markdownToggle": "Raw MD bearbeiten",
@@ -143,7 +144,21 @@
       "auth": "Sitzung abgelaufen oder nicht autorisiert — bitte neu anmelden.",
       "recorder": "Audioaufnahme konnte nicht gestartet werden.",
       "backend": "Spracherkennungs-Dienst nicht erreichbar."
-    }
+    },
+    "deleteImage": "Bild löschen",
+    "openImage": "Bild in neuem Tab öffnen",
+    "presentationMode": "Präsentieren (Alt+P)",
+    "presentationModeShort": "Präsentieren",
+    "showOriginal": "Original anzeigen",
+    "targetLanguage": "Zielsprache",
+    "translateButton": "Übersetzen",
+    "translateError": "Fehler bei der KI-Übersetzung.",
+    "translateModalHint": "Wählen Sie die Zielsprache. Die Übersetzung wird als schreibgeschützte Ansicht angezeigt und ändert nicht das Original.",
+    "translateModalTitle": "Seite mit KI übersetzen",
+    "translatePage": "Seite mit KI übersetzen",
+    "translating": "Übersetze Seite mit KI…",
+    "translationBanner": "<strong>KI-Übersetzung ({{language}})</strong> — Nicht bearbeitbar",
+    "translationStatus": "KI-Übersetzung (Nur Leseansicht)"
   },
   "table": {
     "addRowAbove": "Zeile oberhalb einfügen",
@@ -205,7 +220,8 @@
     "horizontalRule": "Trennlinie",
     "undo": "Rückgängig",
     "redo": "Wiederholen",
-    "save": "Speichern"
+    "save": "Speichern",
+    "presentation": "Präsentationsmodus"
   },
   "messages": {
     "markdownWarningTitle": "Warnung: Komplexe Elemente",
@@ -242,7 +258,8 @@
     "deletePermanentConfirm": "Dies kann nicht rückgängig gemacht werden.",
     "newSubpageTitle": "Titel der neuen Unterseite:",
     "newSubpagePlaceholder": "Titel eingeben...",
-    "imageUploadError": "Fehler beim Hochladen des Bildes: "
+    "imageUploadError": "Fehler beim Hochladen des Bildes: ",
+    "emptyPageTranslate": "Die Seite ist leer und kann nicht übersetzt werden."
   },
   "profile": {
     "title": "Profil bearbeiten",
@@ -286,5 +303,15 @@
       "openPreview": "Vorschau öffnen",
       "openPr": "Änderungen ansehen"
     }
+  },
+  "languages": {
+    "de": "Deutsch",
+    "en": "Englisch",
+    "fr": "Französisch",
+    "it": "Italienisch"
+  },
+  "pwa": {
+    "updateAvailable": "Neue Version verfügbar.",
+    "reload": "Neu laden"
   }
 }

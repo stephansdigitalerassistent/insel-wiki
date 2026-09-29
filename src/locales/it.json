@@ -99,7 +99,8 @@
     "newSubpage": "Nuova sottopagina",
     "moveUp": "Sposta su",
     "moveDown": "Sposta giù",
-    "editAcls": "Gestisci accesso"
+    "editAcls": "Gestisci accesso",
+    "pageActions": "Azioni pagina"
   },
   "editor": {
     "markdownToggle": "Modifica Markdown non elaborato",
@@ -143,7 +144,21 @@
       "auth": "Sessione scaduta o non autorizzata — effettua nuovamente l'accesso.",
       "recorder": "Impossibile avviare la registrazione audio.",
       "backend": "Servizio di riconoscimento vocale non disponibile."
-    }
+    },
+    "deleteImage": "Elimina immagine",
+    "openImage": "Apri immagine in una nuova scheda",
+    "presentationMode": "Presenta (Alt+P)",
+    "presentationModeShort": "Presenta",
+    "showOriginal": "Mostra originale",
+    "targetLanguage": "Lingua di destinazione",
+    "translateButton": "Traduci",
+    "translateError": "Errore durante la traduzione IA.",
+    "translateModalHint": "Seleziona la lingua di destinazione. La traduzione verrà visualizzata in sola lettura e non modifica l'originale.",
+    "translateModalTitle": "Traduci la pagina con l'IA",
+    "translatePage": "Traduci la pagina con l'IA",
+    "translating": "Traduzione della pagina con l'IA…",
+    "translationBanner": "<strong>Traduzione IA ({{language}})</strong> — Anteprima non modificabile",
+    "translationStatus": "Traduzione IA (Sola lettura)"
   },
   "table": {
     "addRowAbove": "Inserisci riga sopra",
@@ -205,7 +220,8 @@
     "horizontalRule": "Linea orizzontale",
     "undo": "Annulla",
     "redo": "Ripristina",
-    "save": "Salva"
+    "save": "Salva",
+    "presentation": "Modalità presentazione"
   },
   "messages": {
     "markdownWarningTitle": "Attenzione: Elementi complessi",
@@ -242,7 +258,8 @@
     "deletePermanentConfirm": "L'azione non può essere annullata.",
     "newSubpageTitle": "Titolo della nuova sottopagina:",
     "newSubpagePlaceholder": "Inserisci titolo...",
-    "imageUploadError": "Errore durante il caricamento dell'immagine: "
+    "imageUploadError": "Errore durante il caricamento dell'immagine: ",
+    "emptyPageTranslate": "La pagina è vuota e non può essere tradotta."
   },
   "profile": {
     "title": "Modifica profilo",
@@ -286,5 +303,15 @@
       "openPreview": "Apri l'anteprima",
       "openPr": "Vedi le modifiche"
     }
+  },
+  "languages": {
+    "de": "Tedesco",
+    "en": "Inglese",
+    "fr": "Francese",
+    "it": "Italiano"
+  },
+  "pwa": {
+    "updateAvailable": "È disponibile una nuova versione.",
+    "reload": "Ricarica"
   }
 }

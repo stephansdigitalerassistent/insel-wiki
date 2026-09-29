@@ -141,6 +141,10 @@ export class FirestoreYjsProvider {
     this.onLoadComplete = null;
     /** @type {boolean} */
     this.hasYjsState = false;
+    /** @type {boolean} Whether Yjs data (state or updates) exists in Firestore or locally. */
+    this.hasYjsData = false;
+    /** @type {boolean} Whether initial loading from Firestore has completed. */
+    this.isLoaded = false;
     /** @type {number} */
     this.localUpdateCount = 0;
     /** @type {number} */
@@ -259,6 +263,9 @@ export class FirestoreYjsProvider {
    */
   setLoadCallback(callback) {
     this.onLoadComplete = callback;
+    if (this.isLoaded && this.onLoadComplete) {
+      this.onLoadComplete(this.hasYjsData);
+    }
   }
 
   /**
@@ -412,12 +419,17 @@ export class FirestoreYjsProvider {
         setTimeout(() => this.compact(), 1000);
       }
 
+      this.hasYjsData = Boolean(this.hasYjsState || !pendingUpdates.empty);
+      this.isLoaded = true;
+
       // Inform editor that binary state load is complete
       if (this.onLoadComplete) {
-        this.onLoadComplete(this.hasYjsState || !pendingUpdates.empty);
+        this.onLoadComplete(this.hasYjsData);
       }
     } catch (err) {
       console.error('[FirestoreYjs] init error:', err);
+      this.isLoaded = true;
+      this.hasYjsData = false;
       // Even on failure, we signal completion so the UI can fallback to markdown content
       if (this.onLoadComplete) this.onLoadComplete(false);
     }
@@ -468,6 +480,7 @@ export class FirestoreYjsProvider {
    */
   _setupUpdateListener() {
     this.ydoc.on('update', (update, origin) => {
+      this.hasYjsData = true;
       // Skip self-applied (Firestore replay) and y-indexeddb-applied (local cache replay) updates.
       if (origin === this) return;
       if (this.persistence && origin === this.persistence) return;
@@ -517,6 +530,7 @@ export class FirestoreYjsProvider {
         if (change.type === 'added') {
           const updateData = change.doc.data();
           if (updateData.clientId !== this.clientId && updateData.update) {
+            this.hasYjsData = true;
             if (updateData.userEmail || updateData.author) {
               this.recordContributor(updateData.userEmail || updateData.author, updateData.userName);
             }
@@ -614,10 +628,14 @@ export class FirestoreYjsProvider {
     try {
       const stateSnap = await getDocs(query(collection(db, 'pages', this.pageId, 'yjs_state'), limit(1)));
       if (!stateSnap.empty && stateSnap.docs[0].data().state) {
+        this.hasYjsData = true;
         const stateArr = stateSnap.docs[0].data().state.toUint8Array();
         Y.applyUpdate(this.ydoc, stateArr, this);
       }
       const pending = await getDocs(query(this.updatesRef, orderBy('timestamp', 'asc')));
+      if (!pending.empty) {
+        this.hasYjsData = true;
+      }
       pending.forEach(change => {
         const updateData = change.data();
         if (updateData.update && updateData.clientId !== this.clientId) {

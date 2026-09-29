@@ -1102,6 +1102,119 @@ export function tableModal(defaultRows = 3, defaultCols = 3, defaultHeader = tru
 }
 
 /**
+ * Modal to select a target language for AI page translation.
+ * @param {string} currentLang Current language code (e.g. 'de')
+ * @returns {Promise<string|null>} Resolves with chosen language code or null if cancelled.
+ */
+export function translateModal(currentLang = 'de') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-box';
+
+    const header = document.createElement('h3');
+    header.className = 'modal-title';
+    header.textContent = i18next.t('editor.translateModalTitle', { defaultValue: 'Seite mit KI übersetzen' });
+
+    const desc = document.createElement('p');
+    desc.className = 'modal-message';
+    desc.style.marginBottom = '1.25rem';
+    desc.textContent = i18next.t('editor.translateModalHint', {
+      defaultValue: 'Wählen Sie die Zielsprache. Die Übersetzung wird als schreibgeschützte Ansicht angezeigt und ändert nicht das Original.'
+    });
+
+    const formGroup = document.createElement('div');
+    formGroup.className = 'form-group';
+    formGroup.style.marginBottom = '1.5rem';
+
+    const label = document.createElement('label');
+    label.textContent = i18next.t('editor.targetLanguage', { defaultValue: 'Zielsprache' });
+    label.setAttribute('for', 'translate-target-lang');
+
+    const select = document.createElement('select');
+    select.id = 'translate-target-lang';
+    select.className = 'modal-input';
+
+    const languages = [
+      { code: 'de', name: i18next.t('languages.de', { defaultValue: 'Deutsch' }) + ' (DE)' },
+      { code: 'en', name: i18next.t('languages.en', { defaultValue: 'English' }) + ' (EN)' },
+      { code: 'fr', name: i18next.t('languages.fr', { defaultValue: 'Français' }) + ' (FR)' },
+      { code: 'it', name: i18next.t('languages.it', { defaultValue: 'Italiano' }) + ' (IT)' }
+    ];
+
+    const defaultTarget = currentLang === 'de' ? 'en' : (currentLang || 'en');
+
+    languages.forEach((lang) => {
+      const opt = document.createElement('option');
+      opt.value = lang.code;
+      opt.textContent = lang.name;
+      if (lang.code === defaultTarget) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    });
+
+    formGroup.appendChild(label);
+    formGroup.appendChild(select);
+
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = i18next.t('common.cancel', { defaultValue: 'Abbrechen' });
+
+    const submitBtn = document.createElement('button');
+    submitBtn.id = 'translate-modal-submit';
+    submitBtn.className = 'btn btn-primary';
+    submitBtn.textContent = i18next.t('editor.translateButton', { defaultValue: 'Übersetzen' });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(submitBtn);
+
+    modal.appendChild(header);
+    modal.appendChild(desc);
+    modal.appendChild(formGroup);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    setTimeout(() => select.focus(), 10);
+
+    const cleanup = () => {
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
+    };
+
+    const submit = () => {
+      const selected = select.value;
+      cleanup();
+      resolve(selected);
+    };
+
+    const cancel = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    submitBtn.addEventListener('click', submit);
+    cancelBtn.addEventListener('click', cancel);
+
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') cancel();
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cancel();
+    });
+  });
+}
+
+/**
  * Multi-choice modal warning the user about complex elements (tables, comments, mentions)
  * before entering raw Markdown editing mode.
  *
