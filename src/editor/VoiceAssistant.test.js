@@ -334,7 +334,8 @@ test('VoiceAssistant.start succeeds and initiates WebSocket session', async () =
   // Check WebSocket was created
   expect(MockWebSocket.instances.length).toBe(1);
   const ws = MockWebSocket.instances[0];
-  expect(ws.url).toBe('ws://localhost:3000/api/transcribe');
+  // Cloud Run directly: the Hosting rewrite cannot carry a WebSocket upgrade.
+  expect(ws.url).toBe('wss://transcribe-485637054444.europe-west1.run.app/api/transcribe');
 
   // Fast-forward connection timer to trigger onopen
   runTimers();
