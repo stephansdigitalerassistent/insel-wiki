@@ -42,7 +42,8 @@ const speech = require('@google-cloud/speech');
 admin.initializeApp();
 
 const PORT = process.env.PORT || 8080;
-const DEFAULT_LANG = 'de-CH';
+// chirp_2 has no de-CH in europe-west4 (INVALID_ARGUMENT); the client sends de-DE anyway.
+const DEFAULT_LANG = 'de-DE';
 // A client that never sends the auth frame is dropped after this long.
 const AUTH_TIMEOUT_MS = 5000;
 
