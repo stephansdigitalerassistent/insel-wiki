@@ -84,10 +84,13 @@ const COMMANDS = {
 };
 
 /**
- * Backend WebSocket path — served same-origin via the Hosting `/api` rewrite.
+ * Backend WebSocket URL — the Cloud Run service itself, NOT the same-origin
+ * `/api/transcribe` Hosting rewrite: Firebase Hosting strips the Upgrade
+ * header, so a WebSocket through it gets a plain 200 and never opens
+ * (see 7a29d72; fdb246f reverted this and broke dictation until 2026-09-29).
  * @type {string}
  */
-const TRANSCRIBE_PATH = '/api/transcribe';
+const TRANSCRIBE_URL = 'wss://transcribe-485637054444.europe-west1.run.app/api/transcribe';
 /**
  * MediaRecorder emits a WebM/Opus blob this often; each is streamed as it lands.
  * @type {number}
@@ -263,8 +266,7 @@ export class VoiceAssistant {
     // start()/stop() may have changed state while the token was being fetched.
     if (!this.isRecording) return;
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}${TRANSCRIBE_PATH}`;
+    const wsUrl = TRANSCRIBE_URL;
     let ws;
     try {
       ws = new WebSocket(wsUrl);
