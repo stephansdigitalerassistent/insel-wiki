@@ -281,6 +281,153 @@ Swiss German: 'ß' becomes 'ss'.`;
   }
 );
 
+export const translateContent = onRequest(
+  {
+    region: 'europe-west1',
+    timeoutSeconds: 300,
+  },
+  async (req, res) => {
+    // 1. Verify Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).send('Unauthorized: Missing token');
+      return;
+    }
+    const token = authHeader.split('Bearer ')[1];
+    if (!token || !token.trim()) {
+      res.status(401).send('Unauthorized: Missing token');
+      return;
+    }
+
+    let decodedToken;
+    try {
+      decodedToken = await getAuth().verifyIdToken(token);
+    } catch (err) {
+      logger.error('[translateContent] Token verification failed', err);
+      res.status(401).send('Unauthorized: Invalid token');
+      return;
+    }
+
+    const email = decodedToken?.email;
+
+    // 2. Validate email domain (gate)
+    const isBot = email && (email === 'stephansdigitalassistent+wiki@gmail.com' || email === 'stephansdigitalassistent@gmail.com');
+    const isInsel = email && email.endsWith('@insel.ch');
+
+    if (!isInsel && !isBot) {
+      res.status(403).send('Forbidden: Unauthorized email domain');
+      return;
+    }
+
+    try {
+      // 3. Process parameters
+      const { title = '', content = '', targetLanguage = 'en' } = req.body || {};
+      const safeTitle = typeof title === 'string' ? title : '';
+      const safeContent = typeof content === 'string' ? content : '';
+
+      if (!safeTitle.trim() && !safeContent.trim()) {
+        res.status(400).send('Bad Request: Nothing to translate');
+        return;
+      }
+
+      if (safeContent.length > 100000) {
+        res.status(413).send('Payload Too Large: Page exceeds translation limit');
+        return;
+      }
+
+      const supportedLanguages = ['de', 'en', 'fr', 'it'];
+      if (!supportedLanguages.includes(targetLanguage)) {
+        res.status(400).send('Bad Request: Unsupported target language');
+        return;
+      }
+
+      // 4. Retrieve API key
+      const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        res.status(500).send('Internal Server Error: Gemini API key not configured');
+        return;
+      }
+
+      const model = 'gemini-3.5-flash-lite';
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+      const targetLangName = {
+        de: 'German (Swiss German conventions: replace ß with ss, keep umlauts ä, ö, ü)',
+        en: 'English',
+        fr: 'French',
+        it: 'Italian'
+      }[targetLanguage];
+
+      const systemPrompt = `You are a professional translator for the Inselspital Bern wiki.
+Translate the provided title and markdown content accurately and fluently into ${targetLangName}.
+Preserve all Markdown formatting precisely, including headers (#, ##, ###), bold (**), italic (*), code blocks, inline code, links, tables, bullet points, checklists (- [ ] / - [x]), and @mentions.
+If German is the target language, use Swiss German (replace 'ß' with 'ss') and keep German umlauts (ä, ö, ü).
+Return ONLY a valid JSON object matching this schema:
+{
+  "translatedTitle": "translated title string",
+  "translatedContent": "translated markdown content string"
+}`;
+
+      const geminiRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Referer': 'https://insel-wiki.web.app/'
+        },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: systemPrompt }]
+          },
+          contents: [{
+            parts: [{ text: JSON.stringify({ title: safeTitle, content: safeContent }) }]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 65536,
+            responseMimeType: "application/json"
+          }
+        })
+      });
+
+      if (!geminiRes.ok) {
+        const errorBody = await geminiRes.text().catch(() => '');
+        logger.error(`[translateContent] Gemini API error: ${geminiRes.status}`, errorBody);
+        res.status(502).send(`Bad Gateway: Gemini API returned ${geminiRes.status}`);
+        return;
+      }
+
+      const data = await geminiRes.json();
+      const finishReason = data?.candidates?.[0]?.finishReason;
+      if (finishReason !== 'STOP') {
+        logger.error(`[translateContent] Translation truncated (finishReason: ${finishReason})`);
+        res.status(502).send(`Bad Gateway: Translation truncated (finishReason: ${finishReason})`);
+        return;
+      }
+
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!rawText) {
+        res.status(502).send('Bad Gateway: No text returned from Gemini API');
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(rawText);
+        res.json({
+          translatedTitle: parsed.translatedTitle ?? safeTitle,
+          translatedContent: parsed.translatedContent ?? safeContent
+        });
+      } catch (parseErr) {
+        logger.error('[translateContent] JSON parse error', parseErr);
+        res.status(502).send('Bad Gateway: Malformed translation response');
+      }
+    } catch (err) {
+      logger.error('[translateContent] Error calling Gemini', err);
+      res.status(500).send('Internal Server Error');
+    }
+  }
+);
+
 export const searchPages = onRequest(
   {
     region: 'europe-west1',
