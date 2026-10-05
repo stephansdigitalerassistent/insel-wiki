@@ -972,6 +972,18 @@ table tr:hover td {
   margin-top: 12px; font-size: 0.78rem; color: var(--text-muted); text-align: center; line-height: 1.4;
 }
 
+.auth-hint-top {
+  margin-top: 0; margin-bottom: 20px;
+}
+
+.auth-link-btn {
+  border: none;
+}
+
+.form-group input.auth-code-input {
+  text-align: center; font-family: var(--font-mono, monospace); font-size: 1.5rem; letter-spacing: 0.4em; font-variant-numeric: tabular-nums;
+}
+
 /* --- Trash / Papierkorb --- */
 .trash-section {
   border-top: 1px solid var(--border); margin-top: 4px;

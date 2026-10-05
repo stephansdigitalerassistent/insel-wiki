@@ -42,6 +42,10 @@ export async function login(page, user, pass) {
       // Ensure overlay is visible before interacting
       await expect(overlay).toBeVisible({ timeout: actionTimeout });
       
+      // Password login sits behind a toggle since the email-code flow became the default.
+      const showPassword = page.locator('#show-password-btn');
+      if (await showPassword.isVisible()) await showPassword.click();
+
       await page.fill('#login-email', user);
       await page.fill('#login-password', pass);
       await page.click('#login-btn');

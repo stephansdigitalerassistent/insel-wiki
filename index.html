@@ -26,81 +26,56 @@
         <h1>Insel-Wiki</h1>
       </div>
 
-      <!-- Login Form -->
-      <form id="login-form" class="auth-form">
-        <h2 data-i18n="auth.login.title">Anmelden</h2>
+      <!-- Step 1: email → we mail a one-time code (sign-up and sign-in are the same flow) -->
+      <form id="code-request-form" class="auth-form" novalidate>
+        <h2 data-i18n="auth.code.title">Anmelden oder registrieren</h2>
+        <p class="auth-hint auth-hint-top" data-i18n="auth.code.hint">
+          Geben Sie Ihre @insel.ch Adresse ein. Wir senden Ihnen einen 6-stelligen Code — ein Passwort brauchen Sie nicht.
+        </p>
+        <div class="form-group">
+          <label for="code-email" data-i18n="auth.login.emailLabel">E-Mail (@insel.ch)</label>
+          <input type="email" id="code-email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" data-i18n="[placeholder]auth.login.emailPlaceholder" placeholder="vorname.name@insel.ch" required />
+        </div>
+        <button type="submit" class="btn btn-primary" id="code-request-btn" data-i18n="auth.code.send">Code senden</button>
+        <div class="auth-error hidden" id="code-request-error" role="alert"></div>
+        <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
+        <button type="button" id="show-password-btn" class="btn btn-outline auth-link-btn" data-i18n="auth.code.usePassword">
+          Mit Passwort anmelden
+        </button>
+      </form>
+
+      <!-- Step 2: type the code back -->
+      <form id="code-verify-form" class="auth-form hidden" novalidate>
+        <h2 data-i18n="auth.code.enterTitle">Code eingeben</h2>
+        <p class="auth-hint auth-hint-top" id="code-sent-to"></p>
+        <div class="form-group">
+          <label for="code-input" data-i18n="auth.code.codeLabel">6-stelliger Code</label>
+          <input type="text" id="code-input" class="auth-code-input" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="7" placeholder="••••••" required />
+        </div>
+        <button type="submit" class="btn btn-primary" id="code-verify-btn" data-i18n="auth.code.verify">Anmelden</button>
+        <div class="auth-error hidden" id="code-verify-error" role="alert"></div>
+        <p class="auth-hint" data-i18n="auth.code.spamHint">Nichts angekommen? Prüfen Sie den Junk-Ordner.</p>
+        <button type="button" id="code-resend-btn" class="btn btn-outline" style="margin-top: 12px;" data-i18n="auth.code.resend">Code erneut senden</button>
+        <button type="button" id="code-change-email-btn" class="btn btn-outline auth-link-btn" style="margin-top: 8px;" data-i18n="auth.code.changeEmail">Andere E-Mail-Adresse verwenden</button>
+      </form>
+
+      <!-- Password sign-in (accounts created before the code flow) -->
+      <form id="login-form" class="auth-form hidden">
+        <h2 data-i18n="auth.login.title">Mit Passwort anmelden</h2>
         <div class="form-group">
           <label for="login-email" data-i18n="auth.login.emailLabel">E-Mail (@insel.ch)</label>
-          <input type="email" id="login-email" data-i18n="[placeholder]auth.login.emailPlaceholder" placeholder="vorname.name@insel.ch" required />
+          <input type="email" id="login-email" autocomplete="username" data-i18n="[placeholder]auth.login.emailPlaceholder" placeholder="vorname.name@insel.ch" required />
         </div>
         <div class="form-group">
           <label for="login-password" data-i18n="auth.login.passwordLabel">Passwort</label>
-          <input type="password" id="login-password" data-i18n="[placeholder]auth.login.passwordPlaceholder" placeholder="Ihr Passwort" required />
+          <input type="password" id="login-password" autocomplete="current-password" data-i18n="[placeholder]auth.login.passwordPlaceholder" placeholder="Ihr Passwort" required />
         </div>
         <button type="submit" class="btn btn-primary" id="login-btn" data-i18n="auth.login.submit">Anmelden</button>
-        <div class="auth-error hidden" id="login-error"></div>
+        <div class="auth-error hidden" id="login-error" role="alert"></div>
+        <p class="auth-hint" data-i18n="auth.login.forgotHint">Passwort vergessen? Melden Sie sich einfach mit einem Code per E-Mail an.</p>
         <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
-        <button type="button" id="show-register-btn" class="btn btn-outline" data-i18n="auth.login.register">
-          Neuen Account erstellen
-        </button>
-        <button type="button" id="show-forgot-btn" class="btn btn-outline" style="border: none; margin-top: 8px;" data-i18n="auth.login.forgotPassword">
-          Passwort vergessen?
-        </button>
-      </form>
-
-      <!-- Register Form -->
-      <form id="register-form" class="auth-form hidden">
-        <h2 data-i18n="auth.register.title">Registrieren</h2>
-        <p class="auth-hint" style="text-align: center; margin-bottom: 20px;" data-i18n="auth.register.hint">
-          Geben Sie Ihre @insel.ch Adresse und ein gewünschtes Passwort ein. Es wird eine E-Mail vorbereitet — senden Sie diese von Ihrem @insel.ch Postfach ab.
-        </p>
-        <div class="form-group">
-          <label for="register-email" data-i18n="auth.register.emailLabel">E-Mail (@insel.ch)</label>
-          <input type="email" id="register-email" data-i18n="[placeholder]auth.login.emailPlaceholder" placeholder="vorname.name@insel.ch" required />
-        </div>
-        <div class="form-group">
-          <label for="register-password" data-i18n="auth.register.passwordLabel">Gewünschtes Passwort</label>
-          <input type="password" id="register-password" data-i18n="[placeholder]auth.register.passwordPlaceholder" placeholder="Mindestens 6 Zeichen" required minlength="6" />
-        </div>
-        <button type="submit" class="btn btn-primary" id="register-btn" data-i18n="auth.register.submit">Registrieren</button>
-        <div class="auth-error hidden" id="register-error"></div>
-        <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
-        <button type="button" id="show-login-btn" class="btn btn-outline" style="border: none;" data-i18n="auth.register.backToLogin">
-          Zurück zur Anmeldung
-        </button>
-      </form>
-
-      <!-- Activation Panel (shown after a successful registration) -->
-      <div id="activation-panel" class="auth-form hidden">
-        <h2 data-i18n="auth.activation.title">Letzter Schritt: Account aktivieren</h2>
-        <p class="auth-hint" style="text-align: center; margin-bottom: 16px;" data-i18n-html="auth.activation.hint">
-          Senden Sie eine leere E-Mail von Ihrem <strong>@insel.ch</strong> Postfach an die folgende Adresse, um Ihren Account zu aktivieren:
-        </p>
-        <div style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.04); border-radius: 6px; font-family: monospace; font-size: 13px; word-break: break-all;">
-          <div><strong data-i18n="auth.activation.to">An:</strong> <span id="activation-recipient"></span></div>
-          <div style="margin-top: 4px;"><strong data-i18n="auth.activation.subject">Betreff:</strong> <span id="activation-subject"></span></div>
-        </div>
-        <a id="activation-mailto-btn" class="btn btn-primary" href="#" style="display: block; text-align: center; text-decoration: none;" data-i18n="auth.activation.openEmail">E-Mail-Programm öffnen</a>
-        <button type="button" id="activation-copy-btn" class="btn btn-outline" style="margin-top: 8px;" data-i18n="auth.activation.copyDetails">Details in die Zwischenablage kopieren</button>
-        <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
-        <button type="button" id="activation-back-btn" class="btn btn-outline" style="border: none;" data-i18n="auth.activation.backToLogin">Zurück zur Anmeldung</button>
-      </div>
-
-      <!-- Forgot Password Form -->
-      <form id="forgot-form" class="auth-form hidden">
-        <h2 data-i18n="auth.forgot.title">Passwort zurücksetzen</h2>
-        <p class="auth-hint" style="text-align: center; margin-bottom: 20px;" data-i18n="auth.forgot.hint">
-          Geben Sie Ihre @insel.ch Adresse ein. Es wird eine E-Mail vorbereitet — senden Sie diese von Ihrem @insel.ch Postfach ab, um das Zurücksetzen anzufordern.
-        </p>
-        <div class="form-group">
-          <label for="forgot-email" data-i18n="auth.forgot.emailLabel">E-Mail (@insel.ch)</label>
-          <input type="email" id="forgot-email" data-i18n="[placeholder]auth.login.emailPlaceholder" placeholder="vorname.name@insel.ch" required />
-        </div>
-        <button type="submit" class="btn btn-primary" id="forgot-btn" data-i18n="auth.forgot.submit">Zurücksetzen anfordern</button>
-        <div class="auth-error hidden" id="forgot-error"></div>
-        <div class="auth-divider"><span data-i18n="common.or">oder</span></div>
-        <button type="button" id="show-login-from-forgot-btn" class="btn btn-outline" style="border: none;" data-i18n="auth.forgot.backToLogin">
-          Zurück zur Anmeldung
+        <button type="button" id="show-code-btn" class="btn btn-outline auth-link-btn" data-i18n="auth.login.useCode">
+          Mit Code per E-Mail anmelden
         </button>
       </form>
     </div>

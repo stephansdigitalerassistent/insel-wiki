@@ -50,6 +50,14 @@ service cloud.firestore {
       allow read, write, delete: if isBot();
     }
 
+    // Outgoing sign-in code mails. Written by the requestLoginCode function
+    // (Admin SDK); WikiBot claims, sends and deletes them. Holds plaintext
+    // codes, so nobody else may read it. The function's own bookkeeping
+    // (login_codes, login_code_stats) is matched by no rule at all.
+    match /mail_queue/{mailId} {
+      allow read, update, delete: if isBot();
+    }
+
     match /archive/{pageId} {
       // Backend bot has full access to manage the archive
       allow read, write, delete: if isBot();

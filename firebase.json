@@ -61,6 +61,16 @@
         "region": "europe-west1"
       },
       {
+        "source": "/api/requestLoginCode",
+        "function": "requestLoginCode",
+        "region": "europe-west1"
+      },
+      {
+        "source": "/api/verifyLoginCode",
+        "function": "verifyLoginCode",
+        "region": "europe-west1"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

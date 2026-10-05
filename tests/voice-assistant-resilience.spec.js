@@ -16,6 +16,8 @@ async function loginAndCreatePage(page) {
 
   const authOverlay = page.locator('#auth-overlay');
   if (await authOverlay.isVisible()) {
+    const showPassword = page.locator('#show-password-btn');
+    if (await showPassword.isVisible()) await showPassword.click();
     await page.fill('#login-email', 'test.user@insel.ch');
     await page.fill('#login-password', 'InselWikiTest2026!');
     await page.click('#login-btn');

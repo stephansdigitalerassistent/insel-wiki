@@ -29,42 +29,51 @@
   "auth": {
     "validation": {
       "passwordLength": "Das Passwort muss mindestens 10 Zeichen lang sein.",
-      "passwordComplexity": "Das Passwort muss Grossbuchstaben, Kleinbuchstaben und Ziffern enthalten."
+      "passwordComplexity": "Das Passwort muss Grossbuchstaben, Kleinbuchstaben und Ziffern enthalten.",
+      "onlyInsel": "Nur @insel.ch E-Mail-Adressen sind zugelassen.",
+      "loginFailed": "Anmeldung fehlgeschlagen. Bitte prüfen Sie E-Mail und Passwort.",
+      "notActivated": "Dieser Account ist noch nicht aktiviert. Melden Sie sich einmal mit einem Code per E-Mail an, um ihn zu aktivieren."
     },
     "login": {
-      "title": "Anmelden",
+      "title": "Mit Passwort anmelden",
       "emailLabel": "E-Mail (@insel.ch)",
       "emailPlaceholder": "vorname.name@insel.ch",
       "passwordLabel": "Passwort",
       "passwordPlaceholder": "Ihr Passwort",
       "submit": "Anmelden",
-      "register": "Neuen Account erstellen",
-      "forgotPassword": "Passwort vergessen?"
+      "useCode": "Mit Code per E-Mail anmelden",
+      "forgotHint": "Passwort vergessen? Melden Sie sich einfach mit einem Code per E-Mail an."
     },
-    "register": {
-      "title": "Registrieren",
-      "hint": "Geben Sie Ihre @insel.ch Adresse und ein gewünschtes Passwort ein. Es wird eine E-Mail vorbereitet — senden Sie diese von Ihrem @insel.ch Postfach ab.",
-      "emailLabel": "E-Mail (@insel.ch)",
-      "passwordLabel": "Gewünschtes Passwort",
-      "passwordPlaceholder": "Mind. 10 Zeichen (A-Z, a-z, 0-9)",
-      "submit": "Registrieren",
-      "backToLogin": "Zurück zur Anmeldung"
-    },
-    "activation": {
-      "title": "Letzter Schritt: Account aktivieren",
-      "hint": "Senden Sie eine leere E-Mail von Ihrem <strong>@insel.ch</strong> Postfach an die folgende Adresse, um Ihren Account zu aktivieren:",
-      "to": "An:",
-      "subject": "Betreff:",
-      "openEmail": "E-Mail-Programm öffnen",
-      "copyDetails": "Details in die Zwischenablage kopieren",
-      "backToLogin": "Zurück zur Anmeldung"
-    },
-    "forgot": {
-      "title": "Passwort zurücksetzen",
-      "hint": "Geben Sie Ihre @insel.ch Adresse ein. Es wird eine E-Mail vorbereitet — senden Sie diese von Ihrem @insel.ch Postfach ab, um das Zurücksetzen anzufordern.",
-      "emailLabel": "E-Mail (@insel.ch)",
-      "submit": "Zurücksetzen anfordern",
-      "backToLogin": "Zurück zur Anmeldung"
+    "code": {
+      "title": "Anmelden oder registrieren",
+      "hint": "Geben Sie Ihre @insel.ch Adresse ein. Wir senden Ihnen einen 6-stelligen Code — ein Passwort brauchen Sie nicht.",
+      "send": "Code senden",
+      "sending": "Code wird gesendet…",
+      "usePassword": "Mit Passwort anmelden",
+      "enterTitle": "Code eingeben",
+      "sentTo": "Wir haben einen 6-stelligen Code an <strong>{{email}}</strong> gesendet. Er ist 10 Minuten gültig.",
+      "codeLabel": "6-stelliger Code",
+      "verify": "Anmelden",
+      "verifying": "Wird geprüft…",
+      "resend": "Code erneut senden",
+      "resendIn": "Code erneut senden ({{seconds}} s)",
+      "resent": "Neuer Code gesendet.",
+      "spamHint": "Nichts angekommen? Prüfen Sie den Junk-Ordner.",
+      "changeEmail": "Andere E-Mail-Adresse verwenden",
+      "errors": {
+        "invalid_email": "Nur @insel.ch E-Mail-Adressen sind zugelassen.",
+        "invalid_code": "Dieser Code stimmt nicht. Bitte prüfen Sie die Eingabe.",
+        "expired": "Dieser Code ist abgelaufen. Bitte fordern Sie einen neuen an.",
+        "too_many_attempts": "Zu viele Fehlversuche. Bitte fordern Sie einen neuen Code an.",
+        "cooldown": "Bitte warten Sie {{seconds}} Sekunden, bevor Sie einen neuen Code anfordern.",
+        "too_many_requests": "Zu viele Codes angefordert. Bitte versuchen Sie es in {{minutes}} Minuten erneut.",
+        "daily_limit": "Der E-Mail-Versand ist vorübergehend ausgelastet. Bitte versuchen Sie es später erneut.",
+        "mail_failed": "Die E-Mail konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
+        "mail_unavailable": "Der E-Mail-Versand ist zurzeit nicht verfügbar. Bitte versuchen Sie es später erneut.",
+        "account_disabled": "Dieser Account wurde gesperrt.",
+        "network": "Keine Verbindung zum Server. Bitte prüfen Sie Ihre Internetverbindung.",
+        "internal": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut."
+      }
     }
   },
   "navigation": {
@@ -244,7 +253,6 @@
     "conflictMerged": "Konflikt gelöst: Gleichzeitige Änderungen wurden automatisch zusammengeführt.",
     "clipboardCopied": "In die Zwischenablage kopiert.",
     "clipboardError": "Kopieren nicht möglich — bitte manuell auswählen.",
-    "forgotInstructions": "Bitte senden Sie die leere E-Mail von Ihrer @insel.ch Adresse ab, um das Zurücksetzen anzufordern.",
     "passwordChanged": "Passwort erfolgreich geändert!",
     "profileUpdated": "Profil aktualisiert!",
     "profileError": "Profil konnte nicht aktualisiert werden. ",

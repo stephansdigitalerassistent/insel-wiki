@@ -1,5 +1,5 @@
-// Auth UI Controller — login, registration, and auth overlay management
-import { login, register, logout, getCurrentUser, onAuthChange, canEdit, getAccessRequestLink, updateUserProfile, isSpellCheckEnabled, setSpellCheckEnabled, changePassword } from '../firebase/auth.js';
+// Auth UI Controller — email-code sign-in, password login, and auth overlay management
+import { login, requestLoginCode, verifyLoginCode, isAllowedEmail, logout, getCurrentUser, onAuthChange, canEdit, updateUserProfile, isSpellCheckEnabled, setSpellCheckEnabled, changePassword } from '../firebase/auth.js';
 import { formatDefaultName } from '../utils/string.js';
 import { showToast } from '../components/toast.js';
 import { uploadAvatar } from '../firebase/storage.js';
@@ -8,13 +8,21 @@ import i18next, { translatePage } from '../i18n.js';
 
 // --- DOM Elements ---
 let authOverlay, loginForm, loginEmailInput, loginPasswordInput, loginError, loginBtn;
-let registerForm, registerEmailInput, registerPasswordInput, registerBtn, registerError;
-let forgotForm, forgotEmailInput, forgotBtn, forgotError;
-let showRegisterBtn, showLoginBtn, showForgotBtn, showLoginFromForgotBtn;
-let activationPanel, activationRecipientEl, activationSubjectEl, activationMailtoBtn, activationCopyBtn, activationBackBtn;
+let codeRequestForm, codeEmailInput, codeRequestBtn, codeRequestError;
+let codeVerifyForm, codeSentTo, codeInput, codeVerifyBtn, codeVerifyError, codeResendBtn, codeChangeEmailBtn;
+let showPasswordBtn, showCodeBtn;
 let profileModal, profileNameInput, profileLanguage, profileAvatarFile, avatarPreviewContainer, avatarPreviewImg;
 let profileSaveBtn, profileCancelBtn, profileSpellcheck, profileOldPassword, profileNewPassword;
-let userInfoEl, requestAccessLink;
+let userInfoEl;
+
+// Remembers which sign-in form the user last chose (a per-browser convenience).
+const AUTH_METHOD_KEY = 'insel-wiki.authMethod';
+// Mirrors the server's resend cooldown (functions/lib/login-code.js).
+const RESEND_COOLDOWN_SEC = 60;
+
+let pendingCodeEmail = '';
+let resendTimer = null;
+let verifyInFlight = false;
 
 let selectedAvatarFile = null;
 let onProfileUpdateCallback = null;
@@ -32,26 +40,19 @@ export function initAuthUI(callbacks = {}) {
   loginPasswordInput = document.getElementById('login-password');
   loginError = document.getElementById('login-error');
   loginBtn = document.getElementById('login-btn');
-  registerForm = document.getElementById('register-form');
-  registerEmailInput = document.getElementById('register-email');
-  registerPasswordInput = document.getElementById('register-password');
-  registerBtn = document.getElementById('register-btn');
-  registerError = document.getElementById('register-error');
-  showRegisterBtn = document.getElementById('show-register-btn');
-  showLoginBtn = document.getElementById('show-login-btn');
-  showForgotBtn = document.getElementById('show-forgot-btn');
-  showLoginFromForgotBtn = document.getElementById('show-login-from-forgot-btn');
-  forgotForm = document.getElementById('forgot-form');
-  forgotEmailInput = document.getElementById('forgot-email');
-  forgotBtn = document.getElementById('forgot-btn');
-  forgotError = document.getElementById('forgot-error');
-  activationPanel = document.getElementById('activation-panel');
-  activationRecipientEl = document.getElementById('activation-recipient');
-  activationSubjectEl = document.getElementById('activation-subject');
-  activationMailtoBtn = document.getElementById('activation-mailto-btn');
-  activationCopyBtn = document.getElementById('activation-copy-btn');
-  activationBackBtn = document.getElementById('activation-back-btn');
-  requestAccessLink = document.getElementById('request-access-link');
+  codeRequestForm = document.getElementById('code-request-form');
+  codeEmailInput = document.getElementById('code-email');
+  codeRequestBtn = document.getElementById('code-request-btn');
+  codeRequestError = document.getElementById('code-request-error');
+  codeVerifyForm = document.getElementById('code-verify-form');
+  codeSentTo = document.getElementById('code-sent-to');
+  codeInput = document.getElementById('code-input');
+  codeVerifyBtn = document.getElementById('code-verify-btn');
+  codeVerifyError = document.getElementById('code-verify-error');
+  codeResendBtn = document.getElementById('code-resend-btn');
+  codeChangeEmailBtn = document.getElementById('code-change-email-btn');
+  showPasswordBtn = document.getElementById('show-password-btn');
+  showCodeBtn = document.getElementById('show-code-btn');
   userInfoEl = document.getElementById('user-info');
   profileModal = document.getElementById('profile-modal');
   profileNameInput = document.getElementById('profile-name');
@@ -65,68 +66,37 @@ export function initAuthUI(callbacks = {}) {
   profileOldPassword = document.getElementById('profile-old-password');
   profileNewPassword = document.getElementById('profile-new-password');
 
-  // Setup mailto link
-  if (requestAccessLink) {
-    requestAccessLink.href = getAccessRequestLink();
-  }
-
-  // Login form
+  // Password login (accounts created before the code flow)
   loginForm.addEventListener('submit', handleLogin);
 
-  // Toggle between login/register
-  if (showRegisterBtn) {
-    showRegisterBtn.addEventListener('click', () => {
-      loginForm.classList.add('hidden');
-      registerForm.classList.remove('hidden');
-    });
-  }
-  if (showLoginBtn) {
-    showLoginBtn.addEventListener('click', () => {
-      registerForm.classList.add('hidden');
-      loginForm.classList.remove('hidden');
-    });
-  }
-  if (registerForm) {
-    registerForm.addEventListener('submit', handleRegister);
-  }
+  // Email-code sign-in: request, verify, resend
+  codeRequestForm.addEventListener('submit', handleCodeRequest);
+  codeVerifyForm.addEventListener('submit', handleCodeVerify);
+  codeResendBtn.addEventListener('click', handleCodeResend);
+  codeChangeEmailBtn.addEventListener('click', () => {
+    stopResendCountdown();
+    showAuthForm(codeRequestForm);
+    codeEmailInput.focus();
+  });
+  codeInput.addEventListener('input', () => {
+    // Keep digits only (a pasted "123 456" still works) and submit once complete.
+    const digits = codeInput.value.replace(/\D/g, '').slice(0, 6);
+    if (digits !== codeInput.value) codeInput.value = digits;
+    if (digits.length === 6) codeVerifyForm.requestSubmit();
+  });
 
-  // Forgot password
-  if (showForgotBtn) {
-    showForgotBtn.addEventListener('click', () => {
-      loginForm.classList.add('hidden');
-      forgotForm.classList.remove('hidden');
-      forgotEmailInput.value = loginEmailInput.value || '';
-      forgotError.classList.add('hidden');
-    });
-  }
-  if (showLoginFromForgotBtn) {
-    showLoginFromForgotBtn.addEventListener('click', () => {
-      forgotForm.classList.add('hidden');
-      loginForm.classList.remove('hidden');
-    });
-  }
-  if (forgotForm) {
-    forgotForm.addEventListener('submit', handleForgotPassword);
-  }
+  showPasswordBtn.addEventListener('click', () => {
+    loginEmailInput.value = loginEmailInput.value || codeEmailInput.value;
+    rememberAuthMethod('password');
+    showAuthForm(loginForm);
+  });
+  showCodeBtn.addEventListener('click', () => {
+    codeEmailInput.value = codeEmailInput.value || loginEmailInput.value;
+    rememberAuthMethod('code');
+    showAuthForm(codeRequestForm);
+  });
 
-  if (activationBackBtn) {
-    activationBackBtn.addEventListener('click', () => {
-      activationPanel.classList.add('hidden');
-      loginForm.classList.remove('hidden');
-    });
-  }
-  if (activationCopyBtn) {
-    activationCopyBtn.addEventListener('click', async () => {
-      const recipient = activationRecipientEl.textContent;
-      const subject = activationSubjectEl.textContent;
-      try {
-        await navigator.clipboard.writeText(`An: ${recipient}\nBetreff: ${subject}`);
-        showToast(i18next.t('messages.clipboardCopied'), 'success', 2000);
-      } catch {
-        showToast(i18next.t('messages.clipboardError'), 'warning', 4000);
-      }
-    });
-  }
+  if (recallAuthMethod() === 'password') showAuthForm(loginForm);
 
   // Logout
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
@@ -191,7 +161,39 @@ export function handleAuthChange(user, { setEditable, formatToolbar, pageTitleIn
   }
 }
 
-// --- Login ---
+// --- Form switching ---
+function showAuthForm(form) {
+  for (const f of [codeRequestForm, codeVerifyForm, loginForm]) {
+    f.classList.toggle('hidden', f !== form);
+  }
+}
+
+// localStorage can throw (private mode, blocked site data); the choice is only a convenience.
+function rememberAuthMethod(method) {
+  try { localStorage.setItem(AUTH_METHOD_KEY, method); } catch { /* ignore */ }
+}
+
+function recallAuthMethod() {
+  try { return localStorage.getItem(AUTH_METHOD_KEY); } catch { return null; }
+}
+
+function showAuthError(el, message) {
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+/** Translate a LoginCodeError (or anything else) into a message for the user. */
+function describeCodeError(err) {
+  const reason = err && err.name === 'LoginCodeError' ? err.code : 'internal';
+  const retry = (err && err.retryAfterSec) || RESEND_COOLDOWN_SEC;
+  return i18next.t(`auth.code.errors.${reason}`, {
+    seconds: retry,
+    minutes: Math.max(1, Math.ceil(retry / 60)),
+    defaultValue: i18next.t('auth.code.errors.internal')
+  });
+}
+
+// --- Password login ---
 async function handleLogin(e) {
   e.preventDefault();
   loginError.classList.add('hidden');
@@ -201,108 +203,130 @@ async function handleLogin(e) {
   try {
     await login(loginEmailInput.value, loginPasswordInput.value);
   } catch (err) {
-    loginError.textContent = err.message || 'Anmeldung fehlgeschlagen.';
-    loginError.classList.remove('hidden');
+    // Firebase's own messages ("Firebase: Error (auth/invalid-credential).") mean nothing to users.
+    const isFirebaseAuthError = typeof err.code === 'string' && err.code.startsWith('auth/');
+    showAuthError(loginError, isFirebaseAuthError || !err.message ? i18next.t('auth.validation.loginFailed') : err.message);
   } finally {
     loginBtn.disabled = false;
     loginBtn.textContent = i18next.t('auth.login.submit');
   }
 }
 
-// --- Registration (instant creation + email activation) ---
-async function handleRegister(e) {
+// --- Email-code sign-in (also the registration path) ---
+async function handleCodeRequest(e) {
   e.preventDefault();
-  registerError.classList.add('hidden');
-  registerBtn.disabled = true;
-  registerBtn.textContent = i18next.t('common.loading');
+  codeRequestError.classList.add('hidden');
 
-  const email = registerEmailInput.value.trim().toLowerCase();
-  const password = registerPasswordInput.value;
-
-  if (!email.endsWith('@insel.ch')) {
-    registerError.textContent = 'Nur @insel.ch E-Mail-Adressen sind zugelassen.';
-    registerError.classList.remove('hidden');
-    registerBtn.disabled = false;
-    registerBtn.textContent = i18next.t('auth.register.submit');
+  const email = codeEmailInput.value.trim().toLowerCase();
+  if (!isAllowedEmail(email)) {
+    showAuthError(codeRequestError, i18next.t('auth.code.errors.invalid_email'));
     return;
   }
 
-  const validation = validatePassword(password);
-  if (!validation.isValid) {
-    registerError.textContent = validation.error;
-    registerError.classList.remove('hidden');
-    registerBtn.disabled = false;
-    registerBtn.textContent = i18next.t('auth.register.submit');
-    return;
-  }
-
+  codeRequestBtn.disabled = true;
+  codeRequestBtn.textContent = i18next.t('auth.code.sending');
   try {
-    // 1. Create account in Firebase (initially inactive)
-    await register(email, password);
-    console.log('[AuthUI] Account created successfully, waiting for activation.');
+    await requestLoginCode(email);
+    enterCodeStep(email, RESEND_COOLDOWN_SEC);
   } catch (err) {
-    // If user exists, we still allow them to send the activation mail (in case they weren't activated yet)
-    if (err.code !== 'auth/email-already-in-use') {
-      registerError.textContent = 'Fehler bei der Registrierung: ' + err.message;
-      registerError.classList.remove('hidden');
-      registerBtn.disabled = false;
-      registerBtn.textContent = i18next.t('auth.register.submit');
-      return;
+    if (err.code === 'cooldown') {
+      // A code was mailed moments ago (e.g. the page was reloaded) — it is still valid.
+      enterCodeStep(email, err.retryAfterSec);
+    } else {
+      showAuthError(codeRequestError, describeCodeError(err));
     }
-    console.log('[AuthUI] Account already exists, proceeding to activation step.');
+  } finally {
+    codeRequestBtn.disabled = false;
+    codeRequestBtn.textContent = i18next.t('auth.code.send');
   }
-
-  // 2. Show inline activation panel with mailto details
-  const recipient = 'stephansdigitalassistent@gmail.com';
-  const subjectPlain = `Wiki Activation: ${email}`;
-  activationRecipientEl.textContent = recipient;
-  activationSubjectEl.textContent = subjectPlain;
-  const mailtoUrl = `mailto:${recipient}?subject=${encodeURIComponent(subjectPlain)}`;
-  activationMailtoBtn.href = mailtoUrl;
-
-  registerForm.classList.add('hidden');
-  activationPanel.classList.remove('hidden');
-  registerEmailInput.value = '';
-  registerPasswordInput.value = '';
-
-  // Automatically open the mail client to generate the activation email
-  window.location.href = mailtoUrl;
-
-  registerBtn.disabled = false;
-  registerBtn.textContent = i18next.t('auth.register.submit');
 }
 
-// --- Forgot password (mailto activation, mirrors registration) ---
-async function handleForgotPassword(e) {
+function enterCodeStep(email, cooldownSec) {
+  pendingCodeEmail = email;
+  rememberAuthMethod('code');
+  // The address is validated above, but it is still user input going into innerHTML.
+  const safeEmail = email.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+  codeSentTo.innerHTML = i18next.t('auth.code.sentTo', { email: safeEmail, interpolation: { escapeValue: false } });
+  codeInput.value = '';
+  codeVerifyError.classList.add('hidden');
+  showAuthForm(codeVerifyForm);
+  startResendCountdown(cooldownSec);
+  codeInput.focus();
+}
+
+async function handleCodeVerify(e) {
   e.preventDefault();
-  forgotError.classList.add('hidden');
-  forgotBtn.disabled = true;
-  forgotBtn.textContent = i18next.t('common.loading');
+  if (verifyInFlight) return;
+  codeVerifyError.classList.add('hidden');
 
-  const email = forgotEmailInput.value.trim().toLowerCase();
-
-  if (!email.endsWith('@insel.ch')) {
-    forgotError.textContent = 'Nur @insel.ch E-Mail-Adressen sind zugelassen.';
-    forgotError.classList.remove('hidden');
-    forgotBtn.disabled = false;
-    forgotBtn.textContent = i18next.t('auth.forgot.submit');
+  const code = codeInput.value.replace(/\D/g, '');
+  if (code.length !== 6) {
+    showAuthError(codeVerifyError, i18next.t('auth.code.errors.invalid_code'));
     return;
   }
 
-  const subject = encodeURIComponent(`Wiki Password Reset: ${email}`);
-  const mailtoUrl = `mailto:stephansdigitalassistent@gmail.com?subject=${subject}`;
-  window.location.href = mailtoUrl;
+  verifyInFlight = true;
+  codeVerifyBtn.disabled = true;
+  codeVerifyBtn.textContent = i18next.t('auth.code.verifying');
+  try {
+    // On success the auth listener hides the overlay; reset the forms for the next sign-out.
+    await verifyLoginCode(pendingCodeEmail, code);
+    stopResendCountdown();
+    codeInput.value = '';
+    showAuthForm(codeRequestForm);
+  } catch (err) {
+    showAuthError(codeVerifyError, describeCodeError(err));
+    codeInput.value = '';
+    codeInput.focus();
+  } finally {
+    verifyInFlight = false;
+    codeVerifyBtn.disabled = false;
+    codeVerifyBtn.textContent = i18next.t('auth.code.verify');
+  }
+}
 
-  showToast(i18next.t('messages.forgotInstructions'), 'info', 10000);
+async function handleCodeResend() {
+  codeVerifyError.classList.add('hidden');
+  codeResendBtn.disabled = true;
+  try {
+    await requestLoginCode(pendingCodeEmail);
+    codeInput.value = '';
+    startResendCountdown(RESEND_COOLDOWN_SEC);
+    showToast(i18next.t('auth.code.resent'), 'success', 3000);
+    codeInput.focus();
+  } catch (err) {
+    if (err.code === 'cooldown') {
+      startResendCountdown(err.retryAfterSec);
+    } else {
+      codeResendBtn.disabled = false;
+      showAuthError(codeVerifyError, describeCodeError(err));
+    }
+  }
+}
 
-  setTimeout(() => {
-    forgotForm.classList.add('hidden');
-    loginForm.classList.remove('hidden');
-    forgotEmailInput.value = '';
-  }, 1500);
+function startResendCountdown(seconds) {
+  stopResendCountdown();
+  let remaining = Math.max(1, Math.ceil(seconds || RESEND_COOLDOWN_SEC));
+  codeResendBtn.disabled = true;
+  const render = () => {
+    codeResendBtn.textContent = i18next.t('auth.code.resendIn', { seconds: remaining });
+  };
+  render();
+  resendTimer = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      stopResendCountdown();
+    } else {
+      render();
+    }
+  }, 1000);
+}
 
-  forgotBtn.disabled = false;
-  forgotBtn.textContent = i18next.t('auth.forgot.submit');
+function stopResendCountdown() {
+  if (resendTimer) clearInterval(resendTimer);
+  resendTimer = null;
+  codeResendBtn.disabled = false;
+  codeResendBtn.textContent = i18next.t('auth.code.resend');
 }
 
 async function handleLogout() {

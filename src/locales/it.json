@@ -29,42 +29,51 @@
   "auth": {
     "validation": {
       "passwordLength": "La password deve essere lunga almeno 10 caratteri.",
-      "passwordComplexity": "La password deve contenere lettere maiuscole, minuscole e cifre."
+      "passwordComplexity": "La password deve contenere lettere maiuscole, minuscole e cifre.",
+      "onlyInsel": "Sono ammessi solo indirizzi email @insel.ch.",
+      "loginFailed": "Accesso non riuscito. Controlla email e password.",
+      "notActivated": "Questo account non è ancora attivato. Accedi una volta con un codice via email per attivarlo."
     },
     "login": {
-      "title": "Accesso",
+      "title": "Accedi con password",
       "emailLabel": "Email (@insel.ch)",
       "emailPlaceholder": "nome.cognome@insel.ch",
       "passwordLabel": "Password",
       "passwordPlaceholder": "La tua password",
       "submit": "Accedi",
-      "register": "Crea nuovo account",
-      "forgotPassword": "Password dimenticata?"
+      "useCode": "Accedi con un codice via email",
+      "forgotHint": "Password dimenticata? Accedi semplicemente con un codice via email."
     },
-    "register": {
-      "title": "Registrazione",
-      "hint": "Inserisci il tuo indirizzo @insel.ch e una password desiderata. Verrà preparata un'email — inviala dalla tua casella @insel.ch.",
-      "emailLabel": "Email (@insel.ch)",
-      "passwordLabel": "Password desiderata",
-      "passwordPlaceholder": "Min. 10 caratteri (A-Z, a-z, 0-9)",
-      "submit": "Registrati",
-      "backToLogin": "Torna all'accesso"
-    },
-    "activation": {
-      "title": "Ultimo passaggio: Attiva l'account",
-      "hint": "Invia un'email vuota dalla tua casella <strong>@insel.ch</strong> al seguente indirizzo per attivare il tuo account:",
-      "to": "A:",
-      "subject": "Oggetto:",
-      "openEmail": "Apri programma di posta",
-      "copyDetails": "Copia dettagli negli appunti",
-      "backToLogin": "Torna all'accesso"
-    },
-    "forgot": {
-      "title": "Reimposta password",
-      "hint": "Inserisci il tuo indirizzo @insel.ch. Verrà preparata un'email — inviala dalla tua casella @insel.ch per richiedere la reimpostazione.",
-      "emailLabel": "Email (@insel.ch)",
-      "submit": "Richiedi reimpostazione",
-      "backToLogin": "Torna all'accesso"
+    "code": {
+      "title": "Accedi o registrati",
+      "hint": "Inserisci il tuo indirizzo @insel.ch. Ti inviamo un codice di 6 cifre — non serve alcuna password.",
+      "send": "Invia codice",
+      "sending": "Invio del codice…",
+      "usePassword": "Accedi con password",
+      "enterTitle": "Inserisci il codice",
+      "sentTo": "Abbiamo inviato un codice di 6 cifre a <strong>{{email}}</strong>. È valido per 10 minuti.",
+      "codeLabel": "Codice di 6 cifre",
+      "verify": "Accedi",
+      "verifying": "Verifica in corso…",
+      "resend": "Invia di nuovo il codice",
+      "resendIn": "Invia di nuovo il codice ({{seconds}} s)",
+      "resent": "Nuovo codice inviato.",
+      "spamHint": "Non è arrivato nulla? Controlla la cartella della posta indesiderata.",
+      "changeEmail": "Usa un altro indirizzo email",
+      "errors": {
+        "invalid_email": "Sono ammessi solo indirizzi email @insel.ch.",
+        "invalid_code": "Questo codice non è corretto. Controlla i dati inseriti.",
+        "expired": "Questo codice è scaduto. Richiedine uno nuovo.",
+        "too_many_attempts": "Troppi tentativi errati. Richiedi un nuovo codice.",
+        "cooldown": "Attendi {{seconds}} secondi prima di richiedere un nuovo codice.",
+        "too_many_requests": "Troppi codici richiesti. Riprova tra {{minutes}} minuti.",
+        "daily_limit": "L'invio delle email è temporaneamente sovraccarico. Riprova più tardi.",
+        "mail_failed": "Non è stato possibile inviare l'email. Riprova.",
+        "mail_unavailable": "L'invio delle email non è al momento disponibile. Riprova più tardi.",
+        "account_disabled": "Questo account è stato bloccato.",
+        "network": "Nessuna connessione al server. Controlla la connessione Internet.",
+        "internal": "Si è verificato un errore imprevisto. Riprova."
+      }
     }
   },
   "navigation": {
@@ -244,7 +253,6 @@
     "conflictMerged": "Conflitto risolto: Le modifiche simultanee sono state unite automaticamente.",
     "clipboardCopied": "Copiato negli appunti.",
     "clipboardError": "Impossibile copiare — selezionare manualmente.",
-    "forgotInstructions": "Invia l'email vuota dal tuo indirizzo @insel.ch per richiedere la reimpostazione.",
     "passwordChanged": "Password cambiata con successo!",
     "profileUpdated": "Profilo aggiornato!",
     "profileError": "Impossibile aggiornare il profilo. ",

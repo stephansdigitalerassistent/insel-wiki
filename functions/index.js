@@ -24,6 +24,10 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { projectToMarkdown } from './lib/convert.js';
 import { BatchCommitter } from './lib/batch-committer.js';
+import {
+  normalizeEmail, normalizeCode, generateCode, emailDocId, defaultDisplayName,
+  dayKey, planSend, checkCode, buildCodeMail, MAX_SENDS_PER_DAY, MAIL_PICKUP_TIMEOUT_MS,
+} from './lib/login-code.js';
 
 initializeApp();
 const db = getFirestore();
@@ -845,3 +849,206 @@ async function _recursivePermanentDelete(pageSnap, user, committer) {
   // 5. Delete the page document
   committer.delete(pageRef);
 }
+
+// ---------------------------------------------------------------------------
+// Email one-time login codes
+//
+// Registration and sign-in are one flow: the user types an @insel.ch address,
+// we mail a 6-digit code to it, they type it back and receive a custom token.
+// Reading the code proves control of the mailbox — the same guarantee the old
+// "send us an empty mail from your Insel account" activation gave, with the
+// direction reversed so nobody has to leave the page or pick a password.
+//
+// Both endpoints are unauthenticated by nature, so every limit lives here:
+// per-address resend cooldown and hourly cap, a global daily cap, five guesses
+// per code. `login_codes` and `login_code_stats` are matched by no Firestore
+// rule, i.e. only the Admin SDK can touch them.
+//
+// The function holds no mail credential. It queues the message in `mail_queue`
+// and WikiBot — which already owns the wiki mailbox's Gmail access on the
+// cluster — claims it, sends it and reports back on the same document.
+// ---------------------------------------------------------------------------
+
+function readJsonBody(req) {
+  return req.body && typeof req.body === 'object' ? req.body : {};
+}
+
+/**
+ * Waits for WikiBot to send a queued mail. Resolves 'sent' or 'failed' as the
+ * bot reports it, or 'timeout' when nothing picked the mail up — in which case
+ * the pending mail is withdrawn here, inside a transaction, so the bot cannot
+ * claim it at the same instant and send a code we are about to disown.
+ */
+function awaitMailOutcome(mailRef) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe = () => {};
+    const finish = (outcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(outcome);
+    };
+    const timer = setTimeout(async () => {
+      try {
+        const outcome = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(mailRef);
+          const status = snap.exists ? snap.data().status : 'sent';
+          if (status === 'pending') {
+            tx.delete(mailRef);
+            return 'timeout';
+          }
+          // Claimed in the last moment: the bot is mid-send, count it as delivered.
+          return status === 'failed' ? 'failed' : 'sent';
+        });
+        finish(outcome);
+      } catch (err) {
+        logger.error('[requestLoginCode] Could not withdraw unsent mail', err);
+        finish('timeout');
+      }
+    }, MAIL_PICKUP_TIMEOUT_MS);
+    unsubscribe = mailRef.onSnapshot(
+      (snap) => {
+        // The bot deletes the document once the mail is out.
+        if (!snap.exists) finish('sent');
+        else if (snap.data().status === 'failed') finish('failed');
+      },
+      (err) => logger.warn('[requestLoginCode] mail_queue listener error', err)
+    );
+  });
+}
+
+export const requestLoginCode = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 30, maxInstances: 5 },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+    const body = readJsonBody(req);
+    const email = normalizeEmail(body.email);
+    if (!email) {
+      res.status(400).json({ error: 'invalid_email' });
+      return;
+    }
+    const now = Date.now();
+    const code = generateCode();
+    const codeRef = db.collection('login_codes').doc(emailDocId(email));
+    const statsRef = db.collection('login_code_stats').doc(dayKey(now));
+    const mailRef = db.collection('mail_queue').doc();
+
+    try {
+      const plan = await db.runTransaction(async (tx) => {
+        const [codeSnap, statsSnap] = await Promise.all([tx.get(codeRef), tx.get(statsRef)]);
+        const decision = planSend(codeSnap.exists ? codeSnap.data() : null, now, email, code);
+        if (!decision.ok) return decision;
+        if ((statsSnap.exists ? statsSnap.data().sent || 0 : 0) >= MAX_SENDS_PER_DAY) {
+          return { ok: false, reason: 'daily_limit', retryAfterSec: 3600 };
+        }
+        tx.set(codeRef, decision.record);
+        tx.set(statsRef, { sent: FieldValue.increment(1) }, { merge: true });
+        tx.set(mailRef, { to: email, ...buildCodeMail(code, body.lang), status: 'pending', createdAt: now });
+        return decision;
+      });
+
+      if (!plan.ok) {
+        if (plan.reason === 'daily_limit') logger.error('[requestLoginCode] Daily mail cap reached');
+        res.status(429).json({ error: plan.reason, retryAfterSec: plan.retryAfterSec });
+        return;
+      }
+
+      const outcome = await awaitMailOutcome(mailRef);
+      if (outcome !== 'sent') {
+        // Withdraw the code so the cooldown does not lock the user out of retrying,
+        // and the mail so a late bot cannot deliver a code that no longer works.
+        logger.error(`[requestLoginCode] Mail not sent (${outcome})`);
+        await Promise.all([codeRef.delete().catch(() => {}), mailRef.delete().catch(() => {})]);
+        res.status(outcome === 'failed' ? 502 : 503).json({ error: outcome === 'failed' ? 'mail_failed' : 'mail_unavailable' });
+        return;
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('[requestLoginCode] Failed', err);
+      res.status(500).json({ error: 'internal' });
+    }
+  }
+);
+
+export const verifyLoginCode = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 30, maxInstances: 5 },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'method_not_allowed' });
+      return;
+    }
+    const body = readJsonBody(req);
+    const email = normalizeEmail(body.email);
+    const code = normalizeCode(body.code);
+    if (!email) {
+      res.status(400).json({ error: 'invalid_email' });
+      return;
+    }
+    if (!code) {
+      res.status(400).json({ error: 'invalid_code' });
+      return;
+    }
+
+    const now = Date.now();
+    const codeRef = db.collection('login_codes').doc(emailDocId(email));
+
+    try {
+      const verdict = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(codeRef);
+        const result = checkCode(snap.exists ? snap.data() : null, now, email, code);
+        if (result.consume) {
+          // Keep the send-rate fields: consuming a code must not reset the cooldown.
+          tx.update(codeRef, { codeHash: FieldValue.delete(), attempts: 0 });
+        } else if (result.attempts) {
+          tx.update(codeRef, { attempts: result.attempts });
+        }
+        return result;
+      });
+
+      if (!verdict.ok) {
+        res.status(verdict.reason === 'too_many_attempts' ? 429 : 400).json({ error: verdict.reason });
+        return;
+      }
+
+      const auth = getAuth();
+      let userRecord;
+      try {
+        userRecord = await auth.getUserByEmail(email);
+      } catch (lookupErr) {
+        if (lookupErr.code !== 'auth/user-not-found') throw lookupErr;
+        userRecord = await auth.createUser({
+          email,
+          emailVerified: true,
+          displayName: defaultDisplayName(email),
+        });
+        logger.info('[verifyLoginCode] Created account', { uid: userRecord.uid });
+      }
+      if (userRecord.disabled) {
+        res.status(403).json({ error: 'account_disabled' });
+        return;
+      }
+
+      // `isActive` is what the client gates the session on and what puts the
+      // user into the @mention directory; only the server may set it true.
+      const userRef = db.collection('users').doc(userRecord.uid);
+      const userSnap = await userRef.get();
+      const profile = { email, isActive: true, updatedAt: FieldValue.serverTimestamp() };
+      if (!userSnap.exists || !userSnap.data().displayName) {
+        profile.displayName = userRecord.displayName || defaultDisplayName(email);
+      }
+      await userRef.set(profile, { merge: true });
+
+      const token = await auth.createCustomToken(userRecord.uid);
+      res.json({ token });
+    } catch (err) {
+      logger.error('[verifyLoginCode] Failed', err);
+      res.status(500).json({ error: 'internal' });
+    }
+  }
+);

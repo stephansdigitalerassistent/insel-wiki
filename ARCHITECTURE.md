@@ -39,7 +39,8 @@ Based on **Tiptap**, extended with medically relevant functions:
 
 ## 5. Security & Automation
 
-- **WikiBot (`wiki-registration-bot.js`)**: An autonomous Node.js service that validates email-based registration tokens, creates accounts, and initializes the employee directory in Firestore.
+- **Email-code sign-in (`requestLoginCode` / `verifyLoginCode`)**: Registration and sign-in are one flow. The user enters an `@insel.ch` address, the function mails a 6-digit code (10 min, 5 guesses, 1 mail/min and 5/hour per address, 300/day overall), and the code is traded for a custom token; the account is created and marked `isActive` server-side. State lives in `login_codes` / `login_code_stats`, which no Firestore rule matches (Admin SDK only). The function holds no mail credential: it queues the message in `mail_queue` (readable by the bot only) and waits up to 12 s for WikiBot to send it, so the mailbox's Google token never leaves the cluster. Password login remains for accounts that already have one.
+- **WikiBot (`tools/wiki-registration-bot.mjs`, assistant repo)**: Runs on the cluster master and owns the wiki mailbox. It listens on `mail_queue` and sends the sign-in code mails. It also still serves the legacy mail-in activation (an account is activated when its owner mails the wiki mailbox from their `@insel.ch` address), which the web app no longer points users at.
 - **Test Isolation**: All automated Playwright tests are strictly isolated. 
   - The `createPage` logic in `src/firebase/firestore.js` automatically redirects test-prefixed pages to the `page-tests` parent.
   - A comprehensive cleanup utility (`tests/helpers/firestore-cleanup.js`) handles the recursive deletion of test-generated documents and sub-collections (History, Comments, Presence) to maintain a clean production environment.

@@ -2,8 +2,7 @@ import { auth } from '../firebase/config.js';
 import { 
   updatePassword, 
   reauthenticateWithCredential, 
-  EmailAuthProvider,
-  createUserWithEmailAndPassword
+  EmailAuthProvider
 } from 'firebase/auth';
 
 /**
@@ -26,13 +25,4 @@ export async function changeUserPassword(oldPassword, newPassword) {
   }
 
   await updatePassword(user, newPassword);
-}
-
-/**
- * Wrapper for creating a user (used by register)
- * @param {string} email 
- * @param {string} password 
- */
-export async function createAuthUser(email, password) {
-    return createUserWithEmailAndPassword(auth, email, password);
 }

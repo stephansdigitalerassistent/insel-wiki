@@ -29,42 +29,51 @@
   "auth": {
     "validation": {
       "passwordLength": "Le mot de passe doit comporter au moins 10 caractères.",
-      "passwordComplexity": "Le mot de passe doit contenir des lettres majuscules, minuscules et des chiffres."
+      "passwordComplexity": "Le mot de passe doit contenir des lettres majuscules, minuscules et des chiffres.",
+      "onlyInsel": "Seules les adresses e-mail @insel.ch sont autorisées.",
+      "loginFailed": "Échec de la connexion. Veuillez vérifier l'e-mail et le mot de passe.",
+      "notActivated": "Ce compte n'est pas encore activé. Connectez-vous une fois avec un code par e-mail pour l'activer."
     },
     "login": {
-      "title": "Connexion",
+      "title": "Se connecter avec un mot de passe",
       "emailLabel": "E-mail (@insel.ch)",
       "emailPlaceholder": "prenom.nom@insel.ch",
       "passwordLabel": "Mot de passe",
       "passwordPlaceholder": "Votre mot de passe",
       "submit": "Se connecter",
-      "register": "Créer un nouveau compte",
-      "forgotPassword": "Mot de passe oublié ?"
+      "useCode": "Se connecter avec un code par e-mail",
+      "forgotHint": "Mot de passe oublié ? Connectez-vous simplement avec un code par e-mail."
     },
-    "register": {
-      "title": "S'inscrire",
-      "hint": "Entrez votre adresse @insel.ch et un mot de passe. Un e-mail sera préparé — envoyez-le depuis votre boîte @insel.ch.",
-      "emailLabel": "E-mail (@insel.ch)",
-      "passwordLabel": "Mot de passe souhaité",
-      "passwordPlaceholder": "Min. 10 caractères (A-Z, a-z, 0-9)",
-      "submit": "S'inscrire",
-      "backToLogin": "Retour à la connexion"
-    },
-    "activation": {
-      "title": "Dernière étape : Activer le compte",
-      "hint": "Envoyez un e-mail vide depuis votre boîte <strong>@insel.ch</strong> à l'adresse suivante pour activer votre compte :",
-      "to": "À :",
-      "subject": "Objet :",
-      "openEmail": "Ouvrir le logiciel de messagerie",
-      "copyDetails": "Copier les détails dans le presse-papiers",
-      "backToLogin": "Retour à la connexion"
-    },
-    "forgot": {
-      "title": "Réinitialiser le mot de passe",
-      "hint": "Entrez votre adresse @insel.ch. Un e-mail sera préparé — envoyez-le depuis votre boîte @insel.ch pour demander une réinitialisation.",
-      "emailLabel": "E-mail (@insel.ch)",
-      "submit": "Demander la réinitialisation",
-      "backToLogin": "Retour à la connexion"
+    "code": {
+      "title": "Se connecter ou s'inscrire",
+      "hint": "Entrez votre adresse @insel.ch. Nous vous envoyons un code à 6 chiffres — aucun mot de passe n'est nécessaire.",
+      "send": "Envoyer le code",
+      "sending": "Envoi du code…",
+      "usePassword": "Se connecter avec un mot de passe",
+      "enterTitle": "Saisir le code",
+      "sentTo": "Nous avons envoyé un code à 6 chiffres à <strong>{{email}}</strong>. Il est valable 10 minutes.",
+      "codeLabel": "Code à 6 chiffres",
+      "verify": "Se connecter",
+      "verifying": "Vérification…",
+      "resend": "Renvoyer le code",
+      "resendIn": "Renvoyer le code ({{seconds}} s)",
+      "resent": "Nouveau code envoyé.",
+      "spamHint": "Rien reçu ? Vérifiez le dossier de courrier indésirable.",
+      "changeEmail": "Utiliser une autre adresse e-mail",
+      "errors": {
+        "invalid_email": "Seules les adresses e-mail @insel.ch sont autorisées.",
+        "invalid_code": "Ce code est incorrect. Veuillez vérifier votre saisie.",
+        "expired": "Ce code a expiré. Veuillez en demander un nouveau.",
+        "too_many_attempts": "Trop de tentatives. Veuillez demander un nouveau code.",
+        "cooldown": "Veuillez patienter {{seconds}} secondes avant de demander un nouveau code.",
+        "too_many_requests": "Trop de codes demandés. Veuillez réessayer dans {{minutes}} minutes.",
+        "daily_limit": "L'envoi d'e-mails est momentanément saturé. Veuillez réessayer plus tard.",
+        "mail_failed": "L'e-mail n'a pas pu être envoyé. Veuillez réessayer.",
+        "mail_unavailable": "L'envoi d'e-mails est actuellement indisponible. Veuillez réessayer plus tard.",
+        "account_disabled": "Ce compte a été bloqué.",
+        "network": "Pas de connexion au serveur. Veuillez vérifier votre connexion Internet.",
+        "internal": "Une erreur inattendue s'est produite. Veuillez réessayer."
+      }
     }
   },
   "navigation": {
@@ -244,7 +253,6 @@
     "conflictMerged": "Conflit résolu: Les modifications simultanées ont été fusionnées automatiquement.",
     "clipboardCopied": "Copié dans le presse-papiers.",
     "clipboardError": "Impossible de copier — veuillez sélectionner manuellement.",
-    "forgotInstructions": "Veuillez envoyer l'e-mail vide depuis votre adresse @insel.ch pour demander la réinitialisation.",
     "passwordChanged": "Mot de passe modifié avec succès !",
     "profileUpdated": "Profil mis à jour !",
     "profileError": "Le profil n'a pas pu être mis à jour. ",

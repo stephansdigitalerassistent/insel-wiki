@@ -1,23 +1,24 @@
 // Authentication module
-// Flow: Non-logged-in users see a login screen + mailto link to request access
-// (there is intentionally no anonymous/public read tier — Firestore rules gate
-// reads to @insel.ch users; see ARCHITECTURE.md §5).
-// @insel.ch users send their chosen password via email → admin or Cloud Function creates account.
-// Logged-in @insel.ch users can read and edit.
+// There is intentionally no anonymous/public read tier — Firestore rules gate
+// reads to @insel.ch users; see ARCHITECTURE.md §5.
+//
+// Sign-up and sign-in are one flow: the user enters an @insel.ch address, the
+// `requestLoginCode` function mails a 6-digit code, `verifyLoginCode` trades it
+// for a custom token and activates the account server-side. Accounts that
+// already have a password can keep using it.
 
 import { auth, db } from './config.js';
 import {
   signInWithEmailAndPassword,
+  signInWithCustomToken,
   signOut,
   onAuthStateChanged,
   updateProfile
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, getDocFromServer, serverTimestamp } from 'firebase/firestore';
-import { createAuthUser, changeUserPassword } from '../services/auth-service.js';
+import { changeUserPassword } from '../services/auth-service.js';
 import i18next, { translatePage } from '../i18n.js';
 
-// Wiki admin email — receiving end for access requests
-const WIKI_ADMIN_EMAIL = 'stephansdigitalassistent@gmail.com';
 const ALLOWED_DOMAIN = 'insel.ch';
 
 let currentUser = null;
@@ -83,32 +84,62 @@ export function setSpellCheckEnabled(enabled) {
 }
 
 /**
- * Register a new user with email and password
- * Creates the user in Firebase Auth and a pending document in Firestore
+ * Error from the login-code endpoints. `code` is the server's machine-readable
+ * reason (e.g. 'cooldown', 'invalid_code'), which the UI maps to
+ * `auth.code.errors.<code>`.
  */
-export async function register(email, password) {
-  if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
-    throw new Error('Nur @insel.ch E-Mail-Adressen sind zugelassen.');
+export class LoginCodeError extends Error {
+  constructor(code, retryAfterSec) {
+    super(code);
+    this.name = 'LoginCodeError';
+    this.code = code;
+    this.retryAfterSec = retryAfterSec;
   }
-  
-  // 1. Create in Firebase Auth
-  const userCredential = await createAuthUser(email, password);
-  const user = userCredential.user;
-  
-  // 2. Create in Firestore with isActive: false
-  const userRef = doc(db, 'users', user.uid);
-  await setDoc(userRef, {
-    email: email,
-    displayName: email.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
-    isActive: false, // Must be activated via email bot
-    updatedAt: serverTimestamp()
-  }, { merge: true });
+}
 
-  // 3. Log out immediately (user is logged in by createUserWithEmailAndPassword)
-  // They should not have access until the bot activates them.
-  await signOut(auth);
-  
-  return user;
+export function isAllowedEmail(email) {
+  return typeof email === 'string' && email.trim().toLowerCase().endsWith('@' + ALLOWED_DOMAIN);
+}
+
+async function postLoginCodeEndpoint(path, payload) {
+  let response;
+  try {
+    response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch {
+    throw new LoginCodeError('network');
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new LoginCodeError(data.error || 'internal', data.retryAfterSec);
+  }
+  return data;
+}
+
+/**
+ * Ask the server to mail a one-time code to an @insel.ch address.
+ */
+export async function requestLoginCode(email) {
+  if (!isAllowedEmail(email)) throw new LoginCodeError('invalid_email');
+  await postLoginCodeEndpoint('/api/requestLoginCode', {
+    email: email.trim().toLowerCase(),
+    lang: (i18next.language || 'de').split('-')[0]
+  });
+}
+
+/**
+ * Trade the mailed code for a session. The server creates the account on first
+ * use and marks it active, so there is no separate registration step.
+ */
+export async function verifyLoginCode(email, code) {
+  const { token } = await postLoginCodeEndpoint('/api/verifyLoginCode', {
+    email: email.trim().toLowerCase(),
+    code
+  });
+  return signInWithCustomToken(auth, token);
 }
 
 /**
@@ -122,12 +153,12 @@ export async function changePassword(oldPassword, newPassword) {
  * Login with email and password
  */
 export async function login(email, password) {
-  if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
-    throw new Error('Nur @insel.ch E-Mail-Adressen sind zugelassen.');
+  if (!isAllowedEmail(email)) {
+    throw new Error(i18next.t('auth.validation.onlyInsel'));
   }
   
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
     const user = userCredential.user;
 
     // Check if active in Firestore (force server fetch to bypass stale cache)
@@ -142,7 +173,7 @@ export async function login(email, password) {
     
     if (!userSnap.exists() || userSnap.data().isActive !== true) {
       await signOut(auth); // Log out immediately if not active
-      throw new Error('Account ist noch nicht aktiviert. Bitte senden Sie die Aktivierungs-E-Mail ab.');
+      throw new Error(i18next.t('auth.validation.notActivated'));
     }
 
     // Cache spell check preference
@@ -165,20 +196,6 @@ export async function login(email, password) {
  */
 export async function logout() {
   return signOut(auth);
-}
-
-/**
- * Generate the mailto link for access requests
- */
-export function getAccessRequestLink() {
-  const subject = encodeURIComponent('Insel-Wiki Zugang anfordern');
-  const body = encodeURIComponent(
-    'Hallo,\n\n' +
-    'Ich möchte Zugang zum Insel-Wiki erhalten.\n\n' +
-    'Mein gewünschtes Passwort: [PASSWORT HIER EINGEBEN]\n\n' +
-    'Vielen Dank!'
-  );
-  return `mailto:${WIKI_ADMIN_EMAIL}?subject=${subject}&body=${body}`;
 }
 
 /**
