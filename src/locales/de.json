@@ -122,6 +122,7 @@
     "history": "Verlauf",
     "lastEdited": "Zuletzt bearbeitet",
     "internalLink": "Internen Link kopieren",
+    "followupMeeting": "Nächstes Meeting / Folge-Seite erstellen",
     "newPageDots": "Neue Seite…",
     "placeholder": "Beginne hier zu schreiben…",
     "restore": "Wiederherstellen",
@@ -321,5 +322,42 @@
   "pwa": {
     "updateAvailable": "Neue Version verfügbar.",
     "reload": "Neu laden"
+  },
+  "series": {
+    "modalTitle": "Nächstes Meeting erstellen",
+    "modalDesc": "Erstellt die Folge-Seite zu «{{title}}».",
+    "titleLabel": "Titel der neuen Seite",
+    "dateLabel": "Datum des Meetings",
+    "openTasksFound": "{{count}} offene Pendenzen werden übernommen:",
+    "moreTasks": "+ {{count}} weitere…",
+    "optTasks": "Offene Pendenzen übernehmen ({{count}})",
+    "optScaffold": "Struktur (Überschriften, Tabellen) übernehmen",
+    "optLink": "Beide Seiten miteinander verlinken",
+    "submit": "Meeting erstellen",
+    "nextMeeting": "Nächstes Meeting:",
+    "createdSuccess": "«{{title}}» wurde erstellt."
+  },
+  "slash": {
+    "noResult": "Keine Befehle gefunden",
+    "nextMeetingTitle": "Nächstes Meeting / Folge-Seite",
+    "nextMeetingDesc": "Erstellt die Folge-Seite mit offenen Pendenzen und Struktur",
+    "tableTitle": "Tabelle",
+    "tableDesc": "Fügt eine Tabelle ein",
+    "dateTitle": "Datum",
+    "dateDesc": "Fügt ein Datumselement ein",
+    "taskTitle": "Aufgabe",
+    "taskDesc": "Fügt eine Checkliste ein",
+    "h1Title": "Überschrift 1",
+    "h1Desc": "Grosse Hauptüberschrift",
+    "h2Title": "Überschrift 2",
+    "h2Desc": "Mittlere Zwischenüberschrift",
+    "h3Title": "Überschrift 3",
+    "h3Desc": "Kleine Abschnittsüberschrift",
+    "bulletListTitle": "Aufzählungsliste",
+    "bulletListDesc": "Liste mit Aufzählungspunkten",
+    "orderedListTitle": "Nummerierte Liste",
+    "orderedListDesc": "Liste mit fortlaufenden Nummern",
+    "dividerTitle": "Trennlinie",
+    "dividerDesc": "Horizontale Trennung"
   }
 }

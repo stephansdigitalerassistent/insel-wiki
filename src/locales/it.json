@@ -122,6 +122,7 @@
     "history": "Cronologia",
     "lastEdited": "Ultima modifica",
     "internalLink": "Copia link interno",
+    "followupMeeting": "Crea la prossima riunione / pagina successiva",
     "newPageDots": "Nuova pagina...",
     "placeholder": "Inizia a scrivere qui...",
     "restore": "Ripristina",
@@ -321,5 +322,42 @@
   "pwa": {
     "updateAvailable": "È disponibile una nuova versione.",
     "reload": "Ricarica"
+  },
+  "series": {
+    "modalTitle": "Crea la prossima riunione",
+    "modalDesc": "Crea la pagina successiva di «{{title}}».",
+    "titleLabel": "Titolo della nuova pagina",
+    "dateLabel": "Data della riunione",
+    "openTasksFound": "{{count}} attività aperte verranno riprese:",
+    "moreTasks": "+ altre {{count}}…",
+    "optTasks": "Riprendi le attività aperte ({{count}})",
+    "optScaffold": "Riprendi la struttura (titoli, tabelle)",
+    "optLink": "Collega le due pagine tra loro",
+    "submit": "Crea riunione",
+    "nextMeeting": "Prossima riunione:",
+    "createdSuccess": "«{{title}}» è stata creata."
+  },
+  "slash": {
+    "noResult": "Nessun comando trovato",
+    "nextMeetingTitle": "Prossima riunione / pagina successiva",
+    "nextMeetingDesc": "Crea la pagina successiva con attività aperte e struttura",
+    "tableTitle": "Tabella",
+    "tableDesc": "Inserisce una tabella",
+    "dateTitle": "Data",
+    "dateDesc": "Inserisce un elemento data",
+    "taskTitle": "Attività",
+    "taskDesc": "Inserisce una lista di controllo",
+    "h1Title": "Titolo 1",
+    "h1Desc": "Titolo principale grande",
+    "h2Title": "Titolo 2",
+    "h2Desc": "Sottotitolo medio",
+    "h3Title": "Titolo 3",
+    "h3Desc": "Titolo di sezione piccolo",
+    "bulletListTitle": "Elenco puntato",
+    "bulletListDesc": "Elenco con punti",
+    "orderedListTitle": "Elenco numerato",
+    "orderedListDesc": "Elenco con numeri progressivi",
+    "dividerTitle": "Divisore",
+    "dividerDesc": "Separazione orizzontale"
   }
 }

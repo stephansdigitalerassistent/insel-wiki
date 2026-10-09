@@ -50,7 +50,8 @@ import { createEditor, setContent, getMarkdown, getHTML, setEditable, destroyEdi
 import { initSidebar, setActivePage, getBreadcrumb, getAllPages } from '../components/sidebar.js';
 import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../components/history.js';
 import { loadCommentsForPage } from '../components/comments.js';
-import { promptModal, newPageModal, confirmModal, markdownWarningModal, translateModal } from '../components/modal.js';
+import { promptModal, newPageModal, confirmModal, markdownWarningModal, translateModal, followupMeetingModal } from '../components/modal.js';
+import { generateFollowupMeetingMarkdown } from '../utils/series-helper.js';
 import { showToast } from '../components/toast.js';
 import { canEdit, getCurrentUser, isLoggedIn } from '../firebase/auth.js';
 import { formatDefaultName, slugify, getColorForEmail, getInitials } from '../utils/string.js';
@@ -390,6 +391,10 @@ export function initPageController(opts) {
   // Setup action buttons
   document.getElementById('new-page-btn').addEventListener('click', () => handleNewPage());
   if (toolbarNewPageBtn) toolbarNewPageBtn.addEventListener('click', () => handleNewPage());
+  const followupBtn = document.getElementById('toolbar-followup-btn');
+  if (followupBtn) followupBtn.addEventListener('click', () => handleFollowupMeeting());
+  // Fired by the `/` command palette in the editor.
+  window.addEventListener('wiki:create-followup-meeting', () => handleFollowupMeeting());
   if (addChildBtn) addChildBtn.addEventListener('click', () => handleNewPage());
   if (deletePageBtn) deletePageBtn.addEventListener('click', handleDeletePage);
   if (historyBtn) historyBtn.addEventListener('click', handleHistoryToggle);
@@ -1138,6 +1143,82 @@ async function handleNewPage() {
   } catch (err) {
     console.error('[Insel-Wiki] Error creating page:', err);
     showToast(i18next.t('messages.pageCreateError') + (err.message || err), 'error');
+  }
+}
+
+let followupInProgress = false;
+
+/**
+ * Creates the next page of a meeting series from the current page: a sibling
+ * with the same access list, seeded with the open tasks and section structure,
+ * and linked to and from the current page.
+ *
+ * @returns {Promise<void>}
+ */
+async function handleFollowupMeeting() {
+  if (!canEdit() || !currentPageId || followupInProgress) return;
+  followupInProgress = true;
+  try {
+    // Markdown mode edits live in the textarea until synced into the editor.
+    flushMarkdownEditor();
+
+    const predecessorId = currentPageId;
+    const predecessorTitle = (pageTitleInput?.value || currentPageData?.title || '').trim();
+    const predecessorContent = getMarkdown() || '';
+
+    const modalData = await followupMeetingModal({ currentTitle: predecessorTitle, currentContent: predecessorContent });
+    // The user may have navigated away while the modal was open.
+    if (!modalData || currentPageId !== predecessorId) return;
+
+    const { title, date, carryoverTasks, carryoverScaffold, linkPrevious } = modalData;
+    const content = generateFollowupMeetingMarkdown({
+      predecessorId: linkPrevious ? predecessorId : null,
+      predecessorTitle,
+      predecessorContent,
+      customDate: date,
+      carryoverTasks,
+      carryoverScaffold
+    });
+
+    // The new page repeats this page's content, so it keeps this page's
+    // readers rather than whatever the parent (or a root page) would grant.
+    const acl = Array.isArray(currentPageData?.allowedEmails) && currentPageData.allowedEmails.length > 0
+      ? currentPageData.allowedEmails
+      : null;
+    const currentUser = getCurrentUser();
+    const pageId = await createPage(title, currentPageData?.parentId || null, currentUser?.email || '', {
+      content,
+      allowedEmails: acl
+    });
+
+    const ed = getEditor();
+    if (linkPrevious && ed) {
+      const link = [
+        { type: 'text', text: '⏭ ' },
+        { type: 'text', marks: [{ type: 'bold' }], text: i18next.t('series.nextMeeting') },
+        { type: 'text', text: ' ' },
+        { type: 'text', marks: [{ type: 'link', attrs: { href: `#/${pageId}/${slugify(title)}` } }], text: title }
+      ];
+      // Insert nodes instead of re-setting the document, so comments,
+      // mentions and other collaborators' cursors on this page stay intact.
+      const first = ed.state.doc.firstChild;
+      const firstText = first?.textContent || '';
+      if (first?.type.name === 'paragraph' && firstText.includes('⏮') && !firstText.includes('⏭')) {
+        ed.chain().insertContentAt(first.nodeSize - 1, [{ type: 'text', text: ' | ' }, ...link]).run();
+      } else {
+        ed.chain().insertContentAt(0, { type: 'paragraph', content: link }).run();
+      }
+      const provider = getProvider();
+      if (provider) await provider.flushPending();
+    }
+
+    showToast(i18next.t('series.createdSuccess', { title, interpolation: { escapeValue: false } }), 'success');
+    navigateCallback(pageId, title);
+  } catch (err) {
+    console.error('[Insel-Wiki] Error creating follow-up page:', err);
+    showToast(i18next.t('messages.pageCreateError') + (err.message || err), 'error');
+  } finally {
+    followupInProgress = false;
   }
 }
 

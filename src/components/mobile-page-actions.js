@@ -32,6 +32,7 @@ const MENU_BUTTON_IDS = [
   'print-page-btn',
   'copy-link-btn',
   'translate-page-btn',
+  'toolbar-followup-btn',
   'markdown-toggle-btn',
   'delete-page-btn'
 ];

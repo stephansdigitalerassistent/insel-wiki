@@ -45,7 +45,7 @@ const ARCHIVE_COLLECTION = 'archive';
 /**
  * Create a new page
  */
-export async function createPage(title, parentId = null, createdBy = '') {
+export async function createPage(title, parentId = null, createdBy = '', { content = '', allowedEmails: explicitAcl = null } = {}) {
   // If this is a test page (starts with typical test prefixes) and it's being
   // created at the top level, force it under the 'page-tests' root.
   const isTestPage = /^(test-|TEST|E2E|AUDIT|FixTest|VoiceTest|Test Page|Mentions Test|Comment Test|Checkbox Test)-?/i.test(title);
@@ -53,8 +53,12 @@ export async function createPage(title, parentId = null, createdBy = '') {
     parentId = 'page-tests';
   }
 
+  // An explicit ACL wins over the parent's: a follow-up page carries its
+  // predecessor's content, so it must not become readable by a wider audience.
   let allowedEmails = ['*'];
-  if (parentId && parentId !== 'page-tests') {
+  if (Array.isArray(explicitAcl) && explicitAcl.length > 0) {
+    allowedEmails = explicitAcl;
+  } else if (parentId && parentId !== 'page-tests') {
     try {
       const parentSnap = await getDoc(doc(db, PAGES_COLLECTION, parentId));
       if (parentSnap.exists()) {
@@ -73,7 +77,8 @@ export async function createPage(title, parentId = null, createdBy = '') {
     title,
     parentId,
     order: 0, // Default order
-    content: '',
+    // Seed markdown: the editor applies it once, while the page has no Yjs state yet.
+    content,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy,

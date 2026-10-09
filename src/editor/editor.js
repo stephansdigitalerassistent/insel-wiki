@@ -58,6 +58,7 @@ import { CodeBlock } from '@tiptap/extension-code-block';
 import { CharacterCount } from '@tiptap/extension-character-count';
 import { Comment } from './Comment.js';
 import { DateNode } from './DateNode.js';
+import { SlashCommands } from './SlashCommands.js';
 import { Mention } from '@tiptap/extension-mention';
 import { mergeAttributes } from '@tiptap/core';
 import suggestion from './suggestions.js';
@@ -1445,6 +1446,7 @@ function _createNewEditor(parentEl, pageId, user, initialContent, onReady) {
     CodeBlock,
     Comment,
     DateNode,
+    SlashCommands,
     Mention.extend({
       renderText({ node }) {
         return `@${node.attrs.label ?? node.attrs.id}`;

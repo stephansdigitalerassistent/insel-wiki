@@ -1435,6 +1435,111 @@ table tr:hover td {
   color: var(--text-muted); font-style: italic; pointer-events: none;
 }
 
+/* --- Slash Command Suggestions --- */
+.slash-suggestions {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-shadow);
+  overflow-y: auto;
+  max-height: 320px;
+  min-width: 280px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 9999;
+}
+
+.slash-item {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.slash-item:hover, .slash-item.is-selected {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.slash-item-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.slash-item.is-selected .slash-item-icon {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+
+.slash-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slash-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slash-item-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slash-item-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--accent-subtle);
+  color: var(--accent-hover);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.slash-item-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slash-item.no-result {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* --- Last Edited Badge --- */
 .last-edited-badge {
   display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 20px; font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap; animation: fadeIn var(--transition-normal);

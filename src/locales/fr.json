@@ -122,6 +122,7 @@
     "history": "Historique",
     "lastEdited": "Dernière modification",
     "internalLink": "Copier le lien interne",
+    "followupMeeting": "Créer la prochaine réunion / page suivante",
     "newPageDots": "Nouvelle page...",
     "placeholder": "Commencez à écrire ici...",
     "restore": "Restaurer",
@@ -321,5 +322,42 @@
   "pwa": {
     "updateAvailable": "Une nouvelle version est disponible.",
     "reload": "Recharger"
+  },
+  "series": {
+    "modalTitle": "Créer la prochaine réunion",
+    "modalDesc": "Crée la page suivante de « {{title}} ».",
+    "titleLabel": "Titre de la nouvelle page",
+    "dateLabel": "Date de la réunion",
+    "openTasksFound": "{{count}} tâches ouvertes seront reprises :",
+    "moreTasks": "+ {{count}} autres…",
+    "optTasks": "Reprendre les tâches ouvertes ({{count}})",
+    "optScaffold": "Reprendre la structure (titres, tableaux)",
+    "optLink": "Lier les deux pages entre elles",
+    "submit": "Créer la réunion",
+    "nextMeeting": "Prochaine réunion :",
+    "createdSuccess": "« {{title}} » a été créée."
+  },
+  "slash": {
+    "noResult": "Aucune commande trouvée",
+    "nextMeetingTitle": "Prochaine réunion / page suivante",
+    "nextMeetingDesc": "Crée la page suivante avec les tâches ouvertes et la structure",
+    "tableTitle": "Tableau",
+    "tableDesc": "Insère un tableau",
+    "dateTitle": "Date",
+    "dateDesc": "Insère un élément de date",
+    "taskTitle": "Tâche",
+    "taskDesc": "Insère une liste de contrôle",
+    "h1Title": "Titre 1",
+    "h1Desc": "Grand titre principal",
+    "h2Title": "Titre 2",
+    "h2Desc": "Sous-titre moyen",
+    "h3Title": "Titre 3",
+    "h3Desc": "Petit titre de section",
+    "bulletListTitle": "Liste à puces",
+    "bulletListDesc": "Liste avec des puces",
+    "orderedListTitle": "Liste numérotée",
+    "orderedListDesc": "Liste avec numéros consécutifs",
+    "dividerTitle": "Séparateur",
+    "dividerDesc": "Séparation horizontale"
   }
 }

@@ -3,6 +3,7 @@ import { slugify } from '../utils/string.js';
 import { getCurrentPageId } from '../controllers/page.js';
 import i18next from '../i18n.js';
 import { auth } from '../firebase/config.js';
+import { predictNextMeetingTitle, extractOpenTasks } from '../utils/series-helper.js';
 
 /**
  * Custom Promise-based modal for confirming actions.
@@ -1348,3 +1349,146 @@ export function markdownWarningModal(elements = {}) {
 }
 
 
+
+/**
+ * Modal for creating the next page of a meeting series.
+ *
+ * Suggests the next title (e.g. "micha-11" -> "micha-12") and previews the open
+ * tasks that would be carried over from the current page.
+ *
+ * @param {{ currentTitle?: string, currentContent?: string }} [opts]
+ * @returns {Promise<{ title: string, date: string, carryoverTasks: boolean, carryoverScaffold: boolean, linkPrevious: boolean }|null>}
+ */
+export function followupMeetingModal({ currentTitle = '', currentContent = '' } = {}) {
+  return new Promise((resolve) => {
+    const openTasks = extractOpenTasks(currentContent, currentTitle);
+    const today = new Date();
+    const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-box';
+
+    const header = document.createElement('h3');
+    header.className = 'modal-title';
+    header.textContent = i18next.t('series.modalTitle');
+
+    const desc = document.createElement('p');
+    desc.className = 'modal-message';
+    desc.style.marginBottom = '1.25rem';
+    desc.textContent = i18next.t('series.modalDesc', { title: currentTitle, interpolation: { escapeValue: false } });
+
+    const field = (id, labelKey, input) => {
+      const group = document.createElement('div');
+      group.className = 'form-group';
+      group.style.marginBottom = '1rem';
+      const label = document.createElement('label');
+      label.textContent = i18next.t(labelKey);
+      label.setAttribute('for', id);
+      input.id = id;
+      input.className = 'modal-input';
+      group.appendChild(label);
+      group.appendChild(input);
+      return group;
+    };
+
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.value = predictNextMeetingTitle(currentTitle);
+
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.value = localToday;
+
+    const options = document.createElement('div');
+    options.className = 'modal-options';
+
+    const checkbox = (id, text, checked, disabled = false) => {
+      const label = document.createElement('label');
+      label.className = 'modal-checkbox-label';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.id = id;
+      box.checked = checked;
+      box.disabled = disabled;
+      const span = document.createElement('span');
+      span.textContent = text;
+      if (disabled) span.style.opacity = '0.5';
+      label.appendChild(box);
+      label.appendChild(span);
+      options.appendChild(label);
+      return box;
+    };
+
+    const tasksBox = checkbox('followup-opt-tasks', i18next.t('series.optTasks', { count: openTasks.length }), openTasks.length > 0, openTasks.length === 0);
+    const scaffoldBox = checkbox('followup-opt-scaffold', i18next.t('series.optScaffold'), true);
+    const linkBox = checkbox('followup-opt-link', i18next.t('series.optLink'), true);
+
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = i18next.t('common.cancel', { defaultValue: 'Abbrechen' });
+
+    const submitBtn = document.createElement('button');
+    submitBtn.id = 'followup-modal-submit';
+    submitBtn.className = 'btn btn-primary';
+    submitBtn.textContent = i18next.t('series.submit');
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(submitBtn);
+
+    modal.appendChild(header);
+    modal.appendChild(desc);
+    modal.appendChild(field('followup-title', 'series.titleLabel', titleInput));
+    modal.appendChild(field('followup-date', 'series.dateLabel', dateInput));
+    modal.appendChild(options);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    setTimeout(() => { titleInput.focus(); titleInput.select(); }, 10);
+
+    const cleanup = () => {
+      if (overlay.parentNode === document.body) {
+        document.body.removeChild(overlay);
+      }
+    };
+
+    const submit = () => {
+      const title = titleInput.value.trim();
+      if (!title) {
+        titleInput.focus();
+        return;
+      }
+      cleanup();
+      resolve({
+        title,
+        date: dateInput.value || localToday,
+        carryoverTasks: tasksBox.checked,
+        carryoverScaffold: scaffoldBox.checked,
+        linkPrevious: linkBox.checked
+      });
+    };
+
+    const cancel = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    submitBtn.addEventListener('click', submit);
+    cancelBtn.addEventListener('click', cancel);
+
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      if (e.key === 'Escape') cancel();
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cancel();
+    });
+  });
+}

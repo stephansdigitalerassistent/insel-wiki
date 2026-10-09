@@ -122,6 +122,7 @@
     "history": "History",
     "lastEdited": "Last edited",
     "internalLink": "Copy internal link",
+    "followupMeeting": "Create next meeting / follow-up page",
     "newPageDots": "New page...",
     "placeholder": "Start typing here...",
     "restore": "Restore",
@@ -321,5 +322,42 @@
   "pwa": {
     "updateAvailable": "A new version is available.",
     "reload": "Reload"
+  },
+  "series": {
+    "modalTitle": "Create next meeting",
+    "modalDesc": "Creates the follow-up page for “{{title}}”.",
+    "titleLabel": "Title of the new page",
+    "dateLabel": "Meeting date",
+    "openTasksFound": "{{count}} open tasks will be carried over:",
+    "moreTasks": "+ {{count}} more…",
+    "optTasks": "Carry over open tasks ({{count}})",
+    "optScaffold": "Carry over structure (headings, tables)",
+    "optLink": "Link both pages to each other",
+    "submit": "Create meeting",
+    "nextMeeting": "Next meeting:",
+    "createdSuccess": "“{{title}}” was created."
+  },
+  "slash": {
+    "noResult": "No commands found",
+    "nextMeetingTitle": "Next meeting / follow-up page",
+    "nextMeetingDesc": "Creates the follow-up page with open tasks and structure",
+    "tableTitle": "Table",
+    "tableDesc": "Inserts a table",
+    "dateTitle": "Date",
+    "dateDesc": "Inserts a date element",
+    "taskTitle": "Task",
+    "taskDesc": "Inserts a checklist",
+    "h1Title": "Heading 1",
+    "h1Desc": "Large main heading",
+    "h2Title": "Heading 2",
+    "h2Desc": "Medium subheading",
+    "h3Title": "Heading 3",
+    "h3Desc": "Small section heading",
+    "bulletListTitle": "Bullet list",
+    "bulletListDesc": "List with bullet points",
+    "orderedListTitle": "Numbered list",
+    "orderedListDesc": "List with consecutive numbers",
+    "dividerTitle": "Divider",
+    "dividerDesc": "Horizontal separator"
   }
 }
