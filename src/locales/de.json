@@ -327,14 +327,12 @@
     "modalTitle": "Nächstes Meeting erstellen",
     "modalDesc": "Erstellt die Folge-Seite zu «{{title}}».",
     "titleLabel": "Titel der neuen Seite",
-    "dateLabel": "Datum des Meetings",
     "openTasksFound": "{{count}} offene Pendenzen werden übernommen:",
     "moreTasks": "+ {{count}} weitere…",
     "optTasks": "Offene Pendenzen übernehmen ({{count}})",
     "optScaffold": "Struktur (Überschriften, Tabellen) übernehmen",
     "optLink": "Beide Seiten miteinander verlinken",
     "submit": "Meeting erstellen",
-    "nextMeeting": "Nächstes Meeting:",
     "createdSuccess": "«{{title}}» wurde erstellt."
   },
   "slash": {

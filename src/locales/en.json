@@ -327,14 +327,12 @@
     "modalTitle": "Create next meeting",
     "modalDesc": "Creates the follow-up page for “{{title}}”.",
     "titleLabel": "Title of the new page",
-    "dateLabel": "Meeting date",
     "openTasksFound": "{{count}} open tasks will be carried over:",
     "moreTasks": "+ {{count}} more…",
     "optTasks": "Carry over open tasks ({{count}})",
     "optScaffold": "Carry over structure (headings, tables)",
     "optLink": "Link both pages to each other",
     "submit": "Create meeting",
-    "nextMeeting": "Next meeting:",
     "createdSuccess": "“{{title}}” was created."
   },
   "slash": {

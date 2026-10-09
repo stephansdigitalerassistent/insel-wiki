@@ -1170,12 +1170,11 @@ async function handleFollowupMeeting() {
     // The user may have navigated away while the modal was open.
     if (!modalData || currentPageId !== predecessorId) return;
 
-    const { title, date, carryoverTasks, carryoverScaffold, linkPrevious } = modalData;
+    const { title, carryoverTasks, carryoverScaffold, linkPrevious } = modalData;
     const content = generateFollowupMeetingMarkdown({
       predecessorId: linkPrevious ? predecessorId : null,
       predecessorTitle,
       predecessorContent,
-      customDate: date,
       carryoverTasks,
       carryoverScaffold
     });
@@ -1195,8 +1194,6 @@ async function handleFollowupMeeting() {
     if (linkPrevious && ed) {
       const link = [
         { type: 'text', text: '⏭ ' },
-        { type: 'text', marks: [{ type: 'bold' }], text: i18next.t('series.nextMeeting') },
-        { type: 'text', text: ' ' },
         { type: 'text', marks: [{ type: 'link', attrs: { href: `#/${pageId}/${slugify(title)}` } }], text: title }
       ];
       // Insert nodes instead of re-setting the document, so comments,

@@ -161,14 +161,14 @@ test('generates complete follower markdown with nav, rollover tasks, and scaffol
     predecessorId: 'prev-id-123',
     predecessorTitle: 'micha-11',
     predecessorContent: prevContent,
-    customDate: '2026-09-02',
     carryoverTasks: true,
     carryoverScaffold: true
   });
 
-  expect(md).toContain('⏮ **Vorheriges Meeting:** [micha-11](#/prev-id-123/micha-11)');
-  expect(md).toContain('📅 **Datum:** 2026-09-02');
-  expect(md).toContain('2026-09-02\n\n---');
+  expect(md.startsWith('⏮ [micha-11](#/prev-id-123/micha-11)\n\n')).toBe(true);
+  expect(md).notToContain('Datum');
+  expect(md).notToContain('Vorheriges Meeting');
+  expect(md).notToContain('---');
   expect(md).toContain('### ⏳ Offene Pendenzen aus vorherigem Meeting');
   expect(md).toContain('- [ ] Feedback von IT-Sicherheit einholen (aus micha-11)');
   expect(md).notToContain('Bereits erledigt');

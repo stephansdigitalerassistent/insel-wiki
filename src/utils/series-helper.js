@@ -253,7 +253,6 @@ function defaultMeetingScaffold() {
  * @param {string} opts.predecessorId - Firestore ID of the previous meeting.
  * @param {string} opts.predecessorTitle - Title of the previous meeting.
  * @param {string} [opts.predecessorContent=''] - Markdown content of the previous meeting.
- * @param {string} [opts.customDate] - ISO date string (defaults to today).
  * @param {boolean} [opts.carryoverTasks=true] - Whether to copy open tasks.
  * @param {boolean} [opts.carryoverScaffold=true] - Whether to retain predecessor headings.
  * @returns {string} The compiled markdown content for the new sub-page.
@@ -262,29 +261,19 @@ export function generateFollowupMeetingMarkdown({
   predecessorId,
   predecessorTitle,
   predecessorContent = '',
-  customDate = '',
   carryoverTasks = true,
   carryoverScaffold = true
 }) {
   const parts = [];
 
-  const today = customDate || new Date().toISOString().split('T')[0];
   const prevSlug = slugify(predecessorTitle || '');
 
-  // 1. Navigation & Header Info Banner
-  const navParts = [];
+  // 1. Navigation line: an icon and the link, nothing else.
   if (predecessorId) {
-    const linkText = (predecessorTitle || 'Vorheriges Meeting').replace(/[\[\]]/g, '\\$&');
-    navParts.push(`⏮ **Vorheriges Meeting:** [${linkText}](#/${predecessorId}/${prevSlug})`);
+    const linkText = (predecessorTitle || '⏮').replace(/[\[\]]/g, '\\$&');
+    parts.push(`⏮ [${linkText}](#/${predecessorId}/${prevSlug})`);
+    parts.push('');
   }
-  navParts.push(`📅 **Datum:** ${today}`);
-
-  parts.push(navParts.join(' | '));
-
-  // The blank line keeps the rule from turning the banner into a setext heading.
-  parts.push('');
-  parts.push('---');
-  parts.push('');
 
   // 2. Rollover of Open Action Items
   if (carryoverTasks && predecessorContent) {

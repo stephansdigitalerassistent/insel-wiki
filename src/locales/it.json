@@ -327,14 +327,12 @@
     "modalTitle": "Crea la prossima riunione",
     "modalDesc": "Crea la pagina successiva di «{{title}}».",
     "titleLabel": "Titolo della nuova pagina",
-    "dateLabel": "Data della riunione",
     "openTasksFound": "{{count}} attività aperte verranno riprese:",
     "moreTasks": "+ altre {{count}}…",
     "optTasks": "Riprendi le attività aperte ({{count}})",
     "optScaffold": "Riprendi la struttura (titoli, tabelle)",
     "optLink": "Collega le due pagine tra loro",
     "submit": "Crea riunione",
-    "nextMeeting": "Prossima riunione:",
     "createdSuccess": "«{{title}}» è stata creata."
   },
   "slash": {

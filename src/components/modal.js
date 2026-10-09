@@ -1357,13 +1357,11 @@ export function markdownWarningModal(elements = {}) {
  * tasks that would be carried over from the current page.
  *
  * @param {{ currentTitle?: string, currentContent?: string }} [opts]
- * @returns {Promise<{ title: string, date: string, carryoverTasks: boolean, carryoverScaffold: boolean, linkPrevious: boolean }|null>}
+ * @returns {Promise<{ title: string, carryoverTasks: boolean, carryoverScaffold: boolean, linkPrevious: boolean }|null>}
  */
 export function followupMeetingModal({ currentTitle = '', currentContent = '' } = {}) {
   return new Promise((resolve) => {
     const openTasks = extractOpenTasks(currentContent, currentTitle);
-    const today = new Date();
-    const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1397,10 +1395,6 @@ export function followupMeetingModal({ currentTitle = '', currentContent = '' } 
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
     titleInput.value = predictNextMeetingTitle(currentTitle);
-
-    const dateInput = document.createElement('input');
-    dateInput.type = 'date';
-    dateInput.value = localToday;
 
     const options = document.createElement('div');
     options.className = 'modal-options';
@@ -1444,7 +1438,6 @@ export function followupMeetingModal({ currentTitle = '', currentContent = '' } 
     modal.appendChild(header);
     modal.appendChild(desc);
     modal.appendChild(field('followup-title', 'series.titleLabel', titleInput));
-    modal.appendChild(field('followup-date', 'series.dateLabel', dateInput));
     modal.appendChild(options);
     modal.appendChild(actions);
     overlay.appendChild(modal);
@@ -1467,7 +1460,6 @@ export function followupMeetingModal({ currentTitle = '', currentContent = '' } 
       cleanup();
       resolve({
         title,
-        date: dateInput.value || localToday,
         carryoverTasks: tasksBox.checked,
         carryoverScaffold: scaffoldBox.checked,
         linkPrevious: linkBox.checked

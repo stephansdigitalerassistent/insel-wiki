@@ -50,6 +50,7 @@ test.describe('Follow-up meeting', () => {
     await page.locator('#toolbar-followup-btn').click();
     await expect(page.locator('#followup-title')).toHaveValue(nextTitle);
     await expect(page.locator('#followup-opt-tasks')).toBeChecked();
+    await expect(page.locator('.modal-overlay:visible input[type="date"]')).toHaveCount(0);
     await page.locator('#followup-modal-submit').click();
 
     // Lands on the new page, which is seeded from the first one.
@@ -66,6 +67,8 @@ test.describe('Follow-up meeting', () => {
     await expect(editor.locator('h2', { hasText: 'Traktanden' })).toBeVisible();
     await expect(editor.locator('li[data-checked="false"]', { hasText: 'Offerte einholen' })).toBeVisible();
     await expect(editor.locator(`a[href^="#/${firstId}"]`)).toHaveText(firstTitle);
+    // Navigation is an icon and the link only.
+    await expect(editor.locator('p').first()).toHaveText(`⏮ ${firstTitle}`);
 
     // The first page keeps its content and gains a link to the new one.
     await waitForSaved(page);
@@ -73,6 +76,7 @@ test.describe('Follow-up meeting', () => {
     await expect(page.locator('#page-title')).toHaveValue(firstTitle, { timeout: 20000 });
     const firstEditor = page.locator('.tiptap:visible');
     await expect(firstEditor.locator(`a[href^="#/${nextId}"]`)).toHaveText(nextTitle, { timeout: 20000 });
+    await expect(firstEditor.locator('p').first()).toHaveText(`⏭ ${nextTitle}`);
     await expect(firstEditor).toContainText('Budget besprochen');
     await expect(firstEditor.locator('li[data-checked="true"]', { hasText: 'Raum reservieren' })).toBeVisible();
   });
