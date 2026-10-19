@@ -1198,12 +1198,14 @@ async function handleFollowupMeeting() {
       ];
       // Insert nodes instead of re-setting the document, so comments,
       // mentions and other collaborators' cursors on this page stay intact.
-      const first = ed.state.doc.firstChild;
-      const firstText = first?.textContent || '';
-      if (first?.type.name === 'paragraph' && firstText.includes('⏮') && !firstText.includes('⏭')) {
-        ed.chain().insertContentAt(first.nodeSize - 1, [{ type: 'text', text: ' | ' }, ...link]).run();
+      // The navigation line sits at the bottom of the page.
+      const { doc } = ed.state;
+      const last = doc.lastChild;
+      const lastText = last?.textContent || '';
+      if (last?.type.name === 'paragraph' && lastText.includes('⏮') && !lastText.includes('⏭')) {
+        ed.chain().insertContentAt(doc.content.size - 1, [{ type: 'text', text: ' | ' }, ...link]).run();
       } else {
-        ed.chain().insertContentAt(0, { type: 'paragraph', content: link }).run();
+        ed.chain().insertContentAt(doc.content.size, { type: 'paragraph', content: link }).run();
       }
       const provider = getProvider();
       if (provider) await provider.flushPending();

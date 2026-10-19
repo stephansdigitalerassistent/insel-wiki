@@ -273,14 +273,7 @@ export function generateFollowupMeetingMarkdown({
 
   const prevSlug = slugify(predecessorTitle || '');
 
-  // 1. Navigation line: an icon and the link, nothing else.
-  if (predecessorId) {
-    const linkText = (predecessorTitle || '⏮').replace(/[\[\]]/g, '\\$&');
-    parts.push(`⏮ [${linkText}](#/${predecessorId}/${prevSlug})`);
-    parts.push('');
-  }
-
-  // 2. Rollover of Open Action Items
+  // 1. Rollover of Open Action Items
   if (carryoverTasks && predecessorContent) {
     const openTasks = extractOpenTasks(predecessorContent, predecessorTitle);
     if (openTasks.length > 0) {
@@ -292,11 +285,18 @@ export function generateFollowupMeetingMarkdown({
     }
   }
 
-  // 3. Meeting Scaffold / Sections
+  // 2. Meeting Scaffold / Sections
   if (carryoverScaffold && predecessorContent) {
     parts.push(extractScaffold(predecessorContent));
   } else {
     parts.push(defaultMeetingScaffold());
+  }
+
+  // 3. Navigation line at the bottom: an icon and the link, nothing else.
+  if (predecessorId) {
+    const linkText = (predecessorTitle || '⏮').replace(/[\[\]]/g, '\\$&');
+    parts.push('');
+    parts.push(`⏮ [${linkText}](#/${predecessorId}/${prevSlug})`);
   }
 
   return parts.join('\n').trim() + '\n';

@@ -171,7 +171,7 @@ test('generates complete follower markdown with nav, rollover tasks, and scaffol
     carryoverScaffold: true
   });
 
-  expect(md.startsWith('⏮ [micha-11](#/prev-id-123/micha-11)\n\n')).toBe(true);
+  expect(md.endsWith('\n\n⏮ [micha-11](#/prev-id-123/micha-11)\n')).toBe(true);
   expect(md).notToContain('Datum');
   expect(md).notToContain('Vorheriges Meeting');
   expect(md).notToContain('---');
