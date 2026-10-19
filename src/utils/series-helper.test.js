@@ -146,6 +146,12 @@ Hier standen sehr lange Diskussionen und alte Notizen, die nicht übernommen wer
   expect(scaffold).notToContain('Alter Punkt 1');
 });
 
+test('puts an empty bullet under every heading', () => {
+  const scaffold = extractScaffold('### A\nalte Notiz\n\n### B\n- [ ] alt\n');
+  expect(scaffold).toBe('### A\n\n-\n\n\n### B\n\n-');
+  expect(extractScaffold('')).toContain('### 📝 Notizen & Diskussion\n-\n');
+});
+
 console.log('\n✨ generateFollowupMeetingMarkdown()');
 
 test('generates complete follower markdown with nav, rollover tasks, and scaffold', () => {

@@ -198,8 +198,12 @@ export function extractScaffold(content) {
       if (/offene pendenzen|rollover/i.test(trimmed)) {
         continue;
       }
+      // An empty bullet under every heading, so there is a line to type into.
+      // A bare '-' (no trailing space): marked reads '- ' before a blank line as text.
       resultLines.push('');
       resultLines.push(trimmed);
+      resultLines.push('');
+      resultLines.push('-');
       resultLines.push('');
       continue;
     }
@@ -240,6 +244,7 @@ function defaultMeetingScaffold() {
     '2. ',
     '',
     '### 📝 Notizen & Diskussion',
+    '-',
     '',
     '### ✅ Neue Beschlüsse & Action Items',
     '- [ ] '
