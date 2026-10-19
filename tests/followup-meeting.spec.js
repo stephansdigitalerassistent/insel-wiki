@@ -90,6 +90,7 @@ test.describe('Follow-up meeting', () => {
 
     await login(page, TEST_USER, TEST_PASS);
     const parentId = await createTestPage(page, parentTitle);
+    await waitForSaved(page);
     // Deleting the parent also trashes the meetings under it.
     createdIds.push(parentId);
     const firstId = await createTestPage(page, firstTitle, parentId);
