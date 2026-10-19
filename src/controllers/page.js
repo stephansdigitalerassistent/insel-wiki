@@ -52,6 +52,7 @@ import { loadHistory, toggleHistoryPanel, closeHistoryPanel } from '../component
 import { loadCommentsForPage } from '../components/comments.js';
 import { promptModal, newPageModal, confirmModal, markdownWarningModal, translateModal, followupMeetingModal } from '../components/modal.js';
 import { generateFollowupMeetingMarkdown } from '../utils/series-helper.js';
+import { addSeriesLinkToParent } from '../utils/yjs-sync.js';
 import { showToast } from '../components/toast.js';
 import { canEdit, getCurrentUser, isLoggedIn } from '../firebase/auth.js';
 import { formatDefaultName, slugify, getColorForEmail, getInitials } from '../utils/string.js';
@@ -1209,6 +1210,15 @@ async function handleFollowupMeeting() {
       }
       const provider = getProvider();
       if (provider) await provider.flushPending();
+    }
+
+    // The parent may keep a list of the meetings; add the new one to it.
+    if (currentPageData?.parentId) {
+      await addSeriesLinkToParent(currentPageData.parentId, {
+        predecessorId,
+        href: `#/${pageId}/${slugify(title)}`,
+        title
+      }).catch(err => console.warn('[Insel-Wiki] Could not add the meeting to the parent page:', err));
     }
 
     showToast(i18next.t('series.createdSuccess', { title, interpolation: { escapeValue: false } }), 'success');

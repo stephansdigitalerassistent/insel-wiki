@@ -53,9 +53,9 @@ export async function ensureSidebarClosed(page) {
 /**
  * Navigates to the Tests page and creates a subpage
  */
-export async function createTestPage(page, title) {
-  // Navigate to 'Tests' page root
-  await page.goto('/#/page-tests');
+export async function createTestPage(page, title, parentId = 'page-tests') {
+  // Navigate to the parent page ('Tests' root by default)
+  await page.goto(`/#/${parentId}`);
   // Wait for sidebar or specific element instead of networkidle
   await expect(page.locator('#sidebar')).toBeVisible({ timeout: 15000 });
   await page.waitForTimeout(1000); // Give auth and state time to settle

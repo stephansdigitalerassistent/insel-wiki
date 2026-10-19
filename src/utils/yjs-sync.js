@@ -3,6 +3,7 @@ import { FirestoreYjsProvider } from '../editor/FirestoreYjsProvider.js';
 import { getCurrentUser } from '../firebase/auth.js';
 import { db } from '../firebase/config.js';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { insertSeriesLinkInFragment, insertSeriesLinkInMarkdown } from './series-parent.js';
 
 /**
  * Toggles a task status both in Yjs (for collaboration) and in Firestore Markdown (for immediate Dashboard update).
@@ -102,4 +103,50 @@ export async function toggleTask(pageId, taskIndex) {
   }
 
   return yjsPromise;
+}
+
+/**
+ * Adds a link to a new meeting page to the parent page, next to the link to its
+ * predecessor — only when the parent already lists the predecessor.
+ *
+ * @param {string} parentId - Parent page ID.
+ * @param {{ predecessorId: string, href: string, title: string }} opts
+ * @returns {Promise<boolean>} Whether the parent was changed.
+ */
+export async function addSeriesLinkToParent(parentId, opts) {
+  const user = getCurrentUser();
+  if (!user || !parentId) return false;
+
+  const ydoc = new Y.Doc();
+  const provider = new FirestoreYjsProvider(parentId, ydoc, user);
+  try {
+    const hasData = await new Promise((resolve) => {
+      provider.setLoadCallback(resolve);
+      provider.init();
+    });
+    if (hasData) {
+      let added = false;
+      ydoc.transact(() => {
+        added = insertSeriesLinkInFragment(ydoc.getXmlFragment('default'), opts);
+      });
+      if (added) await provider.flushPending();
+      return added;
+    }
+  } finally {
+    provider.destroy();
+  }
+
+  // Never opened in the editor: the page is only its markdown seed, which the
+  // editor turns into the Yjs document on first open.
+  const pageRef = doc(db, 'pages', parentId);
+  const pageSnap = await getDoc(pageRef);
+  const updated = insertSeriesLinkInMarkdown(pageSnap.data()?.content, opts);
+  if (updated === null) return false;
+  await updateDoc(pageRef, {
+    content: updated,
+    updatedAt: serverTimestamp(),
+    lastSavedBy: user.email,
+    lastSavedByName: user.displayName || user.email
+  });
+  return true;
 }

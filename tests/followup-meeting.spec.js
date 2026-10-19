@@ -81,6 +81,53 @@ test.describe('Follow-up meeting', () => {
     await expect(firstEditor.locator('li[data-checked="true"]', { hasText: 'Raum reservieren' })).toBeVisible();
   });
 
+  test('adds the next meeting to the list of meetings on the parent page', async ({ page }) => {
+    test.setTimeout(150000);
+    const stamp = Date.now();
+    const parentTitle = `E2E-SeriesParent-${stamp}`;
+    const firstTitle = `E2E-Series-${stamp}-1`;
+    const nextTitle = `E2E-Series-${stamp}-2`;
+
+    await login(page, TEST_USER, TEST_PASS);
+    const parentId = await createTestPage(page, parentTitle);
+    // Deleting the parent also trashes the meetings under it.
+    createdIds.push(parentId);
+    const firstId = await createTestPage(page, firstTitle, parentId);
+    // Leaving a page that is still saving opens a "leave page?" dialog.
+    await waitForSaved(page);
+
+    // The parent lists the meetings.
+    await page.goto(`/#/${parentId}`);
+    await expect(page.locator('#page-title')).toHaveValue(parentTitle, { timeout: 20000 });
+    await waitForEditorSynced(page);
+    await page.waitForFunction(() => window.editor && window.editor.isEditable, null, { timeout: 15000 });
+    await page.evaluate(({ id, title }) => {
+      window.editor.commands.setContent(
+        `<h2>Meetings</h2><ul><li><p><a href="#/${id}/x">${title}</a></p></li></ul><p>Ende</p>`,
+        true
+      );
+    }, { id: firstId, title: firstTitle });
+    await waitForSaved(page);
+
+    await page.goto(`/#/${firstId}`);
+    await expect(page.locator('#page-title')).toHaveValue(firstTitle, { timeout: 20000 });
+    await waitForEditorSynced(page);
+    await ensureSidebarClosed(page);
+    await page.locator('#toolbar-followup-btn').click();
+    await expect(page.locator('#followup-title')).toHaveValue(nextTitle);
+    await page.locator('#followup-modal-submit').click();
+    await expect(page.locator('#page-title')).toHaveValue(nextTitle, { timeout: 20000 });
+    const nextId = page.url().match(/#\/([^/]+)/)[1];
+    await waitForSaved(page);
+
+    await page.goto(`/#/${parentId}`);
+    await expect(page.locator('#page-title')).toHaveValue(parentTitle, { timeout: 20000 });
+    const items = page.locator('.tiptap:visible ul li');
+    await expect(items).toHaveCount(2, { timeout: 20000 });
+    await expect(items.nth(0)).toHaveText(firstTitle);
+    await expect(items.nth(1).locator(`a[href^="#/${nextId}"]`)).toHaveText(nextTitle);
+  });
+
   test('slash palette lists commands, inserts one, and Escape hands Enter back to the editor', async ({ page }) => {
     test.setTimeout(90000);
     await login(page, TEST_USER, TEST_PASS);
